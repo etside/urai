@@ -60,8 +60,18 @@ class LlamaServerBackend(Backend):
             return False
 
     def complete(self, messages, max_tokens=256, temperature=0.2):
+        msgs = [dict(m) for m in messages]
+        # Qwen3 thinks by default (reasoning_content, empty answer, wasted
+        # tokens). Our pipeline wants answers — disable thinking unless
+        # explicitly asked (URAI_THINKING=1). Verified on llama-server b11559.
+        if "qwen3" in self.model.lower() and \
+                os.environ.get("URAI_THINKING") != "1":
+            for m in reversed(msgs):
+                if m.get("role") == "user" and isinstance(m.get("content"), str):
+                    m["content"] = m["content"].rstrip() + "\n/no_think"
+                    break
         data = _post_json(self.base + "/v1/chat/completions", {
-            "model": self.model, "messages": messages,
+            "model": self.model, "messages": msgs,
             "max_tokens": max_tokens, "temperature": temperature,
             "stream": False,
         })
