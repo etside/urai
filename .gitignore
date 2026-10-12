@@ -10,3 +10,8 @@ __pycache__/
 .venv/
 *.log
 /tmp/
+*.db
+*.db-shm
+*.db-wal
+*auth*.json
+opencode-migration-backup-*/

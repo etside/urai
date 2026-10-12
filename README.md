@@ -60,10 +60,29 @@ urai model bench [--id ID]          llama-bench row for a model
 urai serve start|stop|status        llama-server lifecycle (GPU-aware)
 urai gpu                            detect GPU + offload policy
 urai teacher status|test            external teacher backend (env) check
+urai see <image> [question]          ask about a picture (vision model)
+urai imagine <prompt> [-o out.png]   text-to-image (stable-diffusion.cpp)
 urai evaluate "task" --expect a,b   scored check via running server
 urai api [--port 8777]              start Urai OpenAI-compatible API
+                                    (/v1/chat/completions, /v1/images/generations, ...)
 urai version                        runtime version + active model
 ```
+
+## Models
+
+| id | kind | params | role | status |
+|---|---|---|---|---|
+| `qwen05-fast` | chat | 0.5B Q4_K_M | fast | benched 28.6/6.9 tok/s |
+| `coder05-fast` | chat | 0.5B Q4_K_M | fast-coding, **active** | benched 23.2/6.35 tok/s |
+| `coder15-primary` | chat | 1.5B Q4_K_M | primary | needs bigger box |
+| `qwen25vl-3b` | vision | 3B Q4_K_M + Q8_0 mmproj | see pictures | `urai model download qwen25vl-3b` |
+| `sd-turbo` | generate | SD-Turbo fp16 | make pictures | `urai model download sd-turbo` |
+
+Vision: [Qwen2.5-VL-3B GGUF](https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF)
+via [llama.cpp](https://github.com/ggml-org/llama.cpp).
+Generation: [SD-Turbo](https://huggingface.co/stabilityai/sd-turbo) via
+[stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp).
+Details + remaining work: [docs/VISION_UPGRADE.md](docs/VISION_UPGRADE.md).
 
 Teacher (distillation source) is any OpenAI-compatible endpoint:
 

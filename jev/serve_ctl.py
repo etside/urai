@@ -35,7 +35,8 @@ def is_up(port=8080):
         return False
 
 
-def start(model_path, ctx=2048, threads=None, port=8080, ngl=None):
+def start(model_path, ctx=2048, threads=None, port=8080, ngl=None,
+          mmproj=None):
     from .gpu import offload_policy
     if ngl is None:
         ngl = offload_policy()["ngl"]
@@ -44,6 +45,9 @@ def start(model_path, ctx=2048, threads=None, port=8080, ngl=None):
     cmd = [str(BIN / "llama-server"), "-m", model_path, "-c", str(ctx),
            "-t", str(threads), "--port", str(port),
            "--n-gpu-layers", str(ngl)]
+    if mmproj:
+        # vision model: llama.cpp mtmd path (text GGUF + vision projector)
+        cmd += ["--mmproj", str(mmproj)]
     log = open("/tmp/jev-llama-server.log", "ab")
     p = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT,
                          stdin=subprocess.DEVNULL, env=_lib_env(),

@@ -10,6 +10,8 @@
     urai model bench [--id ID]          llama-bench row for a model
     urai serve start|stop|status        llama-server lifecycle (GPU-aware)
     urai gpu                            detect GPU + offload policy
+    urai see <image> [question]          ask about a picture (vision model)
+    urai imagine <prompt> [-o out.png]   text-to-image (stable-diffusion.cpp)
     urai evaluate "task" --expect a,b   scored check via running server
     urai api                            start Urai OpenAI-compatible API (:8777)
 """
@@ -102,6 +104,13 @@ def main(argv=None):
     p.add_argument("action", choices=["status", "test"])
     p = sub.add_parser("evaluate"); p.add_argument("text")
     p.add_argument("--expect", default="")
+    p = sub.add_parser("see"); p.add_argument("image")
+    p.add_argument("question", nargs="?", default="Describe this image in detail.")
+    p.add_argument("--max-tokens", type=int, default=512)
+    p = sub.add_parser("imagine"); p.add_argument("prompt")
+    p.add_argument("-o", "--out", default=None)
+    p.add_argument("--steps", type=int, default=None)
+    p.add_argument("--seed", type=int, default=7)
     p = sub.add_parser("api"); p.add_argument("--port", type=int, default=8777)
 
     args = ap.parse_args(argv)
@@ -126,10 +135,13 @@ def main(argv=None):
         if args.action == "list":
             for mid, m in r["models"].items():
                 from pathlib import Path as P
-                here = (P(__file__).resolve().parents[1] / m["path"]).exists()
+                root = P(__file__).resolve().parents[1]
+                paths = [f["path"] for f in m.get("files", [])] or [m["path"]]
+                here = all((root / p).exists() for p in paths)
                 mark = " [active]" if mid == r["active"] else ""
                 bench = f" pp={m.get('pp_toks')}/tg={m.get('tg_toks')}" if m.get("tg_toks") else " (unbenchmarked)"
                 print(f"{mid}{mark}: {m['params']} {m['quant']} role={m['role']} "
+                      f"kind={m.get('kind', 'chat')} "
                       f"{'on-disk' if here else 'not-downloaded'}{bench}")
             return
         if args.action == "download":
@@ -176,10 +188,18 @@ def main(argv=None):
         mid = args.model or reg.load()["active"]
         m = reg.load()["models"][mid]
         from pathlib import Path as P
-        mp = str(P(__file__).resolve().parents[1] / m["path"])
+        root = P(__file__).resolve().parents[1]
+        mp = str(root / m["path"])
         if not P(mp).exists():
-            sys.exit(f"{mid} not on disk; run: jev model download {mid}")
-        print(serve_ctl.start(mp, ctx=args.ctx, port=args.port))
+            sys.exit(f"{mid} not on disk; run: urai model download {mid}")
+        mmproj = None
+        if m.get("kind") == "vision":
+            cands = [root / f["path"] for f in m.get("files", [])
+                     if "mmproj" in f["path"]]
+            mmproj = str(cands[0]) if cands and cands[0].exists() else None
+            if mmproj is None:
+                sys.exit(f"{mid} needs its mmproj file; run: urai model download {mid}")
+        print(serve_ctl.start(mp, ctx=args.ctx, port=args.port, mmproj=mmproj))
         return
 
     if args.cmd == "version":
@@ -218,6 +238,23 @@ def main(argv=None):
             print(gpu.cuda_build_hint())
         return
 
+    if args.cmd == "see":
+        from . import vision
+        res = vision.see(args.image, args.question, args.max_tokens)
+        if not res["ok"]:
+            sys.exit(res["error"])
+        print(res["answer"])
+        return
+
+    if args.cmd == "imagine":
+        from . import imagine
+        res = imagine.generate(args.prompt, args.out, args.steps,
+                               seed=args.seed)
+        print(json.dumps(res, indent=2))
+        if not res["ok"]:
+            sys.exit(1)
+        return
+
     if args.cmd == "evaluate":
         exp = [e for e in args.expect.split(",") if e]
         try:
@@ -225,7 +262,7 @@ def main(argv=None):
                                   {"task": args.text, "expected_contains": exp}),
                              indent=2)[:4000])
         except Exception as e:
-            print(f"API server not running ({e}); start with: jev api")
+            print(f"API server not running ({e}); start with: urai api")
         return
 
     if args.cmd == "api":

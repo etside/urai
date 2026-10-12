@@ -34,6 +34,54 @@ def _models():
     return ms
 
 
+def _as_messages(raw) -> list:
+    """Normalize to [{role, content}] preserving roles (legacy strings ok)."""
+    msgs = []
+    for m in raw or []:
+        if isinstance(m, str):
+            msgs.append({"role": "user", "content": m})
+        elif isinstance(m, dict):
+            msgs.append({"role": m.get("role", "user"),
+                         "content": m.get("content", "")})
+    return msgs
+
+
+def _text_of(msgs) -> str:
+    """Plain-text view of messages for routing (ignores image parts)."""
+    out = []
+    for m in msgs:
+        c = m.get("content", "")
+        if isinstance(c, list):
+            out += [p.get("text", "") for p in c if p.get("type") == "text"]
+        else:
+            out.append(str(c))
+    return "\n".join(out)
+
+
+def _has_image(msgs) -> bool:
+    return any(isinstance(m.get("content"), list) and
+               any(p.get("type") == "image_url" for p in m["content"])
+               for m in msgs)
+
+
+def _split_image(msgs):
+    """Return (image_ref, question). image_ref is a data: URL or file path."""
+    question = ""
+    for m in reversed(msgs):
+        c = m.get("content", "")
+        if not isinstance(c, list):
+            if not question and isinstance(c, str):
+                question = c
+            continue
+        for p in c:
+            if p.get("type") == "text" and not question:
+                question = p.get("text", "")
+            if p.get("type") == "image_url":
+                u = (p.get("image_url") or {}).get("url", "")
+                return u, question
+    return None, question
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "JEV/0.1"
 
@@ -57,7 +105,7 @@ class Handler(BaseHTTPRequestHandler):
             local = LlamaServerBackend()
             self._send({"status": "ok", "local_llama": local.healthy(),
                         "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
-        elif self.path == "/models":
+        elif self.path in ("/models", "/v1/models"):
             self._send({"object": "list",
                         "data": [{"object": "model", **m} for m in _models()]})
         else:
@@ -70,9 +118,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send({"error": "invalid json"}, 400)
 
         if self.path == "/chat":
-            msgs = body.get("messages", [])
-            prompt = " ".join(m.get("content", "") for m in msgs)
-            r = route(prompt)
+            msgs = _as_messages(body.get("messages", []))
+            r = route(_text_of(msgs))
             try:
                 res = r["backend"].complete(
                     msgs, body.get("max_tokens", 256),
@@ -89,6 +136,66 @@ class Handler(BaseHTTPRequestHandler):
                                                      "content": content},
                              "finish_reason": "stop"}],
                 "jev": {"level": r["level"], "backend": r["backend"].name}})
+
+        if self.path == "/v1/chat/completions":
+            # OpenAI-compatible: roles preserved, vision image_url parts
+            # passed straight through to the local llama-server when it is
+            # up, otherwise answered by the routed backend (text only).
+            msgs = _as_messages(body.get("messages", []))
+            if _has_image(msgs):
+                from . import vision as _vision
+                img, question = _split_image(msgs)
+                if img is None:
+                    return self._send({"error": "no image found in messages"}, 400)
+                res = _vision.see(img, question or "Describe this image.",
+                                  body.get("max_tokens", 512),
+                                  body.get("temperature", 0.2))
+                if not res["ok"]:
+                    return self._send({"error": res["error"]}, 502)
+                content = res["answer"]
+            else:
+                r = route(_text_of(msgs))
+                try:
+                    res = r["backend"].complete(
+                        msgs, body.get("max_tokens", 256),
+                        body.get("temperature", 0.2))
+                    content = res["content"]
+                except Exception as e:
+                    return self._send({"error": str(e)[:300]}, 502)
+            model = body.get("model", res.get("model", "jev-local-student"))
+            if body.get("stream"):
+                return self._stream(content, model)
+            return self._send({
+                "id": "chatcmpl-urai", "object": "chat.completion",
+                "created": int(time.time()), "model": model,
+                "choices": [{"index": 0, "message": {"role": "assistant",
+                                                     "content": content},
+                             "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0,
+                          "total_tokens": 0}})
+
+        if self.path in ("/imagine", "/v1/images/generations"):
+            from . import imagine as _imagine
+            res = _imagine.generate(
+                body.get("prompt", ""),
+                body.get("out") or body.get("file"),
+                body.get("steps"), body.get("width"), body.get("height"),
+                body.get("seed", 7))
+            if not res["ok"]:
+                return self._send({"error": res["error"]}, 502)
+            return self._send({"created": int(time.time()),
+                               "data": [{"url": "file://" + res["path"]}],
+                               **res})
+
+        if self.path == "/see":
+            from . import vision as _vision
+            res = _vision.see(body.get("image", ""),
+                              body.get("question", "Describe this image."),
+                              body.get("max_tokens", 512),
+                              body.get("temperature", 0.2))
+            if not res["ok"]:
+                return self._send({"error": res["error"]}, 502)
+            return self._send(res)
 
         if self.path == "/generate":
             msgs = [{"role": "user", "content": body.get("prompt", "")}]

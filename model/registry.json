@@ -6,6 +6,7 @@
       "params": "0.5B",
       "quant": "Q4_K_M",
       "role": "fast",
+      "kind": "chat",
       "hf": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
       "pp_toks": 28.6,
       "tg_toks": 6.9,
@@ -17,6 +18,7 @@
       "params": "0.5B",
       "quant": "Q4_K_M",
       "role": "fast-coding",
+      "kind": "chat",
       "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
       "pp_toks": 23.2,
       "tg_toks": 6.35,
@@ -28,7 +30,40 @@
       "params": "1.5B",
       "quant": "Q4_K_M",
       "role": "primary",
-      "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"
+      "kind": "chat",
+      "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+    },
+    "qwen25vl-3b": {
+      "path": "model/base/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+      "params": "3B",
+      "quant": "Q4_K_M",
+      "role": "vision",
+      "kind": "vision",
+      "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+      "files": [
+        {
+          "path": "model/base/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+          "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"
+        },
+        {
+          "path": "model/base/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf",
+          "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf"
+        }
+      ]
+    },
+    "sd-turbo": {
+      "path": "model/generate/sd_turbo.safetensors",
+      "params": "0.86B-unet",
+      "quant": "fp16",
+      "role": "generate",
+      "kind": "generate",
+      "hf": "https://huggingface.co/stabilityai/sd-turbo/resolve/main/sd_turbo.safetensors",
+      "steps": 2,
+      "size": [
+        512,
+        512
+      ],
+      "note": "~3.4GB fp16; 1-4 steps; CPU-runnable via stable-diffusion.cpp"
     }
   }
 }
