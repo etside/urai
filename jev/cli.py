@@ -116,6 +116,8 @@ def main(argv=None):
     p.add_argument("--steps", type=int, default=None)
     p.add_argument("--seed", type=int, default=7)
     p = sub.add_parser("embed"); p.add_argument("text", nargs="+")
+    p = sub.add_parser("skill"); p.add_argument("action", nargs="?",
+                                                default="list")
     p = sub.add_parser("mcp")
     p = sub.add_parser("api"); p.add_argument("--port", type=int, default=8777)
     p.add_argument("--host", default="127.0.0.1",
@@ -294,6 +296,12 @@ def main(argv=None):
                              indent=2)[:4000])
         except Exception as e:
             print(f"API server not running ({e}); start with: urai api")
+        return
+
+    if args.cmd == "skill":
+        from . import skills as _skills
+        for s in _skills.all_skills():
+            print(f"{s['name']}: {s['description'][:120]}")
         return
 
     if args.cmd == "mcp":

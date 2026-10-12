@@ -18,6 +18,8 @@ from verifier import verify
 from . import tools
 from .context import build_context, to_messages
 from .router import route
+from .skills import context_block as skills_block
+from .skills import match as skills_match
 
 MAX_FIXES = 2
 MAX_TOOLS = 6
@@ -100,6 +102,13 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048) -> dict:
     trace.append({"step": "context", "est_tokens": ctx["est_tokens"],
                   "dropped_history": ctx["dropped_history"]})
     messages = [{"role": "system", "content": SYSTEM}] + to_messages(ctx)
+    loaded = skills_match(task)
+    if loaded:
+        messages.append({"role": "system",
+                         "content": "Loaded skills (follow them):\n"
+                         + skills_block(task)})
+        trace.append({"step": "skills",
+                      "loaded": [s["name"] for s in loaded]})
 
     answer, fixes, tool_calls = "", 0, 0
     failure_kind = None

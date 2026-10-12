@@ -3,9 +3,14 @@
 
 Checks: registry loads (chat+vision+generate kinds), CLI surface
 (see/imagine/version/teacher/model/serve/api), server routes, agent +
-verifier + distill imports, no secrets in tracked files.
+verifier + distill imports, no secrets in repo.
 
-    python3 scripts/smoke_urai.py
+    python3 scripts/smoke_urai.py            # full (CI, VPS, GPU boxes)
+    python3 scripts/smoke_urai.py --offline  # device-safe: no network,
+                                             # no subprocesses (rule: no
+                                             # heavy work on the small box —
+                                             # heavy runs live on the VPS
+                                             # and GitHub Actions)
 """
 
 import json
@@ -33,6 +38,7 @@ def run_cli(*args):
 
 
 def main():
+    offline = "--offline" in sys.argv  # device-safe: no network, no subprocesses
     import jev
     check("version", jev.VERSION == "v1-lite", getattr(jev, "VERSION", None))
 
@@ -52,11 +58,16 @@ def main():
     check("tool parse+exec", run_tool_call(
         extract_tool_calls('x\n```tool\n{"tool": "run", "args": {"argv": ["git", "status"]}}\n```')[0]
     ).get("ok") in (True, False))  # executes (ok) or refuses cleanly
-    ws = web_search("test", top=1)
+    ws = {"ok": True, "output": "offline-skip"} if offline else web_search("test", top=1)
     check("web_search live", ws["ok"] and len(ws["output"]) > 0, ws["output"][:80])
     check("web_fetch ssrf guard",
           web_fetch("http://127.0.0.1:9/").get("ok") is False)
     import scripts.learn.ingest as _ing  # noqa - import check only
+    from jev.skills import all_skills, match as skills_match
+    check("skills load", len(all_skills()) >= 3,
+          str([s["name"] for s in all_skills()]))
+    check("skills match", any(s["name"] == "webapp-testing" for s in
+                              skills_match("test the webapp login page")))
     check("learn docs+scripts", (ROOT / "docs" / "LEARN.md").is_file()
           and (ROOT / "scripts" / "learn" / "ingest.py").is_file()
           and (ROOT / "scripts" / "learn" / "render.py").is_file())
@@ -64,8 +75,11 @@ def main():
     check("vision bad-path guard", not bad["ok"] and "error" in bad, str(bad)[:80])
     st = jev.imagine.status()
     check("imagine status shape", set(st) >= {"runner_built", "checkpoint_ready"})
-    gen = jev.imagine.generate("test prompt")
-    check("imagine missing-runner guard", not gen["ok"], str(gen)[:80])
+    if offline:
+        check("imagine generate (offline-skip)", True)
+    else:
+        gen = jev.imagine.generate("test prompt")
+        check("imagine missing-runner guard", not gen["ok"], str(gen)[:80])
 
     src = (ROOT / "jev" / "server.py").read_text()
     for route in ["/v1/chat/completions", "/v1/models", "/v1/images/generations", "/see", "/imagine"]:
@@ -86,6 +100,9 @@ def main():
         (["imagine", "a red ball"], "ok"),
         (["embed", "hello"], "embedding server down"),
     ]:
+        if offline:
+            check("cli surface (offline-skip)", True)
+            break
         _, out = run_cli(*args)
         check(f"cli {' '.join(args)}", (needle in out) if needle else True, out[:100])
 

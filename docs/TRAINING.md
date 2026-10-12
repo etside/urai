@@ -146,3 +146,19 @@ Every claim lands in `eval/reports/` with command + box + commit:
 ./bin/urai serve start --model <id> [--spec ngram-mod]
 python3 scripts/distill/run_distill.py ...  # quality gates
 ```
+
+## Promotion rule (eval-gated: the scoreboard decides)
+
+No student — ours, merged, or third-party — becomes `active` without
+beating the current best **on the same probes**:
+
+```bash
+python3 scripts/student_baseline.py --model <candidate> --n 10
+# compare eval/reports/student-baseline-<candidate>.json mean_score
+# vs the incumbent's file. Higher mean wins. Ties: smaller/faster wins.
+```
+
+Current bar: `coder05-fast` mean **0.2** (10 probes,
+`eval/reports/student-baseline-coder05-fast.json`). Community fine-tunes
+(e.g. HF Qwen3 GGUFs) may be registered as `experimental` entries, but
+they stay non-active until they clear this gate. No exceptions, no vibes.
