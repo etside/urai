@@ -72,6 +72,34 @@ DEFAULTS = {
             "steps": 2, "size": [512, 512],
             "note": "~3.4GB fp16; 1-4 steps; CPU-runnable via stable-diffusion.cpp",
         },
+        # Qwen3 students (2025+, hybrid thinking, stronger than Qwen2.5
+        # at the same size). Open weights (Apache-2.0). Refs:
+        #   https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF
+        #   https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF
+        #   https://github.com/QwenLM/Qwen3
+        "qwen3-06b": {
+            "path": "model/base/Qwen3-0.6B-Q8_0.gguf",
+            "params": "0.6B", "quant": "Q8_0", "role": "fast",
+            "kind": "chat",
+            "hf": "https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf",
+        },
+        "qwen3-17b": {
+            "path": "model/base/Qwen3-1.7B-Q4_K_M.gguf",
+            "params": "1.7B", "quant": "Q4_K_M", "role": "primary",
+            "kind": "chat",
+            "hf": "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf",
+        },
+        # Embeddings: nomic-embed-text-v1.5 (open weights, Apache-2.0).
+        # Served by llama-server --embedding on port 8081. Refs:
+        #   https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF
+        "embed-small": {
+            "path": "model/base/nomic-embed-text-v1.5.Q4_K_M.gguf",
+            "params": "137M", "quant": "Q4_K_M", "role": "embed",
+            "kind": "embedding",
+            "hf": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf",
+            "port": 8081,
+            "note": "~100MB; served with llama-server --embedding",
+        },
     },
 }
 

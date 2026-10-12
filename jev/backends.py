@@ -69,6 +69,34 @@ class LlamaServerBackend(Backend):
                 "backend": self.name, "model": self.model}
 
 
+class EmbeddingBackend(Backend):
+    """Local embedding server (llama-server --embedding, :8081)."""
+
+    name = "embed-local"
+
+    def __init__(self, base=None, model=None):
+        self.base = (base or os.environ.get("URAI_EMBED_URL",
+                                            "http://127.0.0.1:8081")).rstrip("/")
+        self.model = model or os.environ.get("URAI_EMBED_MODEL", "local-embed")
+
+    def healthy(self):
+        try:
+            urllib.request.urlopen(self.base + "/health", timeout=5).read()
+            return True
+        except Exception:
+            return False
+
+    def embed(self, inputs):
+        if isinstance(inputs, str):
+            inputs = [inputs]
+        data = _post_json(self.base + "/v1/embeddings",
+                          {"model": self.model, "input": inputs})
+        return [d["embedding"] for d in data["data"]]
+
+    def complete(self, messages, max_tokens=256, temperature=0.2):
+        raise NotImplementedError("embedding backend has no chat; use .embed()")
+
+
 class TeacherAPIBackend(Backend):
     """External fallback (OpenRouter / Gemini-OAI / any OpenAI endpoint)."""
 

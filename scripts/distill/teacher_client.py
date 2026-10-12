@@ -92,6 +92,22 @@ DEFAULT_SYSTEM = (
     "benchmark results. If unsure, say so."
 )
 
+# Reasoning-distill mode (DeepSeek-R1 style): the teacher thinks first in a
+# ```think block, then gives the final answer. The trace is kept as training
+# signal (small models learn the reasoning, not just the answer).
+# Use: run_distill.py --system reasoning (with a reasoning teacher such as
+# DeepSeek-R1-Distill, Qwen3-thinking, or any strong chat model).
+REASONING_SYSTEM = (
+    "You are a senior software engineer who reasons step by step. First "
+    "write your analysis in a ```think block (plan, edge cases, why other "
+    "approaches fail). Then output the final production-quality answer with "
+    "tests and error handling. Never invent APIs, files, or benchmark "
+    "results. If unsure, say so inside the think block and keep the answer "
+    "minimal."
+)
+
+SYSTEMS = {"default": DEFAULT_SYSTEM, "reasoning": REASONING_SYSTEM}
+
 
 def get_teacher() -> Teacher:
     if os.environ.get("TEACHER_API_KEY") and os.environ.get("TEACHER_BASE_URL"):

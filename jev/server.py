@@ -278,6 +278,25 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send({"error": res["error"]}, 502)
             return self._send(res)
 
+        if self.path == "/v1/embeddings":
+            from .backends import EmbeddingBackend
+            be = EmbeddingBackend(model=body.get("model", "local-embed"))
+            if not be.healthy():
+                return self._send({"error": "embedding server down; run: "
+                                            "urai model download embed-small && "
+                                            "urai serve start --model embed-small"},
+                                  502)
+            try:
+                vecs = be.embed(body.get("input", ""))
+            except Exception as e:
+                return self._send({"error": str(e)[:300]}, 502)
+            return self._send({
+                "object": "list",
+                "data": [{"object": "embedding", "index": i,
+                          "embedding": v} for i, v in enumerate(vecs)],
+                "model": body.get("model", "local-embed"),
+                "usage": {"prompt_tokens": 0, "total_tokens": 0}})
+
         if self.path == "/generate":
             msgs = [{"role": "user", "content": body.get("prompt", "")}]
             r = route(body.get("prompt", ""))

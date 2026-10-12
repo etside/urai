@@ -102,3 +102,17 @@ for general — exact picks deferred to Phase 2 after workload sampling.
 
 BASE STUDENT MODEL: TBD · BEST TEACHER: TBD · DATASET SIZE: 0 ·
 TOKENS/SEC: unmeasured · All scores: unmeasured · No "best" claimed.
+
+## Addendum 2026-10-12 — speed flags on this box (llama.cpp b11559, m3 CPU, -t 2)
+
+coder05-fast, pp128/tg64, `llama-bench -o json`:
+
+| flags | pp t/s | tg t/s | note |
+|---|---|---|---|
+| plain | 22.84 | 8.06 | `eval/reports/bench-coder05-plain.json` |
+| `-ctk q8_0 -ctv q8_0 -fa on` | 21.69 | 8.02 | `eval/reports/bench-coder05-kv8fa.json` |
+
+Finding: KV-cache quant + flash-attn do **not** speed up this CPU box
+(slight prompt-processing slowdown). They still ship as server defaults
+because q8_0 KV **saves RAM** (matters for 3B+ models in 3 GB). Next lever
+here: `--spec ngram-mod` (free) and IQ quants — bench before claiming.

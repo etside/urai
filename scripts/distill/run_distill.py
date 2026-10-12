@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from teacher_client import get_teacher
+from teacher_client import get_teacher, SYSTEMS
 from verifier import verify
 from filter import build_record, filter_batch
 from judge import judge
@@ -46,10 +46,13 @@ def main():
                     help="execute python blocks (timeout-guarded), not just compile")
     ap.add_argument("--judge", action="store_true",
                     help="LLM-judge second signal for text-only tasks")
+    ap.add_argument("--system", default="default",
+                    choices=sorted(SYSTEMS),
+                    help="teacher system prompt (reasoning = R1-style think traces)")
     args = ap.parse_args()
 
     teacher = get_teacher()
-    print(f"teacher: {teacher.name}")
+    print(f"teacher: {teacher.name} (system: {args.system})")
 
     scored = []
     import glob as _glob
@@ -62,6 +65,8 @@ def main():
                 if not line:
                     continue
                 task = json.loads(line)
+                if args.system != "default":
+                    task["system"] = SYSTEMS[args.system]
                 out = teacher.generate(task)
                 verdict = score_completion(task, out, exec_python=args.exec_python,
                                            use_judge=args.judge, teacher=teacher)

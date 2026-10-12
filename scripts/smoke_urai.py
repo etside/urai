@@ -39,12 +39,18 @@ def main():
     from jev import models_registry as reg
     r = reg.load()
     kinds = {m.get("kind", "chat") for m in r["models"].values()}
-    check("registry kinds", kinds == {"chat", "vision", "generate"}, str(kinds))
+    check("registry kinds", kinds == {"chat", "vision", "generate", "embedding"}, str(kinds))
     check("vision files", len(r["models"]["qwen25vl-3b"].get("files", [])) == 2)
     check("sd-turbo entry", r["models"]["sd-turbo"]["kind"] == "generate")
+    check("embed-small entry", r["models"]["embed-small"]["kind"] == "embedding")
 
     import jev.vision, jev.imagine, jev.server, jev.agent, jev.router
-    check("vision+imagine import", True)
+    from jev.backends import EmbeddingBackend
+    from jev.agent import extract_tool_calls, run_tool_call
+    check("vision+imagine+embed+tools import", True)
+    check("tool parse+exec", run_tool_call(
+        extract_tool_calls('x\n```tool\n{"tool": "run", "args": {"argv": ["git", "status"]}}\n```')[0]
+    ).get("ok") in (True, False))  # executes (ok) or refuses cleanly
     bad = jev.vision.see("/nonexistent/x.png", "hi?")
     check("vision bad-path guard", not bad["ok"] and "error" in bad, str(bad)[:80])
     st = jev.imagine.status()
@@ -56,7 +62,7 @@ def main():
     for route in ["/v1/chat/completions", "/v1/models", "/v1/images/generations", "/see", "/imagine"]:
         check(f"server route {route}", route in src)
     for feat in ["do_OPTIONS", "_needs_key", "URAI_API_KEY", "/v1/completions",
-                 "b64_json", "_static", "Access-Control-Allow-Origin"]:
+                 "/v1/embeddings", "b64_json", "_static", "Access-Control-Allow-Origin"]:
         check(f"server hosting {feat}", feat in src)
     check("webapp exists", (ROOT / "jev" / "static" / "app.html").is_file())
     for f in ["Dockerfile", "docker/docker-compose.yml", "docker/entrypoint.sh",
@@ -66,8 +72,10 @@ def main():
     for args, needle in [
         (["--help"], "imagine"), (["version"], "urai v1-lite"),
         (["teacher", "status"], "base"), (["model", "list"], "qwen25vl-3b"),
+        (["model", "list"], "embed-small"),
         (["see", "/nonexistent.png"], None),
         (["imagine", "a red ball"], "ok"),
+        (["embed", "hello"], "embedding server down"),
     ]:
         _, out = run_cli(*args)
         check(f"cli {' '.join(args)}", (needle in out) if needle else True, out[:100])

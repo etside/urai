@@ -94,6 +94,13 @@ urai version                        runtime version + active model
 | `coder15-primary` | chat | 1.5B Q4_K_M | primary | needs bigger box |
 | `qwen25vl-3b` | vision | 3B Q4_K_M + Q8_0 mmproj | see pictures | `urai model download qwen25vl-3b` |
 | `sd-turbo` | generate | SD-Turbo fp16 | make pictures | `urai model download sd-turbo` |
+| `embed-small` | embedding | 137M Q4_K_M | vectors (`urai embed`) | `urai model download embed-small` |
+| `qwen3-06b` | chat | 0.6B Q8_0 | fast, newer than 0.5B | `urai model download qwen3-06b` |
+| `qwen3-17b` | chat | 1.7B Q4_K_M | primary pick | `urai model download qwen3-17b` |
+
+Train your own (Unsloth QLoRA on the distill set, R1-style reasoning
+traces, MergeKit merges) + speed levers (KV quant default, ngram
+speculative, EAGLE-3): [docs/TRAINING.md](docs/TRAINING.md).
 
 Vision: [Qwen2.5-VL-3B GGUF](https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF)
 via [llama.cpp](https://github.com/ggml-org/llama.cpp).

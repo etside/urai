@@ -97,6 +97,8 @@ def main(argv=None):
     p.add_argument("--model", default=None)
     p.add_argument("--ctx", type=int, default=2048)
     p.add_argument("--port", type=int, default=8080)
+    p.add_argument("--spec", default=None,
+                   help="speculative decoding, e.g. ngram-mod (free) — see docs/TRAINING.md#speed")
 
     sub.add_parser("gpu")
     sub.add_parser("version")
@@ -111,6 +113,7 @@ def main(argv=None):
     p.add_argument("-o", "--out", default=None)
     p.add_argument("--steps", type=int, default=None)
     p.add_argument("--seed", type=int, default=7)
+    p = sub.add_parser("embed"); p.add_argument("text", nargs="+")
     p = sub.add_parser("api"); p.add_argument("--port", type=int, default=8777)
     p.add_argument("--host", default="127.0.0.1",
                    help="bind address (use 0.0.0.0 for LAN/VPS + URAI_API_KEY)")
@@ -191,6 +194,15 @@ def main(argv=None):
         m = reg.load()["models"][mid]
         from pathlib import Path as P
         root = P(__file__).resolve().parents[1]
+        if m.get("kind") == "generate":
+            sys.exit(f"{mid} is a checkpoint, not a server model — "
+                     f"use: urai imagine \"prompt\"")
+        if m.get("kind") == "embedding":
+            mp = str(root / m["path"])
+            if not P(mp).exists():
+                sys.exit(f"{mid} not on disk; run: urai model download {mid}")
+            print(serve_ctl.emb_start(mp, port=m.get("port", 8081)))
+            return
         mp = str(root / m["path"])
         if not P(mp).exists():
             sys.exit(f"{mid} not on disk; run: urai model download {mid}")
@@ -201,7 +213,8 @@ def main(argv=None):
             mmproj = str(cands[0]) if cands and cands[0].exists() else None
             if mmproj is None:
                 sys.exit(f"{mid} needs its mmproj file; run: urai model download {mid}")
-        print(serve_ctl.start(mp, ctx=args.ctx, port=args.port, mmproj=mmproj))
+        print(serve_ctl.start(mp, ctx=args.ctx, port=args.port, mmproj=mmproj,
+                              spec=args.spec))
         return
 
     if args.cmd == "version":
@@ -255,6 +268,19 @@ def main(argv=None):
         print(json.dumps(res, indent=2))
         if not res["ok"]:
             sys.exit(1)
+        return
+
+    if args.cmd == "embed":
+        from .backends import EmbeddingBackend
+        be = EmbeddingBackend()
+        if not be.healthy():
+            sys.exit("embedding server down; run: "
+                     "urai model download embed-small && "
+                     "urai serve start --model embed-small")
+        vecs = be.embed(args.text)
+        print(json.dumps({"model": be.model, "count": len(vecs),
+                          "dims": [len(v) for v in vecs],
+                          "embeddings": vecs}, indent=2)[:6000])
         return
 
     if args.cmd == "evaluate":

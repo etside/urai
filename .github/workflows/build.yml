@@ -67,7 +67,7 @@ jobs:
 
       - name: Download all registry weights
         run: |
-          for id in qwen05-fast coder05-fast coder15-primary qwen25vl-3b sd-turbo; do
+          for id in $(python3 -c "import sys; sys.path.insert(0,'jev'); from models_registry import DEFAULTS; print(' '.join(DEFAULTS['models']))"); do
             echo "== $id =="
             ./bin/urai model download "$id"
           done
