@@ -1,5 +1,36 @@
 # Urai training guide — faster + better, latest open methods (Oct 2026)
 
+## The setup (read this first)
+
+This box (2-core m3, 3.3 GB RAM, no GPU) **orchestrates**; free cloud GPUs
+**train**. Each side does what it's good at:
+
+| Where | Free budget | Job |
+|---|---|---|
+| This box | 24/7 | distill data → verify → serve → eval → release |
+| Kaggle notebooks | 30 GPU-hrs/wk, T4×2, 12h sessions | **primary trainer** (Unsloth QLoRA) |
+| Google Colab | T4, ~4–12h, unpredictable | backup trainer / quick tests |
+| GitHub Actions | 2000 CPU-min/mo | builds, CI, release bundles |
+| HuggingFace Hub | unlimited public | home for adapters, GGUFs, datasets |
+
+## The weekly loop (end to end, $0)
+
+1. **Grow data here** (this box, offline, free):
+   `generate_tasks.py --seed <new>` → `run_distill.py --system reasoning
+   --exec --judge` → `data/verified/distill-vX.jsonl`. Aim: hundreds→
+   thousands of kept records before each training run (41 is a start, not
+   a training set).
+2. **Pack**: `python3 scripts/train/pack_dataset.py --inputs
+   data/verified/distill-vX.jsonl --out /tmp/urai-train-data.tar.gz` →
+   upload once as a Kaggle Dataset (survives the no-internet GPU rule).
+3. **Train** (Kaggle, T4×2, Internet ON): open
+   `notebooks/train_urai_qlora.ipynb`, train Qwen3-0.6B (~15 min) or
+   1.7B, push adapter to `tukitattu/urai-*` on HF Hub.
+4. **Bring it home**: download adapter → merge + GGUF export →
+   `model/base/` → `urai model bench` → registry → `urai serve` →
+   eval vs previous best in `eval/reports/`.
+5. **Ship**: commit, tag `vX.Y`, Actions builds the full bundle + Release.
+
 Urai's CPU box **cannot train weights** (no GPU, 3 GB RAM). The proven split:
 
 1. **Distill here** (this repo, offline): teacher → verifier → filter →
