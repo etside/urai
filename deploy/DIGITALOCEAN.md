@@ -2,8 +2,14 @@
 
 - **Droplet:** `urai-1` (ID 608481907) — 4 vCPU / 8 GB / 160 GB, `blr1`
   (Bangalore, closest to GMT+6), Ubuntu 24.04, **$48/mo**
-- **IP:** `168.144.180.56` — API+web: `http://168.144.180.56:8777`
-  (web playground at `/`, OpenAI-compatible `/v1/*`)
+- **Production URL (nginx :80 + basic auth, no API key):**
+  - `http://168.144.180.56/` (web playground + `/v1/*` API)
+  - `http://urai.168.144.180.56.nip.io/` (same, hostname form — free nip.io DNS)
+  - Login user: `kptjms991` (password held by operator, never in git)
+  - APK: `http://168.144.180.56/app/app-debug.apk` (same login)
+- Direct `:8777` is **firewalled off** — everything goes through nginx auth.
+- Active chat model: `qwen3-17b` (Qwen3 needs `/no_think`; wired in
+  `jev/backends.py`, follows registry `active` automatically).
 - **Project:** `urai` (Development, ML/AI purpose —
   ID 45246ec6-c8cf-46c1-81ba-d8964f70496a)
 - **Firewall:** `urai-fw` — 22, 80, 443, 8777 open
