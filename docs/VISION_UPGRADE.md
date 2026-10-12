@@ -64,7 +64,7 @@ API equivalents: `POST /see {image, question}`, `POST /imagine {prompt, ...}`,
    smoke test (mirrors `scripts/distill/verifier.py` for text).
 3. **Generation eval**: fixed prompt/seed set, record time + output hashes in
    `eval/reports/` (see `MODEL_BENCHMARK_BASELINE.md` conventions).
-4. **VRAM policy**: `gpu.offload_policy()` covers llama; SD-CUDA (`-DSD_CUBLAS=ON`)
+4. **VRAM policy**: `gpu.offload_policy()` covers llama; SD-CUDA (`-DSD_CUDA=ON`)
    path untested — needs a CUDA box.
 5. **Embeddings**: no `/v1/embeddings` yet (llama-server can serve one;
    wire through when retrieval is needed).

@@ -7,11 +7,11 @@ Default checkpoint: SD-Turbo (open weights, CreativeML Open RAIL++-M) —
 https://huggingface.co/stabilityai/sd-turbo — 1-4 steps, 512px, CPU-feasible.
 
 Build the runner once:
-    git clone --depth 1 https://github.com/leejet/stable-diffusion.cpp.git \\
+    git clone --depth 1 https://github.com/leejet/stable-diffusion.cpp.git \
         third_party/stable-diffusion.cpp
-    cmake -S third_party/stable-diffusion.cpp -B third_party/stable-diffusion.cpp/build \\
-        -DCMAKE_BUILD_TYPE=Release -DSD_CUBLAS=OFF
-    cmake --build third_party/stable-diffusion.cpp/build -j$(nproc) --target sd
+    cmake -S third_party/stable-diffusion.cpp -B third_party/stable-diffusion.cpp/build \
+        -DCMAKE_BUILD_TYPE=Release
+    cmake --build third_party/stable-diffusion.cpp/build -j$(nproc) --target sd-cli
 Then:
     ./bin/urai model download sd-turbo
     ./bin/urai imagine "a robot reading a book" -o out.png
@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SD_BIN = ROOT / "third_party" / "stable-diffusion.cpp" / "build" / "bin" / "sd"
+SD_BIN = ROOT / "third_party" / "stable-diffusion.cpp" / "build" / "bin" / "sd-cli"
 OUT_DIR = ROOT / "out" / "images"
 TIMEOUT_S = int(os.environ.get("URAI_IMAGINE_TIMEOUT", "900"))
 

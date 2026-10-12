@@ -47,6 +47,23 @@ cmake --build third_party/llama.cpp/build -j$(nproc) \
 
 Add `./bin` to `PATH` to call `urai` from anywhere.
 
+## Automated build (no manual downloads)
+
+`.github/workflows/build.yml` does the whole upgrade on a GitHub runner:
+builds llama.cpp (pinned commit) + stable-diffusion.cpp from source,
+downloads every pinned weight, runs the smoke test, regenerates the distill
+datasets, and bundles runners + weights (+ SHA256SUMS) as artifacts — and as
+a **GitHub Release** when you push a version tag:
+
+```bash
+git tag v1.1 && git push origin v1.1
+# -> Release holds the full bundle; files over ~1.9GB are split
+#    (2GB Release cap) — rejoin with:
+python3 scripts/assemble_release.py <download-dir>
+```
+
+Every push also runs fast CI (`ci.yml`: compile + offline smoke test).
+
 ## CLI reference
 
 ```

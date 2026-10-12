@@ -1,0 +1,22 @@
+# Urai fast CI — every push: compile + offline smoke test.
+# No weights, servers, keys or network needed. Finishes in ~1 minute.
+name: Urai CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile + offline smoke test
+        run: |
+          python3 -m py_compile jev/*.py scripts/*.py scripts/distill/*.py
+          python3 scripts/smoke_urai.py

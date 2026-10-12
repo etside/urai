@@ -1,0 +1,131 @@
+# Urai full build — runners + weights + verify + release bundle.
+#
+# What it does (Ubuntu runner, CPU-only, no secrets needed):
+#   1. builds llama.cpp (pinned commit, proven by our bench) and
+#      stable-diffusion.cpp from source
+#   2. downloads every pinned weight in model/registry.json
+#      (Qwen chat GGUFs, Qwen2.5-VL + mmproj, SD-Turbo)
+#   3. runs the offline smoke test + regenerates the distill datasets
+#   4. packages runners + weights; splits files >1900MB (GitHub Release
+#      assets cap at 2GB); uploads as workflow artifacts, and as a
+#      GitHub Release on version tags (v*).
+#
+# Run: Actions tab -> "Urai full build" -> Run workflow,
+#      or push a tag:  git tag v1.1 && git push origin v1.1
+# Reassemble after download:  python3 scripts/assemble_release.py <dir>
+
+name: Urai full build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+env:
+  LLAMA_CPP_COMMIT: "7049ff0"   # proven by our qwen05 bench (build #1)
+  PYTHON: python3
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake \
+            libcurl4-openssl-dev libssl-dev > /dev/null
+          cmake --version | head -n 1
+          df -h / | tail -n 1
+
+      - name: Build llama.cpp (pinned)
+        run: |
+          git clone https://github.com/ggml-org/llama.cpp.git third_party/llama.cpp
+          cd third_party/llama.cpp
+          git fetch --depth 1 origin "${{ env.LLAMA_CPP_COMMIT }}"
+          git checkout "${{ env.LLAMA_CPP_COMMIT }}"
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF
+          cmake --build build -j$(nproc) \
+            --target llama-cli llama-bench llama-quantize llama-server
+          ls build/bin | grep -v '^lib'
+          rm -rf .git
+
+      - name: Build stable-diffusion.cpp
+        run: |
+          git clone --depth 1 https://github.com/leejet/stable-diffusion.cpp.git \
+            third_party/stable-diffusion.cpp
+          cmake -S third_party/stable-diffusion.cpp \
+            -B third_party/stable-diffusion.cpp/build \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build third_party/stable-diffusion.cpp/build \
+            -j$(nproc) --target sd-cli
+          ls third_party/stable-diffusion.cpp/build/bin
+          rm -rf third_party/stable-diffusion.cpp/.git
+
+      - name: Download all registry weights
+        run: |
+          for id in qwen05-fast coder05-fast coder15-primary qwen25vl-3b sd-turbo; do
+            echo "== $id =="
+            ./bin/urai model download "$id"
+          done
+          find model -type f -exec ls -la {} \;
+
+      - name: Smoke test + regenerate distill data
+        run: |
+          python3 scripts/smoke_urai.py
+          python3 scripts/distill/generate_tasks.py \
+            --out data/raw_tasks/expanded --seed 7
+          python3 scripts/distill/run_distill.py \
+            --tasks data/raw_tasks/sample_tasks.jsonl \
+            --out data/verified/distill-v0.1.jsonl \
+            --report eval/reports/distill-v0.1-summary.json
+          python3 scripts/distill/run_distill.py \
+            --tasks data/raw_tasks/expanded \
+            --out data/verified/distill-v0.2.jsonl \
+            --report eval/reports/distill-v0.2-summary.json --exec --judge
+
+      - name: Package bundle (+ split >1900MB for Release cap)
+        run: |
+          mkdir -p bundle/runners bundle/weights
+          cp third_party/llama.cpp/build/bin/llama-cli \
+             third_party/llama.cpp/build/bin/llama-bench \
+             third_party/llama.cpp/build/bin/llama-quantize \
+             third_party/llama.cpp/build/bin/llama-server \
+             bundle/runners/
+          cp third_party/stable-diffusion.cpp/build/bin/sd-cli bundle/runners/
+          (strip bundle/runners/* 2>/dev/null || true)
+          find model -type f \( -name '*.gguf' -o -name '*.safetensors' \) \
+            -exec cp {} bundle/weights/ \;
+          (cd bundle && sha256sum runners/* weights/* > SHA256SUMS.txt)
+          (cd bundle/weights && for f in *; do
+             sz=$(stat -c%s "$f")
+             if [ "$sz" -gt 1992294400 ]; then
+               echo "splitting $f ($sz bytes)"
+               split -b 1900M -d "$f" "$f.part" && rm "$f"
+             fi
+           done)
+          (cd bundle && sha256sum runners/* weights/* > SHA256SUMS.txt)
+          du -sh bundle bundle/runners bundle/weights
+          cat bundle/SHA256SUMS.txt
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-bundle-linux-x64
+          path: bundle/
+          retention-days: 30
+
+      - name: Attach bundle to GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bundle/**/*
+          body: |
+            Urai full bundle: CPU runners (llama.cpp pinned ${{ env.LLAMA_CPP_COMMIT }},
+            stable-diffusion.cpp) + all pinned weights + SHA256SUMS.txt.
+            Files ending in .partNN: reassemble with
+            `python3 scripts/assemble_release.py <download-dir>`
+            then verify with `sha256sum -c SHA256SUMS.txt`.
