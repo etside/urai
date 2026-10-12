@@ -19,14 +19,14 @@ COPY . /app
 # Build the llama.cpp runner (pinned commit) at image build time so the
 # container starts fast. stable-diffusion.cpp builds on first imagine
 # request if missing (or prebuild with: cmake --build ... --target sd-cli).
-ARG LLAMA_CPP_COMMIT=7049ff0
-RUN git clone https://github.com/ggml-org/llama.cpp.git third_party/llama.cpp \
- && cd third_party/llama.cpp \
+ARG LLAMA_CPP_COMMIT=7049ff0cbeb1f5ead231de4522af6b75d8d773c0
+RUN git init third_party/llama.cpp && cd third_party/llama.cpp \
+ && git remote add origin https://github.com/ggml-org/llama.cpp.git \
  && git fetch --depth 1 origin ${LLAMA_CPP_COMMIT} \
- && git checkout ${LLAMA_CPP_COMMIT} \
- && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF \
- && cmake --build build -j$(nproc) --target llama-cli llama-bench llama-quantize llama-server \
- && rm -rf .git \
+ && git checkout FETCH_HEAD \
+ && cd /app && cmake -S third_party/llama.cpp -B third_party/llama.cpp/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF \
+ && cmake --build third_party/llama.cpp/build -j$(nproc) --target llama-cli llama-bench llama-quantize llama-server \
+ && rm -rf third_party/llama.cpp/.git \
  && cd /app && python3 -m py_compile jev/*.py scripts/*.py scripts/distill/*.py \
  && chmod +x bin/urai bin/jev docker/entrypoint.sh
 

@@ -23,7 +23,7 @@ on:
       - "v*"
 
 env:
-  LLAMA_CPP_COMMIT: "7049ff0"   # proven by our qwen05 bench (build #1)
+  LLAMA_CPP_COMMIT: "7049ff0cbeb1f5ead231de4522af6b75d8d773c0"   # proven by our bench (short: 7049ff0)
   PYTHON: python3
 
 jobs:
@@ -43,15 +43,15 @@ jobs:
 
       - name: Build llama.cpp (pinned)
         run: |
-          git clone https://github.com/ggml-org/llama.cpp.git third_party/llama.cpp
-          cd third_party/llama.cpp
+          git init third_party/llama.cpp && cd third_party/llama.cpp
+          git remote add origin https://github.com/ggml-org/llama.cpp.git
           git fetch --depth 1 origin "${{ env.LLAMA_CPP_COMMIT }}"
-          git checkout "${{ env.LLAMA_CPP_COMMIT }}"
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF
-          cmake --build build -j$(nproc) \
+          git checkout FETCH_HEAD
+          cd ../..
+          cmake -S third_party/llama.cpp -B third_party/llama.cpp/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF
+          cmake --build third_party/llama.cpp/build -j$(nproc) \
             --target llama-cli llama-bench llama-quantize llama-server
-          ls build/bin | grep -v '^lib'
-          rm -rf .git
+          ls third_party/llama.cpp/build/bin | grep -v "^lib"
 
       - name: Build stable-diffusion.cpp
         run: |
