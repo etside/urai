@@ -1,13 +1,11 @@
-# Urai — binaries and regenerable artifacts stay out of git
+# Urai — binaries and local build outputs stay out of git.
+# Everything else (source, docs, seed + verified data, reports, registry)
+# is tracked so the repo holds the complete project.
 *.gguf
 *.bin
 third_party/
 __pycache__/
 *.pyc
-data/teacher_out/
-data/verified/
-data/raw_tasks/expanded/
-eval/reports/
 .nox/
 .venv/
 *.log

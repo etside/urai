@@ -1,0 +1,18 @@
+{
+  "timestamp_utc": "2026-10-12T00:58:52Z",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "python": "3.14.4",
+  "cpu_model": "Intel(R) Core(TM) m3-6Y30 CPU @ 0.90GHz",
+  "cpu_count_logical": "4",
+  "mem_total": "3454832 kB",
+  "mem_available": "1168996 kB",
+  "swap_total": "3781628kB",
+  "gpu": "none detected",
+  "disk_root_free": "34G",
+  "disk_cwd_free": "34G",
+  "huggingface_reachable": true,
+  "cpu_matmul_proxy": {
+    "ran": false,
+    "reason": "numpy not installed"
+  }
+}
