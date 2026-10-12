@@ -1,0 +1,23 @@
+[Unit]
+Description=Urai API + web playground
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=urai
+WorkingDirectory=/opt/urai
+Environment=URAI_API_KEY=
+Environment=URAI_MODEL=coder05-fast
+# Teacher fallback (optional):
+# Environment=TEACHER_BASE_URL=https://opencode.ai/zen/v1
+# Environment=TEACHER_API_KEY=...
+# Environment=TEACHER_MODEL=opencode/muse-spark-1.3-contributor-free
+ExecStartPre=/usr/bin/python3 -m jev.cli model download ${URAI_MODEL}
+ExecStart=/usr/bin/python3 -m jev.cli api --host 127.0.0.1 --port 8777
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

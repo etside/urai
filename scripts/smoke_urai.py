@@ -55,6 +55,13 @@ def main():
     src = (ROOT / "jev" / "server.py").read_text()
     for route in ["/v1/chat/completions", "/v1/models", "/v1/images/generations", "/see", "/imagine"]:
         check(f"server route {route}", route in src)
+    for feat in ["do_OPTIONS", "_needs_key", "URAI_API_KEY", "/v1/completions",
+                 "b64_json", "_static", "Access-Control-Allow-Origin"]:
+        check(f"server hosting {feat}", feat in src)
+    check("webapp exists", (ROOT / "jev" / "static" / "app.html").is_file())
+    for f in ["Dockerfile", "docker/docker-compose.yml", "docker/entrypoint.sh",
+              "deploy/urai-api.service", "deploy/Caddyfile"]:
+        check(f"hosting file {f}", (ROOT / f).is_file())
 
     for args, needle in [
         (["--help"], "imagine"), (["version"], "urai v1-lite"),

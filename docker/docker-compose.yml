@@ -1,0 +1,38 @@
+# Urai compose: API+web (+ optional Caddy TLS front).
+#   cp .env.example .env   # set URAI_API_KEY + domain
+#   docker compose up -d --build
+#   open http://localhost:8777   (or https://<domain> via caddy)
+services:
+  urai:
+    build: ..
+    image: urai:latest
+    ports:
+      - "8777:8777"
+    environment:
+      URAI_MODEL: ${URAI_MODEL:-coder05-fast}
+      URAI_API_KEY: ${URAI_API_KEY:-}
+      URAI_PORT: 8777
+      TEACHER_BASE_URL: ${TEACHER_BASE_URL:-}
+      TEACHER_API_KEY: ${TEACHER_API_KEY:-}
+      TEACHER_MODEL: ${TEACHER_MODEL:-}
+    volumes:
+      - urai-model:/app/model
+      - urai-out:/app/out
+      - urai-data:/app/data
+    restart: unless-stopped
+
+  # Uncomment for https://<domain> with automatic TLS:
+  # caddy:
+  #   image: caddy:2-alpine
+  #   ports: ["80:80", "443:443"]
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile
+  #     - caddy-data:/data
+  #   depends_on: [urai]
+  #   restart: unless-stopped
+
+volumes:
+  urai-model:
+  urai-out:
+  urai-data:
+  # caddy-data:

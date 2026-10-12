@@ -101,6 +101,53 @@ Generation: [SD-Turbo](https://huggingface.co/stabilityai/sd-turbo) via
 [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp).
 Details + remaining work: [docs/VISION_UPGRADE.md](docs/VISION_UPGRADE.md).
 
+## Hosting (API + web playground, DeepSeek-style)
+
+`urai api` serves **both** the OpenAI-compatible API and a zero-dependency
+web playground (chat / see / imagine with streaming) at `/`:
+
+```
+./bin/urai api                              # localhost only, no key
+URAI_API_KEY=$(openssl rand -hex 24) \
+  ./bin/urai api --host 0.0.0.0             # LAN/VPS, key required
+```
+
+Webapp: http://localhost:8777 — set endpoint + key in the header, pick a
+model, chat with streaming, upload pictures, generate images. Keys live only
+in your browser's localStorage.
+
+### Options
+
+| Where | How | Notes |
+|---|---|---|
+| Localhost | `./bin/urai api` | default, no key, safest |
+| LAN | `--host 0.0.0.0` + `URAI_API_KEY` | every `/v1/*` + tool route needs `Bearer` |
+| VPS (systemd) | `deploy/urai-api.service` → `/etc/systemd/system/` | create `urai` user, put repo in `/opt/urai` |
+| VPS + HTTPS | Caddy: `deploy/Caddyfile` | automatic TLS, `reverse_proxy 127.0.0.1:8777` |
+| Docker | `docker build -t urai .` + `docker/docker-compose.yml` | `cp docker/.env.example docker/.env`, set key |
+| Railway/similar | Dockerfile deploys as-is | set `URAI_API_KEY`, `URAI_MODEL` vars; add volume for `model/` |
+
+### Sizing (measured where noted, rest estimated)
+
+| Model | RAM needed | Notes |
+|---|---|---|
+| `coder05-fast` 0.5B | ~0.6 GB | measured 569 MB; smallest VPS (1 GB) OK |
+| `qwen05-fast` 0.5B | ~0.6 GB | measured 592 MB |
+| `coder15-primary` 1.5B | ~1.5 GB | needs 2 GB+ box (3 GB box OOM'd) |
+| `qwen25vl-3b` vision | ~3 GB | 3B Q4_K_M + Q8_0 projector |
+| `sd-turbo` generate | ~4 GB | fp16 UNet on CPU; slow but works |
+
+Rule of thumb: 2 vCPU + model RAM + 1 GB headroom. CPU-only is fine;
+CUDA (`--n-gpu-layers`, `SD_CUDA`) just makes it faster.
+
+### Security checklist
+
+- Never bind `0.0.0.0` without `URAI_API_KEY` (the CLI prints `auth=off` as a reminder).
+- `/health` and the web UI stay public by design; all data routes need the key when set.
+- CORS defaults to `*` for local dev; lock down with `URAI_CORS_ORIGIN=https://your.domain` in production.
+- Put Caddy/nginx in front for TLS; never expose bare HTTP to the internet.
+- `urai model download` URLs are pinned in `model/registry.json`; weights are the only large pieces and live outside git.
+
 Teacher (distillation source) is any OpenAI-compatible endpoint:
 
 ```bash

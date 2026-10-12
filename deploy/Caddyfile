@@ -1,0 +1,9 @@
+# Caddy front for Urai: automatic HTTPS + API key stays server-side.
+#   1. point DNS ai.example.com -> VPS
+#   2. cp deploy/Caddyfile /etc/caddy/Caddyfile (edit domain)
+#   3. systemctl reload caddy
+ai.example.com {
+	reverse_proxy 127.0.0.1:8777
+	# optional: rate-limit the expensive endpoints
+	# rate_limit { zone imagine { key {remote_host} events 10 window 1m } }
+}

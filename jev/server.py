@@ -1,21 +1,35 @@
 #!/usr/bin/env python3
-"""Urai local API — OpenAI-compatible where practical (mission §22).
+"""Urai API — OpenAI-compatible where practical + hosted webapp (mission §22).
 
-  GET  /health     -> {status, backends}
-  GET  /models     -> OpenAI-style model list (local student + teacher fallback)
-  POST /chat       -> {messages, max_tokens?, temperature?, stream?}
-  POST /generate   -> {prompt, ...} (completions-style convenience)
-  POST /agent      -> {task, files?} full plan/tool/verify loop
-  POST /tools      -> {tool, args} direct tool call (jailed)
-  POST /evaluate   -> {task, expected_contains?} quick scored check
+  GET  /health                  -> {status, backends}
+  GET  / or /app/<file>         -> hosted web playground (no auth)
+  GET  /models, /v1/models      -> OpenAI-style model list
+  POST /chat                    -> {messages, max_tokens?, temperature?, stream?}
+  POST /v1/chat/completions     -> OpenAI chat (roles, vision image_url, stream)
+  POST /v1/completions          -> OpenAI legacy completions {prompt, ...}
+  POST /generate                -> {prompt, ...} convenience
+  POST /agent                   -> {task, files?} full plan/tool/verify loop
+  POST /tools                   -> {tool, args} direct tool call (jailed)
+  POST /evaluate                -> {task, expected_contains?} scored check
+  POST /see                     -> {image, question?} vision answer
+  POST /imagine, /v1/images/generations -> {prompt, ...} PNG (url or b64_json)
 
-Stdlib only. SSE streaming supported on /chat with "stream": true.
+Hosting: bind --host (default 127.0.0.1). Set URAI_API_KEY to require
+`Authorization: Bearer <key>` on every API route (/health + web UI stay
+open; the UI sends the key from its key field). CORS open (configurable
+via URAI_CORS_ORIGIN, default *) so browser apps can call it.
+
+Stdlib only. SSE streaming supported with "stream": true.
 """
 
+import base64
 import json
+import mimetypes
+import os
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 from .agent import run_agent
 from .backends import LlamaServerBackend, MockBackend
@@ -23,6 +37,18 @@ from .router import route
 from . import tools as tool_engine
 
 PORT = 8777
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+API_KEY = os.environ.get("URAI_API_KEY", "")
+CORS_ORIGIN = os.environ.get("URAI_CORS_ORIGIN", "*")
+
+# API routes (everything else: /health open, / + /app/* static UI open)
+_guarded = ("/v1/", "/chat", "/generate", "/agent", "/tools",
+            "/evaluate", "/see", "/imagine")
+
+
+def _needs_key(path: str) -> bool:
+    return bool(API_KEY) and (path == "/chat" or path.startswith(_guarded[0])
+                              or path in _guarded[1:])
 
 
 def _models():
@@ -85,13 +111,39 @@ def _split_image(msgs):
 class Handler(BaseHTTPRequestHandler):
     server_version = "JEV/0.1"
 
+    def _cors(self):
+        self.send_header("Access-Control-Allow-Origin", CORS_ORIGIN)
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers",
+                         "Content-Type, Authorization")
+
     def _send(self, obj, code=200):
         body = json.dumps(obj).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self._cors()
         self.end_headers()
         self.wfile.write(body)
+        print(f"{self.client_address[0]} {self.command} {self.path} -> {code}",
+              flush=True)
+
+    def _deny(self):
+        self._send({"error": {"message": "invalid API key",
+                              "type": "invalid_request_error",
+                              "code": "invalid_api_key"}}, 401)
+
+    def _auth_ok(self) -> bool:
+        if not _needs_key(self.path):
+            return True
+        got = self.headers.get("Authorization", "")
+        return got.startswith("Bearer ") and got[7:] == API_KEY
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors()
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def _read_json(self):
         n = int(self.headers.get("Content-Length", 0) or 0)
@@ -99,6 +151,25 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *a):
         pass
+
+    def _static(self):
+        rel = "app.html" if self.path in ("/", "/app", "/app/") else \
+            self.path[len("/app/"):] if self.path.startswith("/app/") else None
+        if rel is None or ".." in rel:
+            return self._send({"error": "not found"}, 404)
+        f = STATIC_DIR / rel
+        if not f.is_file():
+            return self._send({"error": "not found"}, 404)
+        data = f.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type",
+                         mimetypes.guess_type(str(f))[0] or
+                         "application/octet-stream")
+        self.send_header("Content-Length", str(len(data)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(data)
+        print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
 
     def do_GET(self):
         if self.path == "/health":
@@ -108,10 +179,15 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path in ("/models", "/v1/models"):
             self._send({"object": "list",
                         "data": [{"object": "model", **m} for m in _models()]})
+        elif self.path in ("/", "/app", "/app/") or \
+                self.path.startswith("/app/"):
+            return self._static()
         else:
             self._send({"error": "not found"}, 404)
 
     def do_POST(self):
+        if not self._auth_ok():
+            return self._deny()
         try:
             body = self._read_json()
         except Exception:
@@ -183,9 +259,14 @@ class Handler(BaseHTTPRequestHandler):
                 body.get("seed", 7))
             if not res["ok"]:
                 return self._send({"error": res["error"]}, 502)
-            return self._send({"created": int(time.time()),
-                               "data": [{"url": "file://" + res["path"]}],
-                               **res})
+            if body.get("response_format") == "b64_json":
+                raw = Path(res["path"]).read_bytes()
+                data = [{"b64_json": base64.b64encode(raw).decode()}]
+            else:
+                data = [{"url": "file://" + res["path"]}]
+            return self._send({"created": int(time.time()), "data": data,
+                               **{k: v for k, v in res.items()
+                                   if k not in ("path",)}})
 
         if self.path == "/see":
             from . import vision as _vision
@@ -205,6 +286,28 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
             return self._send({"text": res["content"], "backend": res["backend"]})
+
+        if self.path == "/v1/completions":
+            # OpenAI legacy completions over the routed backend.
+            prompt = body.get("prompt", "")
+            msgs = [{"role": "user", "content": prompt}]
+            r = route(prompt)
+            try:
+                res = r["backend"].complete(
+                    msgs, body.get("max_tokens", 256),
+                    body.get("temperature", 0.2))
+            except Exception as e:
+                return self._send({"error": str(e)[:300]}, 502)
+            model = body.get("model", res.get("model", "jev-local-student"))
+            if body.get("stream"):
+                return self._stream(res["content"], model)
+            return self._send({
+                "id": "cmpl-urai", "object": "text_completion",
+                "created": int(time.time()), "model": model,
+                "choices": [{"index": 0, "text": res["content"],
+                             "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0,
+                          "total_tokens": 0}})
 
         if self.path == "/agent":
             result = run_agent(body.get("task", ""),
@@ -252,10 +355,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(b"data: [DONE]\n\n")
 
 
-def serve(port=PORT):
-    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+def serve(port=PORT, host="127.0.0.1"):
+    srv = ThreadingHTTPServer((host, port), Handler)
     from . import VERSION
-    print(f"Urai {VERSION} on http://127.0.0.1:{port}  (/health /models /chat /agent)")
+    print(f"Urai {VERSION} API+web on http://{host}:{port}  "
+          f"(/health /v1/* /app)  auth={'on' if API_KEY else 'off (localhost only)'}")
     srv.serve_forever()
 
 

@@ -13,7 +13,7 @@
     urai see <image> [question]          ask about a picture (vision model)
     urai imagine <prompt> [-o out.png]   text-to-image (stable-diffusion.cpp)
     urai evaluate "task" --expect a,b   scored check via running server
-    urai api                            start Urai OpenAI-compatible API (:8777)
+    urai api [--host ADDR] [--port P]   start Urai API + web playground (:8777)
 """
 
 import argparse
@@ -112,6 +112,8 @@ def main(argv=None):
     p.add_argument("--steps", type=int, default=None)
     p.add_argument("--seed", type=int, default=7)
     p = sub.add_parser("api"); p.add_argument("--port", type=int, default=8777)
+    p.add_argument("--host", default="127.0.0.1",
+                   help="bind address (use 0.0.0.0 for LAN/VPS + URAI_API_KEY)")
 
     args = ap.parse_args(argv)
 
@@ -267,7 +269,7 @@ def main(argv=None):
 
     if args.cmd == "api":
         from .server import serve
-        return serve(args.port)
+        return serve(args.port, args.host)
 
 
 if __name__ == "__main__":

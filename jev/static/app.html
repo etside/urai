@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Urai — local AI playground</title>
+<style>
+:root{--bg:#0f1420;--panel:#182032;--line:#2a3550;--txt:#e8eef7;--dim:#93a1b8;--acc:#5aa2ff;--ok:#3ddc84;--err:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 system-ui,sans-serif}
+header{display:flex;align-items:center;gap:10px;padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+header b{font-size:18px}#dot{width:10px;height:10px;border-radius:50%;background:var(--dim)}
+#dot.on{background:var(--ok)}#dot.bad{background:var(--err)}
+header .sp{flex:1}header input,header select{background:#0c1220;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px}
+main{max-width:860px;margin:0 auto;padding:16px}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tabs button{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 18px;cursor:pointer}
+.tabs button.on{background:var(--acc);border-color:var(--acc);color:#04122b;font-weight:700}
+.tab{display:none}.tab.on{display:block}
+#msgs{display:flex;flex-direction:column;gap:10px;min-height:300px;max-height:60vh;overflow-y:auto;margin-bottom:12px}
+.msg{padding:10px 14px;border-radius:10px;max-width:85%;white-space:pre-wrap;word-break:break-word}
+.msg.u{align-self:flex-end;background:#24406b}.msg.a{align-self:flex-start;background:var(--panel);border:1px solid var(--line)}
+.row{display:flex;gap:8px}.row input[type=text],.row textarea{flex:1;background:#0c1220;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:10px}
+button.go{background:var(--acc);color:#04122b;font-weight:700;border:0;border-radius:8px;padding:10px 20px;cursor:pointer}
+button.go:disabled{opacity:.5}img.prev{max-width:100%;border-radius:10px;border:1px solid var(--line);margin:8px 0}
+.dim{color:var(--dim);font-size:13px}.err{color:var(--err)}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:8px 0}
+.grid label{font-size:13px;color:var(--dim)}.grid input,.grid select{width:100%;background:#0c1220;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:8px}
+</style>
+</head>
+<body>
+<header>
+  <span id="dot"></span><b>Urai</b><span class="dim" id="ver">v1-lite</span>
+  <span class="sp"></span>
+  <input id="ep" size="26" title="API endpoint">
+  <input id="key" size="16" type="password" placeholder="API key (if set)" title="Sent as Bearer token">
+  <select id="model" title="Model"></select>
+</header>
+<main>
+  <div class="tabs">
+    <button data-t="chat" class="on">Chat</button>
+    <button data-t="see">See</button>
+    <button data-t="imagine">Imagine</button>
+  </div>
+
+  <section id="t-chat" class="tab on">
+    <div id="msgs"></div>
+    <div class="row"><input id="qin" type="text" placeholder="Ask Urai… (Enter to send)"><button class="go" id="qgo">Send</button></div>
+  </section>
+
+  <section id="t-see" class="tab">
+    <input type="file" id="img" accept="image/*">
+    <img id="prev" class="prev" style="display:none">
+    <div class="row"><input id="squestion" type="text" value="Describe this image in detail."><button class="go" id="sgo">Ask</button></div>
+    <div id="sout" style="margin-top:10px"></div>
+  </section>
+
+  <section id="t-imagine" class="tab">
+    <div class="row"><input id="prompt" type="text" placeholder="A robot reading a book, watercolor…"><button class="go" id="igo">Generate</button></div>
+    <div class="grid">
+      <label>Steps<input id="steps" type="number" value="2" min="1" max="20"></label>
+      <label>Seed<input id="seed" type="number" value="7"></label>
+      <label>Size<select id="size"><option>512x512</option><option>768x512</option><option>512x768</option></select></label>
+    </div>
+    <div id="iout" style="margin-top:10px"></div>
+  </section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const ep=()=>$('ep').value.replace(/\/$/,'');
+const hdrs=()=>{const h={'Content-Type':'application/json'};if($('key').value)h['Authorization']='Bearer '+$('key').value;return h};
+localStorage.urai_ep=localStorage.urai_ep||location.origin;$('ep').value=localStorage.urai_ep;
+$('ep').onchange=()=>{localStorage.urai_ep=$('ep').value;boot()};
+$('key').value=localStorage.urai_key||'';$('key').onchange=()=>localStorage.urai_key=$('key').value;
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');$('t-'+b.dataset.t).classList.add('on')});
+async function boot(){
+  try{
+    const h=await (await fetch(ep()+'/health')).json();
+    $('dot').className=h.status==='ok'?'on':'bad';
+    const m=await (await fetch(ep()+'/v1/models',{headers:hdrs()})).json();
+    $('model').innerHTML=(m.data||[]).map(x=>`<option>${x.id}</option>`).join('');
+  }catch(e){$('dot').className='bad'}
+}
+function bubble(who,text){const d=document.createElement('div');d.className='msg '+who;d.textContent=text;$('msgs').appendChild(d);$('msgs').scrollTop=1e9;return d}
+async function send(stream){
+  const q=$('qin').value.trim();if(!q)return;$('qin').value='';bubble('u',q);
+  const b=bubble('a','…');$('qgo').disabled=true;
+  try{
+    const r=await fetch(ep()+'/v1/chat/completions',{method:'POST',headers:hdrs(),
+      body:JSON.stringify({model:$('model').value,stream,messages:[{role:'user',content:q}]})});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    if(stream){const rd=r.body.getReader(),dec=new TextDecoder();let buf='',out='';
+      while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});
+        for(const line of buf.split('\n')){const t=line.trim();if(!t.startsWith('data:'))continue;
+          const p=t.slice(5).trim();if(p==='[DONE]')continue;
+          try{out+=JSON.parse(p).choices[0].delta.content||'';b.textContent=out}catch(e){}}
+        buf=buf.slice(-500)}
+      b.textContent=out||'(empty)'}
+    else{const j=await r.json();b.textContent=j.choices?j.choices[0].message.content:JSON.stringify(j)}
+  }catch(e){b.textContent='Error: '+e.message;b.classList.add('err')}
+  $('qgo').disabled=false;
+}
+$('qgo').onclick=()=>send(true);$('qin').onkeydown=e=>{if(e.key==='Enter')send(true)};
+let imgB64='';
+$('img').onchange=()=>{const f=$('img').files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{imgB64=r.result;$('prev').src=imgB64;$('prev').style.display='block'};r.readAsDataURL(f)};
+$('sgo').onclick=async()=>{
+  if(!imgB64){$('sout').textContent='Pick an image first.';return}
+  $('sout').textContent='…';
+  try{const r=await fetch(ep()+'/v1/chat/completions',{method:'POST',headers:hdrs(),body:JSON.stringify({
+    model:$('model').value,messages:[{role:'user',content:[
+      {type:'image_url',image_url:{url:imgB64}},{type:'text',text:$('squestion').value}]}]})});
+    const j=await r.json();
+    $('sout').textContent=j.choices?j.choices[0].message.content:JSON.stringify(j);
+  }catch(e){$('sout').textContent='Error: '+e.message}};
+$('igo').onclick=async()=>{
+  const p=$('prompt').value.trim();if(!p)return;$('iout').textContent='rendering…';
+  const[W,H]=$('size').value.split('x').map(Number);
+  try{const r=await fetch(ep()+'/v1/images/generations',{method:'POST',headers:hdrs(),body:JSON.stringify({
+    prompt:p,steps:+$('steps').value,seed:+$('seed').value,width:W,height:H,response_format:'b64_json'})});
+    const j=await r.json();
+    if(j.data&&j.data[0].b64_json){$('iout').innerHTML=`<img class="prev" src="data:image/png;base64,${j.data[0].b64_json}"><div class="dim">${(j.elapsed_s||'?')}s · seed ${$('seed').value}</div>`}
+    else $('iout').textContent=JSON.stringify(j).slice(0,500);
+  }catch(e){$('iout').textContent='Error: '+e.message}};
+boot();
+</script>
+</body>
+</html>
