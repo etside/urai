@@ -12,6 +12,8 @@
     urai gpu                            detect GPU + offload policy
     urai see <image> [question]          ask about a picture (vision model)
     urai imagine <prompt> [-o out.png]   text-to-image (stable-diffusion.cpp)
+    urai embed "text..."                 vectors (embedding server)
+    urai mcp                             MCP stdio server (Claude/opencode tools)
     urai evaluate "task" --expect a,b   scored check via running server
     urai api [--host ADDR] [--port P]   start Urai API + web playground (:8777)
 """
@@ -114,6 +116,7 @@ def main(argv=None):
     p.add_argument("--steps", type=int, default=None)
     p.add_argument("--seed", type=int, default=7)
     p = sub.add_parser("embed"); p.add_argument("text", nargs="+")
+    p = sub.add_parser("mcp")
     p = sub.add_parser("api"); p.add_argument("--port", type=int, default=8777)
     p.add_argument("--host", default="127.0.0.1",
                    help="bind address (use 0.0.0.0 for LAN/VPS + URAI_API_KEY)")
@@ -292,6 +295,10 @@ def main(argv=None):
         except Exception as e:
             print(f"API server not running ({e}); start with: urai api")
         return
+
+    if args.cmd == "mcp":
+        from .mcp_server import main as mcp_main
+        return mcp_main()
 
     if args.cmd == "api":
         from .server import serve

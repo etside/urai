@@ -1,2 +1,4 @@
 #!/usr/bin/env bash
-exec python3 -m jev.cli "$@"
+# jev launcher (alias of urai) — works from any directory.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec python3 -c "import sys; sys.path.insert(0, '$ROOT'); from jev.cli import main; sys.exit(main())" "$@"
