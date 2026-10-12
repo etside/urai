@@ -50,7 +50,17 @@ class LlamaServerBackend(Backend):
     def __init__(self, base=None, model=None):
         self.base = (base or os.environ.get("JEV_LLAMA_URL",
                                             "http://127.0.0.1:8080")).rstrip("/")
-        self.model = model or os.environ.get("JEV_LLAMA_MODEL", "local-student")
+        if model is None:
+            model = os.environ.get("JEV_LLAMA_MODEL")
+        if model is None:
+            # fall back to the registry's active model id so model-specific
+            # behavior (e.g. Qwen3 /no_think) follows `urai model use`
+            try:
+                from . import models_registry as _reg
+                model = _reg.load().get("active")
+            except Exception:
+                model = None
+        self.model = model or "local-student"
 
     def healthy(self):
         try:
