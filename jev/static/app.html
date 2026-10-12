@@ -5,73 +5,77 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Urai — local AI playground</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;500&display=swap');
 :root{
-  --bg:#0a0d14; --bg-subtle:#111827; --card:#161d2b;
-  --line:#2a3550; --muted:#7f8cab; --txt:#e8eef7; --dim:#58657b;
+  --bg:#0a0d14; --bg-subtle:#111827; --card:#171e2a;
+  --line:#2a3550; --muted:#8892b0; --txt:#f8f8f2; --dim:#575f82;
   --acc:#00d4aa; --accent:#00b8d4; --ok:#3ddc84; --err:#ff6b6b;
-  --radius:12px; --spacing:12px;
+  --radius:10px; --spacing:8px; --gutter:16px;
+  --font:400 13px/1.6 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
 }
 * {box-sizing:border-box; margin:0; padding:0;}
 body{
-  font-family:'Inter',system-ui,sans-serif;
-  background:var(--bg); color:var(--txt); line-height:1.5;
+  font:var(--font);
+  background:var(--bg); color:var(--txt);
 }
-#root{max-width:960px;margin:0 auto;padding:20px;min-height:100vh;}
+#root{max-width:920px;margin:0 auto;padding:var(--gutter);min-height:100vh;}
 /* Header */
-header{display:flex;align-items:center;gap:10px;padding:var(--spacing);background:var(--bg-subtle);border-radius:var(--radius);margin-bottom:var(--spacing);border:1px solid var(--line);}
-.logo{font-size:20px;font-weight:600;color:var(--txt);}
-.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+header{display:flex;align-items:center;gap:var(--spacing);padding:var(--spacing);background:var(--bg-subtle);border-radius:var(--radius);margin-bottom:var(--gutter);border:1px solid var(--line);}
+.logo{font-weight:600;color:var(--txt);font-size:18px;}
+.status-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
 .status-dot.ok{background:var(--ok)}.status-dot.bad{background:var(--err)}.status-dot.dim{background:var(--muted);}
-.header-text .ver{font-size:12px;color:var(--muted);}
+.header-text{margin-left:auto;}
+.header-text .ver{font-size:10px;color:var(--muted);letter-spacing:.2px;}
 /* Tabs */
-.tabs{display:flex;gap:6px;margin:var(--spacing) 0;}
-.tab-btn{background:var(--card);color:var(--muted);border:1px solid var(--line);border-radius:var(--radius);padding:8px 14px;cursor:pointer;font-size:13px;transition:all .2s;}
+.tabs{display:flex;gap:var(--spacing);margin:var(--gutter) 0;}
+.tab-btn{background:var(--card);color:var(--muted);border:1px solid var(--line);border-radius:var(--radius);padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s,color .15s;}
 .tab-btn:hover{background:var(--bg-subtle);color:var(--txt)}
 .tab-btn.on{background:var(--acc);color:#051b25;border-color:var(--acc);}
 .tab-btn.on:hover{background:var(--accent);color:#04122b;}
 /* Chat section */
-.chat-section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:var(--spacing);min-height:420px;overflow:hidden;}
-#msgs{flex:1;overflow-y:auto;padding:var(--spacing) 0;display:flex;flex-direction:column;gap:var(--spacing);}
-.msg{display:flex;gap:var(--spacing);max-width:85%;font-size:14px;line-height:1.5;}
+.chat-section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:var(--gutter);}
+#msgs{flex:1;overflow-y:auto;padding:var(--gutter) 0;display:flex;flex-direction:column;gap:var(--spacing);}
+.msg{display:flex;gap:var(--spacing);max-width:85%;font-size:13px;line-height:1.5;}
 .msg.user{align-self:flex-end;}
 .msg.assistant{align-self:flex-start;}
-.avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--bg);}
+.avatar{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--bg);}
 .msg.user .avatar{background:var(--acc);color:#051b25;}
 .msg.assistant .avatar{background:var(--card);color:var(--muted);content:'U';}
-.bubble{padding:var(--spacing) var(--spacing) var(--spacing) calc(var(--spacing)+40px);border-radius:var(--radius);position:relative;word-break:break-all;}
-.bubble.user{background:var(--acc);color:#051b25;margin-left:40px;}
-.bubble.assistant{background:var(--bg-subtle);color:var(--txt);margin-right:40px;}
-.bubble .meta{font-size:10px;color:var(--muted);margin-top:4px;display:block;}
-.typing{color:var(--muted);font-style:italic;padding:var(--spacing);}
+.bubble{padding:var(--spacing) var(--spacing) var(--spacing) calc(var(--spacing)+36px);border-radius:var(--radius);position:relative;word-break:break-all;font-size:13px;line-height:1.5;}
+.bubble.user{background:var(--acc);color:#051b25;margin-left:36px;}
+.bubble.assistant{background:var(--bg-subtle);color:var(--txt);margin-right:36px;}
+.bubble .meta{font-size:10px;color:var(--muted);margin-top:2px;display:block;}
+.typing{color:var(--muted);font-style:italic;padding:var(--spacing);font-size:13px; }
 /* Input row */
-.input-row{display:flex;gap:8px;padding:var(--spacing);background:var(--bg-subtle);border-radius:var(--radius);border-top:1px solid var(--line);}
-.input-row input{flex:1;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;font-size:14px;}
-.input-row input:focus{outline:none;border-color:var(--acc);}
-.input-row button{background:var(--acc);color:#051b25;border:0;border-radius:var(--radius);padding:0 18px;font-weight:600;cursor:pointer;transition:opacity .2s;}
+.input-row{display:flex;gap:var(--spacing);padding:var(--gutter);background:var(--bg-subtle);border-radius:var(--radius);border-top:1px solid var(--line);align-items:center;}
+.input-row input{flex:1;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;font-size:13px; transition:border-color .15s,box-shadow .15s;}
+.input-row input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 2px rgba(0,212,170,0.12);}
+.input-row button{background:var(--acc);color:#051b25;border:0;border-radius:var(--radius);padding:0 16px;font-weight:600;font-size:12px;cursor:pointer;transition:background .15s,transform .08s;}
 .input-row button:disabled{opacity:.5;}
-.input-row button:hover:not(:disabled){background:var(--accent);color:#04122b;}
+.input-row button:hover:not(:disabled){background:var(--accent);color:#04122b;transform:translateY(-1px);}
+.input-row button:active:not(:disabled){transform:translateY(1px);}
 /* Sections */
-.section{display:none;padding:var(--spacing);}
+.section{display:none;padding:var(--gutter);}
 .section.on{display:block;}
 /* See section */
 #prev-img{max-width:100%;border-radius:var(--radius);border:1px solid var(--line);margin-top:var(--spacing);display:none;}
 /* Imagine section */
-.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--spacing);margin:var(--spacing) 0;}
-.grid label{font-size:12px;color:var(--muted);}
-.grid input,.grid select{background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--spacing);margin:var(--gutter) 0;}
+.grid label{font-size:11px;color:var(--muted);}
+.grid input,.grid select{background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:var(--radius);padding:6px 8px;font-size:12px;width:100%;}
+.grid select{cursor:pointer;}
 </style>
 </head>
-<body id="root">
+<body>
 <div id="root">
 <header>
   <div class="logo">Urai</div>
   <span class="status-dot ok" id="dot"></span>
   <div class="header-text"><span class="ver" id="ver">v1-lite</span></div>
   <div style="margin-left:auto;display:flex;gap:6px;align-items:center;">
-    <input id="ep" size="26" style="width:180px;background:var(--bg);color:var(--txt;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;" placeholder="Endpoint" value="http://127.0.0.1:8080">
-    <input id="key" size="16" type="password" style="width:140px;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;" placeholder="API key" title="Sent as Bearer token">
-    <select id="model" style="width:150px;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;"></select>
+    <input id="ep" size="25" style="background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:var(--radius);padding:6px 8px;font-size:12px;" placeholder="Endpoint" value="http://127.0.0.1:8080">
+    <input id="key" size="14" type="password" style="background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:var(--radius);padding:6px 8px;font-size:12px;" placeholder="API key">
+    <select id="model" style="background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:var(--radius);padding:6px 8px;font-size:12px;"></select>
   </div>
 </header>
 
@@ -91,13 +95,13 @@ header{display:flex;align-items:center;gap:10px;padding:var(--spacing);backgroun
       <input type="file" id="img" accept="image/*">
       <img id="prev-img" src="#" alt="preview" style="display:none;">
     </div>
-    <div class="row" style="margin:var(--spacing) 0;"><input id="squestion" type="text" value="Describe this image in detail."><button class="go" id="sgo">Ask</button></div>
+    <div class="row" style="margin:var(--gutter) 0 0;"><input id="squestion" type="text" value="Describe this image in detail."><button class="go" id="sgo">Ask</button></div>
     <div id="sout"></div>
   </section>
 
   <!-- Imagine -->
   <section id="imagine" class="section chat-section">
-    <div class="row" style="margin:var(--spacing) 0;"><input id="prompt" type="text" placeholder="A robot reading a book, watercolor…"><button class="go" id="igo">Generate</button></div>
+    <div class="row" style="margin:var(--gutter) 0 0;"><input id="prompt" type="text" placeholder="A robot reading a book, watercolor…"><button class="go" id="igo">Generate</button></div>
     <div class="grid">
       <label>Steps<input id="steps" type="number" value="2" min="1" max="20"></label>
       <label>Seed<input id="seed" type="number" value="7"></label>
