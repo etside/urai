@@ -86,6 +86,53 @@ class OpenAICompatibleTeacher(Teacher):
         )
 
 
+class FreeCliTeacher(Teacher):
+    """Free-tier teacher via the local opencode CLI (no API key needed).
+
+    Uses models the CLI may spend from the free tier, e.g.
+    opencode/muse-spark-1.3-contributor-free (default). Enable with:
+        export URAI_FREE_TEACHER=1
+        export URAI_FREE_MODEL="opencode/muse-spark-1.3-contributor-free"
+    Optional: URAI_FREE_TIMEOUT (seconds per call, default 180),
+    OPENCODE_BIN (default: opencode on PATH, else ~/.opencode/bin/opencode).
+
+    Slow by design (one subprocess per task, ~10-30s) — run it in the
+    background and let it grind through hundreds of tasks for free.
+    """
+
+    name = "free-cli"
+
+    def __init__(self):
+        import shutil
+        self.model = os.environ.get(
+            "URAI_FREE_MODEL", "opencode/muse-spark-1.3-contributor-free")
+        self.timeout = int(os.environ.get("URAI_FREE_TIMEOUT", "180"))
+        self.bin = os.environ.get("OPENCODE_BIN") or shutil.which("opencode") \
+            or os.path.expanduser("~/.opencode/bin/opencode")
+
+    def generate(self, task: dict) -> TeacherOutput:
+        import subprocess
+        system = task.get("system", DEFAULT_SYSTEM)
+        prompt = system + "\n\nTASK:\n" + task["prompt"]
+        try:
+            p = subprocess.run(
+                [self.bin, "run", "--model", self.model, prompt],
+                capture_output=True, text=True, timeout=self.timeout)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"free teacher timed out after {self.timeout}s")
+        if p.returncode != 0:
+            raise RuntimeError(f"free teacher exit {p.returncode}: "
+                               f"{(p.stderr or p.stdout)[-300:]}")
+        text = p.stdout
+        # strip CLI header lines like "> build · <model>"
+        lines = [ln for ln in text.splitlines()
+                 if not ln.strip().startswith(">")]
+        content = "\n".join(lines).strip()
+        if not content:
+            raise RuntimeError("free teacher returned empty answer")
+        return TeacherOutput(content=content, model=self.model, meta={})
+
+
 class PuterBackend(Teacher):
     """Puter.com AI (free account, user-pays allowance, no credit card).
 
@@ -173,4 +220,6 @@ def get_teacher() -> Teacher:
         return OpenAICompatibleTeacher()
     if os.environ.get("PUTER_API_KEY"):
         return PuterBackend()
+    if os.environ.get("URAI_FREE_TEACHER") == "1":
+        return FreeCliTeacher()
     return MockTeacher()
