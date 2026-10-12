@@ -116,3 +116,10 @@ Finding: KV-cache quant + flash-attn do **not** speed up this CPU box
 (slight prompt-processing slowdown). They still ship as server defaults
 because q8_0 KV **saves RAM** (matters for 3B+ models in 3 GB). Next lever
 here: `--spec ngram-mod` (free) and IQ quants — bench before claiming.
+
+## Addendum 2026-10-12 — Qwen2.5-VL-3B (llama.cpp b11559, m3 CPU, -t 2)
+
+qwen25vl-3b Q4_K_M, pp64/tg32: **pp 4.26 t/s, tg 2.48 t/s**
+(`eval/reports/bench-qwen25vl.json`). Slow on this box but functional —
+vision answers stream at a usable pace for single pictures. Needs a bigger
+box (or GPU offload) for interactive use.
