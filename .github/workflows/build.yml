@@ -65,6 +65,18 @@ jobs:
           ls third_party/stable-diffusion.cpp/build/bin
           rm -rf third_party/stable-diffusion.cpp/.git
 
+      - name: Slim build trees (keep bins, free GBs before weights)
+        run: |
+          mkdir -p /tmp/runners
+          cp third_party/llama.cpp/build/bin/llama-cli \
+             third_party/llama.cpp/build/bin/llama-bench \
+             third_party/llama.cpp/build/bin/llama-quantize \
+             third_party/llama.cpp/build/bin/llama-server \
+             third_party/stable-diffusion.cpp/build/bin/sd-cli /tmp/runners/
+          (strip /tmp/runners/* 2>/dev/null || true)
+          rm -rf third_party/llama.cpp third_party/stable-diffusion.cpp
+          ls /tmp/runners && df -h / | tail -n 1
+
       - name: Download all registry weights
         run: |
           for id in $(python3 -c "import sys; sys.path.insert(0,'jev'); from models_registry import DEFAULTS; print(' '.join(DEFAULTS['models']))"); do
@@ -87,16 +99,10 @@ jobs:
             --out data/verified/distill-v0.2.jsonl \
             --report eval/reports/distill-v0.2-summary.json --exec --judge
 
-      - name: Package bundle (+ split >1900MB for Release cap)
+      - name: Package runners, drop build trees (14GB runner disk)
         run: |
           mkdir -p bundle/runners bundle/weights
-          cp third_party/llama.cpp/build/bin/llama-cli \
-             third_party/llama.cpp/build/bin/llama-bench \
-             third_party/llama.cpp/build/bin/llama-quantize \
-             third_party/llama.cpp/build/bin/llama-server \
-             bundle/runners/
-          cp third_party/stable-diffusion.cpp/build/bin/sd-cli bundle/runners/
-          (strip bundle/runners/* 2>/dev/null || true)
+          cp /tmp/runners/* bundle/runners/
           find model -type f \( -name '*.gguf' -o -name '*.safetensors' \) \
             -exec cp {} bundle/weights/ \;
           (cd bundle && sha256sum runners/* weights/* > SHA256SUMS.txt)
