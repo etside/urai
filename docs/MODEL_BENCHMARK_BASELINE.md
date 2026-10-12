@@ -123,3 +123,12 @@ qwen25vl-3b Q4_K_M, pp64/tg32: **pp 4.26 t/s, tg 2.48 t/s**
 (`eval/reports/bench-qwen25vl.json`). Slow on this box but functional —
 vision answers stream at a usable pace for single pictures. Needs a bigger
 box (or GPU offload) for interactive use.
+
+## Addendum 2026-10-12 — vision live (qwen25vl-3b served, m3 CPU box)
+
+`urai serve start --model qwen25vl-3b` loads GGUF + Q8_0 mmproj
+(`loaded multimodal model` confirmed in server log) and
+`urai see photo.png` answers correctly (test: 100px PNG → accurate one-line
+description). Notes: needs `--mmproj` (auto-passed by `serve start`);
+WebP input fails on this build (`failed to decode webp buffer`) — use
+PNG/JPEG; 2048 ctx is tight for big images.
