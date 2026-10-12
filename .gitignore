@@ -1,0 +1,14 @@
+# Urai — binaries and regenerable artifacts stay out of git
+*.gguf
+*.bin
+third_party/
+__pycache__/
+*.pyc
+data/teacher_out/
+data/verified/
+data/raw_tasks/expanded/
+eval/reports/
+.nox/
+.venv/
+*.log
+/tmp/

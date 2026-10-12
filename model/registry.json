@@ -1,0 +1,34 @@
+{
+  "active": "coder05-fast",
+  "models": {
+    "qwen05-fast": {
+      "path": "model/base/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+      "params": "0.5B",
+      "quant": "Q4_K_M",
+      "role": "fast",
+      "hf": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+      "pp_toks": 28.6,
+      "tg_toks": 6.9,
+      "ram_mb": 592,
+      "code_smoke": "retry-task: wrong shape (decorator), vacuous tests, truncated repetition - score 0.0"
+    },
+    "coder05-fast": {
+      "path": "model/base/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+      "params": "0.5B",
+      "quant": "Q4_K_M",
+      "role": "fast-coding",
+      "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+      "pp_toks": 23.2,
+      "tg_toks": 6.35,
+      "ram_mb": 569,
+      "code_smoke": "retry-task: runnable, real asserts, flawed backoff (sleep 2**tries, swallows to None) - beats qwen05 (vacuous tests, syntax fail)"
+    },
+    "coder15-primary": {
+      "path": "model/base/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+      "params": "1.5B",
+      "quant": "Q4_K_M",
+      "role": "primary",
+      "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"
+    }
+  }
+}
