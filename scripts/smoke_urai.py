@@ -47,10 +47,19 @@ def main():
     import jev.vision, jev.imagine, jev.server, jev.agent, jev.router
     from jev.backends import EmbeddingBackend
     from jev.agent import extract_tool_calls, run_tool_call
+    from jev.tools import web_search, web_fetch
     check("vision+imagine+embed+tools import", True)
     check("tool parse+exec", run_tool_call(
         extract_tool_calls('x\n```tool\n{"tool": "run", "args": {"argv": ["git", "status"]}}\n```')[0]
     ).get("ok") in (True, False))  # executes (ok) or refuses cleanly
+    ws = web_search("test", top=1)
+    check("web_search live", ws["ok"] and len(ws["output"]) > 0, ws["output"][:80])
+    check("web_fetch ssrf guard",
+          web_fetch("http://127.0.0.1:9/").get("ok") is False)
+    import scripts.learn.ingest as _ing  # noqa - import check only
+    check("learn docs+scripts", (ROOT / "docs" / "LEARN.md").is_file()
+          and (ROOT / "scripts" / "learn" / "ingest.py").is_file()
+          and (ROOT / "scripts" / "learn" / "render.py").is_file())
     bad = jev.vision.see("/nonexistent/x.png", "hi?")
     check("vision bad-path guard", not bad["ok"] and "error" in bad, str(bad)[:80])
     st = jev.imagine.status()

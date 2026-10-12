@@ -28,6 +28,7 @@ SYSTEM = ("You are Urai, a senior engineer runtime. Plan briefly, use tools, "
           '{"tool": "<name>", "args": {...}}\n'
           "```\n"
           "Tools: read_file {path}, run {argv:[...]}, "
+          "web_search {query, top?}, web_fetch {url}, "
           "see {image, question?}, imagine {prompt, out?}. "
           "After the tool result arrives, continue the task.")
 TOOL_RE = re.compile(r"```tool\s*\n(.*?)```", re.DOTALL)
