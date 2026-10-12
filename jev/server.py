@@ -195,8 +195,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if self.path == "/chat":
             msgs = _as_messages(body.get("messages", []))
-            r = route(_text_of(msgs))
             try:
+                r = route(_text_of(msgs))
                 res = r["backend"].complete(
                     msgs, body.get("max_tokens", 256),
                     body.get("temperature", 0.2))
@@ -230,8 +230,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send({"error": res["error"]}, 502)
                 content = res["answer"]
             else:
-                r = route(_text_of(msgs))
                 try:
+                    r = route(_text_of(msgs))
                     res = r["backend"].complete(
                         msgs, body.get("max_tokens", 256),
                         body.get("temperature", 0.2))

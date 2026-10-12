@@ -64,7 +64,7 @@ class LlamaServerBackend(Backend):
 
     def healthy(self):
         try:
-            urllib.request.urlopen(self.base + "/health", timeout=5).read()
+            urllib.request.urlopen(self.base + "/health", timeout=10).read()
             return True
         except Exception:
             return False

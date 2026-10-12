@@ -14,7 +14,7 @@ Heuristics now, learned classifier later (routing outcomes are logged).
 
 import re
 
-from .backends import MockBackend, LlamaServerBackend, TeacherAPIBackend
+from .backends import LlamaServerBackend, TeacherAPIBackend
 
 DIFFICULT = re.compile(
     r"architect|design system|debug|root cause|race condition|deadlock|"
@@ -49,7 +49,7 @@ def pick_backend(level: int, local: bool = True):
         ll = LlamaServerBackend()
         if ll.healthy():
             return ll, level >= 2, True
-        return MockBackend(), False, False  # local down: honest mock, no silent API spend
+        raise RuntimeError("local backend unavailable (llama-server down or overloaded)")
     try:
         api = TeacherAPIBackend()
         if api.healthy():
@@ -59,7 +59,7 @@ def pick_backend(level: int, local: bool = True):
     ll = LlamaServerBackend()
     if ll.healthy():
         return ll, True, False
-    return MockBackend(), False, False
+    raise RuntimeError("local backend unavailable (llama-server down or overloaded)")
 
 
 def route(prompt: str) -> dict:
