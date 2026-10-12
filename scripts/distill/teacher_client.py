@@ -220,6 +220,44 @@ def get_teacher() -> Teacher:
         return OpenAICompatibleTeacher()
     if os.environ.get("PUTER_API_KEY"):
         return PuterBackend()
+    if os.environ.get("LOCAL_TEACHER") == "1":
+        return SelfTeacher()
     if os.environ.get("URAI_FREE_TEACHER") == "1":
         return FreeCliTeacher()
     return MockTeacher()
+
+
+class SelfTeacher(Teacher):
+    """Distill from your own served student — no keys, no cloud, no cost.
+
+    Serve a capable local model first, e.g.:
+        urai model download qwen3-17b && urai model use qwen3-17b
+        urai serve start
+    Then:  LOCAL_TEACHER=1 bash scripts/distill/run_free_grind.sh ...
+    Optional: LOCAL_TEACHER_URL (default http://127.0.0.1:8080),
+    LOCAL_TEACHER_MODEL (label only).
+    Quality < frontier teachers, but free, private and unlimited —
+    ideal for VPS/laptop grinds and for bootstrapping before GPU training.
+    """
+
+    name = "self-local"
+
+    def __init__(self):
+        import sys as _sys
+        from pathlib import Path as _P
+        _sys.path.insert(0, str(_P(__file__).resolve().parents[2] / "jev"))
+        from backends import LlamaServerBackend
+        self._be = LlamaServerBackend(
+            base=os.environ.get("LOCAL_TEACHER_URL",
+                                "http://127.0.0.1:8080"),
+            model=os.environ.get("LOCAL_TEACHER_MODEL", "local-student"))
+        self.model = self._be.model
+
+    def generate(self, task: dict) -> TeacherOutput:
+        system = task.get("system", DEFAULT_SYSTEM)
+        res = self._be.complete(
+            [{"role": "system", "content": system},
+             {"role": "user", "content": task["prompt"]}],
+            max_tokens=512, temperature=0.2)
+        return TeacherOutput(content=res["content"], model=self.model,
+                             meta={"backend": self._be.name})

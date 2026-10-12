@@ -14,6 +14,14 @@ mkdir -p "$OUTDIR" eval/reports
 export URAI_FREE_TEACHER=1
 : "${OPENCODE_BIN:=/home/kp/.opencode/bin/opencode}"
 export OPENCODE_BIN
+# refuse silent mock runs (a mock "grind" burns hours for zero data)
+TNAME=$(python3 -c "import sys; sys.path.insert(0,'scripts/distill'); from teacher_client import get_teacher; print(get_teacher().name)")
+if [ "$TNAME" = "mock-v1" ]; then
+  echo "REFUSE: teacher is mock-v1. Set one of TEACHER_* (API), PUTER_API_KEY,"
+  echo "LOCAL_TEACHER=1 (own served student), or URAI_FREE_TEACHER=1 (opencode CLI)."
+  exit 1
+fi
+echo "teacher: $TNAME"
 for tf in "$SRC"/*.jsonl; do
   [ -e "$tf" ] || continue
   cat="$(basename "$tf" .jsonl)"
