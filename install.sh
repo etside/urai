@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Urai one-command installer: repo + `urai` on PATH + optional local model.
-#   curl -fsSL https://raw.githubusercontent.com/etside/urai/main/install.sh | bash
+#   export GH_TOKEN=$(gh auth token); curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://raw.githubusercontent.com/etside/urai/main/install.sh | bash  # private repo: `gh auth login` first
 # Env:
 #   URAI_DIR    (default ~/.local/share/urai)
 #   URAI_MODEL  (default empty = remote-first, no download; e.g. coder05-fast for offline coding)

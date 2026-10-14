@@ -21,7 +21,7 @@ Token status: `GET https://urai.daddyai.online/v1/token/status?device_id=YOUR_ID
 ## 1. Minimal terminal install (coding + agent)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/etside/urai/main/install.sh | bash
+export GH_TOKEN=$(gh auth token); curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://raw.githubusercontent.com/etside/urai/main/install.sh | bash  # private repo: `gh auth login` first
 urai login 856777
 urai ask --remote "explain this repo layout"
 urai agent --remote "write a Python retry helper with tests"
