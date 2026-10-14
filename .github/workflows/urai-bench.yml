@@ -1,0 +1,88 @@
+name: Urai Bench - Honest Benchmarks via Actions
+
+# Measures the LIVE VPS system through its public API (no local models,
+# no VPS changes). Dispatch manually; the job commits the JSON report and
+# the regenerated docs/BENCHMARKS.md table back to main.
+#
+# Required repo secret: URAI_MASTER_KEY (master key 856777 = unlimited cost 0).
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Report tag (e.g. bench-2026-10)"
+        required: false
+        default: "nightly"
+
+permissions:
+  contents: write
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout Urai repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python (stdlib only)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run benchmark harness vs live VPS
+        env:
+          URAI_MASTER_KEY: ${{ secrets.URAI_MASTER_KEY }}
+        run: |
+          test -n "$URAI_MASTER_KEY" || { echo "::error::URAI_MASTER_KEY secret missing"; exit 1; }
+          python3 jev/bench.py --base https://urai.daddyai.online \
+            --tag "${{ inputs.tag }}" --key "$URAI_MASTER_KEY"
+
+      - name: Regenerate docs/BENCHMARKS.md
+        run: |
+          python3 - <<'PYEOF'
+          import json, glob, os
+          reps = sorted(glob.glob("eval/reports/bench-*.json"))
+          lines = ["# Urai benchmarks — measured, reproducible",
+                   "",
+                   "Every row below is produced by `jev/bench.py` against the **live**",
+                   "system (`--base https://urai.daddyai.online`, master key = cost 0).",
+                   "Method: knowledge = substring match (12 Qs); math = exact numeric",
+                   "match with 3-sample majority vote (12 Qs); code = generated `solve()`",
+                   "EXECUTED against tests, best-of-3 by pass (6 tasks). No cherry-picking:",
+                   "the harness reports every item. Re-run anytime:",
+                   "`Actions → Urai Bench → Run workflow`.",
+                   "",
+                   "| report | started (UTC) | knowledge | math | code | calls | wall time |",
+                   "|---|---|---|---|---|---|---|"]
+          for fp in reps[-12:]:
+              try:
+                  d = json.load(open(fp))
+                  c = d.get("categories", {})
+                  acc = lambda k: (c.get(k, {}).get("accuracy", "-"))
+                  calls = d.get("calls", "-")
+                  ts = d.get("total_s", "-")
+                  lines.append(f"| `{os.path.basename(fp)}` | {d.get('started','-')} "
+                               f"| {acc('knowledge')} | {acc('math')} | {acc('code')} "
+                               f"| {calls} | {ts}s |")
+              except Exception as e:
+                  lines.append(f"| `{os.path.basename(fp)}` | error: {e} | - | - | - | - | - |")
+          lines += ["",
+                    "Honest framing: these scores measure **this deployment** (Qwen3-4B Q4_K_M,",
+                    "CPU, self-consistency + verifier re-rank on). They show the system working",
+                    "correctly — not parity with frontier models 10-100x its size. The methods",
+                    "that move these numbers (majority vote, exec-pass pick, CoT routing) are",
+                    "exactly what `jev/bench.py` and `run_agent(consistency=N)` implement."]
+          os.makedirs("docs", exist_ok=True)
+          open("docs/BENCHMARKS.md", "w").write("\n".join(lines) + "\n")
+          print("docs/BENCHMARKS.md regenerated")
+          PYEOF
+
+      - name: Commit report + docs
+        run: |
+          git config user.name "urai-bench"
+          git config user.email "urai-bench@daddyai.online"
+          git add eval/reports/bench-*.json docs/BENCHMARKS.md
+          git diff --cached --quiet && echo "nothing new" || \
+            git commit -m "Bench ${{ inputs.tag }}: measured knowledge/math/code scores" && \
+            git push origin HEAD:main

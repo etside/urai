@@ -93,7 +93,8 @@ def extract_tool_calls(answer: str) -> list:
     return calls[:1]  # one tool per turn: observe before the next
 
 
-def run_agent(task: str, files: dict = None, budget_tokens: int = 2048) -> dict:
+def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
+                consistency: int = 1) -> dict:
     t0 = time.time()
     trace = []
     r = route(task)
@@ -165,6 +166,26 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048) -> dict:
             trace.append({"step": "correct", "kind": failure_kind})
         else:
             break
+
+    # Self-consistency re-rank (opt-in): extra samples at temp 0.7,
+    # keep the highest verifier score. Default 1 = unchanged behavior.
+    tried = 1
+    if consistency and int(consistency) > 1 and r["verify"] and answer:
+        try:
+            best, best_score = answer, verify(answer)["score"]
+            for _ in range(min(int(consistency) - 1, 4)):
+                cand = r["backend"].complete(messages, max_tokens=512,
+                                             temperature=0.7)["content"]
+                tried += 1
+                sc = verify(cand)["score"]
+                if sc > best_score:
+                    best, best_score = cand, sc
+            answer = best
+            trace.append({"step": "consistency", "tried": tried,
+                          "best_score": best_score})
+        except Exception as e:
+            trace.append({"step": "consistency-skip",
+                          "error": str(e)[:120]})
 
     return {"ok": True, "answer": answer, "level": r["level"],
             "backend": r["backend"].name, "fixes": fixes,

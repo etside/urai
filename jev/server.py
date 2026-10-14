@@ -482,8 +482,8 @@ class Handler(BaseHTTPRequestHandler):
                 "active_model": _repo_status().get("active_model"),
                 "local_llama": local.healthy(),
                 "measured": {
-                    "gen_toks_per_s": 8.7, "prompt_toks_per_s": 25.0,
-                    "embed_dims": 768, "note": "measured on this CPU droplet (Qwen3-4B Q4_K_M); your latency varies with load",
+                    "gen_toks_per_s": "6-9", "prompt_toks_per_s": "12-28",
+                    "embed_dims": 768, "note": "llama-server slot timings on this CPU droplet (Qwen3-4B Q4_K_M); varies with load and context length",
                 },
                 "strengths": ["local-first zero-cost chat", "agent + swarm + tools",
                               "vision + image + video-animatic", "OpenAI-compatible API + MCP",
@@ -499,6 +499,22 @@ class Handler(BaseHTTPRequestHandler):
                               "/v1/docs", "/v1/notices", "/docs/<file>", "/superadmin"],
                 "docs": "/v1/docs",
             })
+            return
+        if p == "/v1/benchmarks":
+            rdir = ROOT / "eval" / "reports"
+            reps = sorted(rdir.glob("bench-*.json")) if rdir.is_dir() else []
+            latest = None
+            if reps:
+                try:
+                    latest = json.loads(reps[-1].read_text())
+                    latest = {k: latest.get(k) for k in
+                              ("tag", "started", "categories", "calls", "total_s")}
+                    latest["report"] = reps[-1].name
+                except Exception:
+                    latest = {"error": "unreadable"}
+            self._send({"latest": latest,
+                        "reports": [r.name for r in reps[-10:]],
+                        "method_doc": "/docs/BENCHMARKS.md"})
             return
         if p == "/v1/docs":
             docs = []
@@ -825,7 +841,8 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/agent":
             result = run_agent(body.get("task", ""),
                                body.get("files", {}),
-                               body.get("budget_tokens", 2048))
+                               body.get("budget_tokens", 2048),
+                               body.get("consistency", 1))
             _record_use(ip, device, bool(body.get("_urai_authed")))
             _log("agent", ip, device, str(body.get("task", ""))[:160])
             result["usage"] = {"total_tokens": 0, "cost": 0}
