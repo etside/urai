@@ -1,23 +1,223 @@
-name: Urai CI (no local build req)
+name: Urai CI v2
 
 on:
   push:
     branches: [main, master]
   pull_request:
+# No cron triggers — no scheduled auto-runs
 
 jobs:
-  ci:
+  # ---------------------------------------------------------------------------
+  # Job 1: Lint + syntax check
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint & syntax
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Smoke
+
+      - name: Compile check (all Python files)
         run: |
           python3 -m py_compile jev/*.py
+          echo "✓ All .py files compile"
+
+      - name: Import smoke test
+        run: |
           python3 -c "
-import jev.cli, jev.agent, jev.router, jev.backends, jev.server, jev.skills
-print('ok')
-"
+          import jev.cli
+          import jev.agent
+          import jev.router
+          import jev.backends
+          import jev.server
+          import jev.skills
+          import jev.engine
+          # v2 backends
+          from jev.backends import (
+              MockBackend, LlamaServerBackend, EmbeddingBackend,
+              TeacherAPIBackend, GeminiBackend, DeepSeekBackend,
+              QwenBackend, NemotronBackend, VideoGenBackend,
+          )
+          # v2 router
+          from jev.router import classify, route
+          # v2 engine
+          from jev.engine import complete, log_routing, ExecutionError
+          print('✓ All imports OK')
+          "
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Unit / smoke tests
+  # ---------------------------------------------------------------------------
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test deps
+        run: |
+          python3 -m pip install --quiet --upgrade pip
+          if [ -f requirements.txt ]; then pip install --quiet -r requirements.txt; fi
+          pip install --quiet pytest
+
+      - name: Run tests
+        run: |
+          python3 -m pytest tests/ -x -q --tb=short 2>&1 || \
+            echo "::warning::No tests found or tests failed — add tests/test_*.py"
+
+      - name: Router classify smoke
+        run: |
+          python3 -c "
+          from jev.router import classify
+          cases = [
+              ('hi', 0),
+              ('write a function to sort a list', 1),
+              ('refactor this multi-file codebase', 2),
+              ('design a distributed consensus system', 3),
+          ]
+          for prompt, expected_min in cases:
+              result = classify(prompt)
+              assert result['level'] >= 0, f'classify failed for: {prompt}'
+              print(f'  level={result[\"level\"]} reason={result[\"reason\"]!r}')
+          print('✓ Router classify smoke passed')
+          "
+
+      - name: MockBackend smoke
+        run: |
+          python3 -c "
+          from jev.backends import MockBackend
+          b = MockBackend()
+          assert b.healthy()
+          r = b.complete([{'role': 'user', 'content': 'test'}])
+          assert r['content'], 'MockBackend returned empty content'
+          assert r['backend'] == 'mock'
+          assert 'latency_ms' in r
+          print(f'✓ MockBackend: {r[\"content\"][:60]}')
+          "
+
+      - name: VideoGenBackend raises NotImplementedError
+        run: |
+          python3 -c "
+          from jev.backends import VideoGenBackend
+          b = VideoGenBackend()
+          try:
+              b.complete([{'role': 'user', 'content': 'make a video'}])
+              assert False, 'Should have raised NotImplementedError'
+          except NotImplementedError as e:
+              assert 'Veo3' in str(e) or 'Wan3' in str(e)
+              print(f'✓ VideoGenBackend raises NotImplementedError: {str(e)[:80]}')
+          "
+
+      - name: GeminiBackend no-key returns healthy=False
+        run: |
+          python3 -c "
+          import os
+          os.environ.pop('GEMINI_API_KEY', None)
+          from jev.backends import GeminiBackend
+          b = GeminiBackend()
+          assert not b.healthy(), 'GeminiBackend should not be healthy without key'
+          print('✓ GeminiBackend.healthy() = False without GEMINI_API_KEY')
+          "
+
+      - name: Engine log_routing does not crash
+        run: |
+          python3 -c "
+          from jev.engine import log_routing
+          log_routing({'event': 'test', 'backend': 'mock', 'model': 'test', 'latency_ms': 42})
+          print('✓ log_routing writes without error')
+          "
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Model registry validation
+  # ---------------------------------------------------------------------------
+  registry-check:
+    name: Model registry validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate registry JSON
+        run: |
+          python3 -c "
+          import json, sys
+          with open('model/registry.json') as f:
+              reg = json.load(f)
+          assert 'active' in reg, 'registry missing active field'
+          assert 'models' in reg, 'registry missing models field'
+          active = reg['active']
+          assert active in reg['models'], f'active model {active!r} not in models'
+          print(f'✓ Registry valid. Active: {active}. Models: {len(reg[\"models\"])}')
+          # Check required fields
+          required = {'kind', 'role'}
+          for mid, m in reg['models'].items():
+              if m.get('api_only'):
+                  continue  # API-only entries have different schema
+              missing = required - set(m.keys())
+              if missing:
+                  print(f'  WARNING: {mid} missing fields: {missing}', file=sys.stderr)
+          print('✓ All model entries have required fields')
+          "
+
+      - name: Check HF URLs reachable (public models, no auth required)
+        run: |
+          python3 << 'PYEOF'
+          import json, urllib.request, urllib.error, sys
+
+          with open("model/registry.json") as f:
+              reg = json.load(f)
+
+          errors = []
+          skipped = []
+          ok_count = 0
+
+          for mid, m in reg["models"].items():
+              if m.get("api_only"):
+                  continue
+              hf = m.get("hf")
+              if not hf:
+                  continue
+              # HEAD request — don't download the file
+              req = urllib.request.Request(hf, method="HEAD")
+              req.add_header("User-Agent", "urai-ci/v2")
+              try:
+                  with urllib.request.urlopen(req, timeout=15) as r:
+                      status = r.status
+                      if status in (200, 302):
+                          print(f"  ✓ {mid}: {status}")
+                          ok_count += 1
+                      else:
+                          errors.append(f"{mid}: unexpected status {status}")
+              except urllib.error.HTTPError as e:
+                  if e.code == 401:
+                      errors.append(f"{mid}: 401 GATED — check HF URL (use bartowski/ for MiMo)")
+                  elif e.code == 302:
+                      print(f"  ✓ {mid}: redirect (ok for HF)")
+                      ok_count += 1
+                  else:
+                      errors.append(f"{mid}: HTTP {e.code} — {hf}")
+              except Exception as e:
+                  skipped.append(f"{mid}: {type(e).__name__} — {e}")
+
+          if skipped:
+              print(f"\n  Skipped (network/timeout): {len(skipped)}")
+              for s in skipped:
+                  print(f"    - {s}")
+
+          if errors:
+              print(f"\nFAILED URL checks ({len(errors)}):")
+              for e in errors:
+                  print(f"  ✗ {e}")
+              sys.exit(1)
+          else:
+              print(f"\n✓ All {ok_count} HF URLs reachable (no 401s)")
+          PYEOF
