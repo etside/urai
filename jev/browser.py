@@ -186,6 +186,8 @@ def _needs_secret(step: dict) -> str:
 
 def run_steps(steps, goal="", run_id=None) -> dict:
     """Execute browser steps. May pause for credential approval (see module doc)."""
+    if not run_id and not (steps or []):
+        return {"ok": False, "error": "no steps given"}
     rid = run_id or _new_run(goal)
     r = _runs.get(rid)
     if r is None:

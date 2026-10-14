@@ -48,13 +48,47 @@ def all_skills() -> list:
     return out
 
 
+def _stem(w: str) -> str:
+    for suf in ("ing", "ed", "es", "s"):
+        if len(w) - len(suf) >= 3 and w.endswith(suf):
+            return w[:-len(suf)]
+    return w
+
+
+def _related(a: str, b: str) -> bool:
+    if a == b:
+        return True
+    if len(a) >= 4 and len(b) >= 4:
+        n = 0
+        for x, y in zip(a, b):
+            if x != y:
+                break
+            n += 1
+        if n >= 5:  # secur-ity/secure, cod-e/coding
+            return True
+    return False
+
+
 def match(task: str, limit: int = MAX_SKILLS) -> list:
-    """Score skills by keyword overlap with the task. Returns top matches."""
+    """Score skills by keyword overlap: substring hit (1pt) or stem/prefix
+    relation (1pt). Keeps old substring behavior, adds word-variant recall."""
     words = set(re.findall(r"[a-z]{3,}", task.lower()))
     scored = []
     for s in all_skills():
         hay = (s["name"] + " " + s["description"]).lower()
-        score = sum(1 for w in words if w in hay)
+        hay_words = set(re.findall(r"[a-z]{3,}", hay))
+        hay_stems = {_stem(w) for w in hay_words}
+        score = 0
+        name = s["name"].lower()
+        for w in words:
+            if w in name:
+                score += 2  # name hit = strong signal
+            elif w in hay:
+                score += 1
+            elif _stem(w) in hay_stems:
+                score += 1
+            elif any(_related(w, h) for h in hay_words):
+                score += 1
         if score > 0:
             scored.append((score, s))
     scored.sort(key=lambda x: -x[0])

@@ -400,10 +400,7 @@ class Handler(BaseHTTPRequestHandler):
         if n > 10_000_000:
             raise ValueError("body too large")
         raw = self.rfile.read(n) or b"{}"
-        try:
-            return json.loads(raw)
-        except Exception:
-            return {}
+        return json.loads(raw)  # strict: malformed JSON raises -> 400 in do_POST
 
     def _query(self):
         try:
