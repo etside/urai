@@ -461,6 +461,10 @@ class Handler(BaseHTTPRequestHandler):
                     "stats": _state["stats"],
                 })
             return
+        if p.startswith("/browser/status/"):
+            from . import browser as _b
+            info = _b.run_status(p[len("/browser/status/"):].split("/")[0])
+            return self._send(info, 200 if info.get("ok") else 404)
         if p.startswith("/v1/videos/"):
             from . import video as _video
             jid = p[len("/v1/videos/"):].split("/")[0]
@@ -569,7 +573,8 @@ class Handler(BaseHTTPRequestHandler):
                  "/agent", "/tools", "/evaluate", "/see", "/imagine",
                  "/v1/images/generations", "/v1/embeddings",
                  "/v1/videos/generations")
-        needs_gate = (p == "/chat" or p.startswith("/v1/") or p in gated[2:])
+        needs_gate = (p == "/chat" or p.startswith("/v1/") or p in gated[2:]
+                      or p.startswith("/agent") or p.startswith("/browser/"))
         if needs_gate and p not in ("/v1/models",):
             allowed, reason, remaining = _check_access(ip, device, is_master)
             if not allowed:
@@ -767,6 +772,36 @@ class Handler(BaseHTTPRequestHandler):
             _log("agent", ip, device, str(body.get("task", ""))[:160])
             result["usage"] = {"total_tokens": 0, "cost": 0}
             return self._send(result)
+
+        if p == "/agent/swarm":
+            from .swarm import run_swarm
+            try:
+                tasks = body.get("tasks", [])
+                result = run_swarm(tasks, body.get("max_workers", 3))
+            except Exception as e:
+                return self._send({"error": str(e)[:300]}, 502)
+            _record_use(ip, device, bool(body.get("_urai_authed")))
+            _log("swarm", ip, device, f"{len(tasks)} tasks",
+                 {"master": bool(body.get("_urai_authed"))})
+            result["usage"] = {"total_tokens": 0, "cost": 0}
+            return self._send(result)
+
+        if p == "/browser/run":
+            from . import browser as _b
+            res = _b.run_steps(body.get("steps", []), goal=body.get("goal", ""))
+            _record_use(ip, device, bool(body.get("_urai_authed")))
+            _log("browser", ip, device, str(body.get("goal", ""))[:160],
+                 {"master": bool(body.get("_urai_authed")),
+                  "needs_approval": bool(res.get("needs_approval"))})
+            code = 200 if res.get("ok") or res.get("needs_approval") else 502
+            return self._send(res, code)
+
+        if p == "/browser/approve":
+            from . import browser as _b
+            res = _b.approve(body.get("run_id", ""), dict(body.get("secrets", {})))
+            _log("browser_approve", ip, device, f"run={body.get('run_id','')[:20]}",
+                 {"ok": bool(res.get("ok"))})
+            return self._send(res, 200 if res.get("ok") else 400)
 
         if p == "/tools":
             fn = tool_engine.TOOLS.get(body.get("tool", ""))

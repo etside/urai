@@ -1,0 +1,1 @@
+{"name": "telegram", "version": "1.0.0", "description": "Telegram channel: polls bot updates, answers via Urai API. Needs TELEGRAM_BOT_TOKEN.", "enabled": false, "hooks": ["message"]}

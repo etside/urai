@@ -17,6 +17,9 @@
     urai login [key]                     save VPS master key (856777) for remote use
     urai logout                          forget saved remote credentials
     urai whoami                          show remote token status
+    urai swarm "t1" "t2" [...]            parallel multi-agent fan-out
+    urai plugin list|enable|disable|serve  OpenClaw-style plugins
+    urai browse "goal" --steps file.json  human-like browser run
     urai mcp                             MCP stdio server (Claude/opencode tools)
     urai evaluate "task" --expect a,b   scored check via running server
     urai api [--host ADDR] [--port P]   start Urai API + web playground (:8777)
@@ -220,6 +223,17 @@ def main(argv=None):
     p.add_argument("--url", default=None, help="API base URL")
     p = sub.add_parser("logout")
     p = sub.add_parser("whoami")
+    p = sub.add_parser("swarm"); p.add_argument("tasks", nargs="+")
+    p.add_argument("--workers", type=int, default=3)
+    p.add_argument("--remote", action="store_true",
+        help="fan out on VPS /agent/swarm (needs: urai login)")
+    p = sub.add_parser("plugin"); p.add_argument("action",
+        choices=["list", "enable", "disable", "serve"], nargs="?", default="list")
+    p.add_argument("name", nargs="?", default=None)
+    p = sub.add_parser("browse"); p.add_argument("goal")
+    p.add_argument("--steps", default=None, help="JSON file with steps array")
+    p.add_argument("--remote", action="store_true",
+        help="run on VPS /browser/run (needs: urai login)")
     p = sub.add_parser("mcp")
     p = sub.add_parser("api"); p.add_argument("--port", type=int, default=8777)
     p.add_argument("--host", default="127.0.0.1",
@@ -465,6 +479,52 @@ def main(argv=None):
         from . import skills as _skills
         for s in _skills.all_skills():
             print(f"{s['name']}: {s['description'][:120]}")
+        return
+
+    if args.cmd == "swarm":
+        if args.remote or os.environ.get("URAI_REMOTE"):
+            try:
+                print(json.dumps(call("POST", "/agent/swarm",
+                                      {"tasks": args.tasks,
+                                       "max_workers": args.workers}), indent=2)[:8000])
+            except Exception as e:
+                sys.exit(f"remote swarm failed ({e}); check: urai whoami")
+            return
+        from .swarm import run_swarm
+        print(json.dumps(run_swarm(args.tasks, args.workers), indent=2)[:8000])
+        return
+
+    if args.cmd == "plugin":
+        from . import plugins as _pl
+        if args.action == "list":
+            for m in _pl.all_plugins():
+                print(f"{m['name']}: {'on' if m.get('enabled') else 'off'} — {m.get('description','')[:90]}")
+            return
+        if args.action in ("enable", "disable"):
+            if not args.name:
+                sys.exit("usage: urai plugin enable|disable <name>")
+            print(json.dumps(_pl.set_enabled(args.name, args.action == "enable")))
+            return
+        if args.action == "serve":
+            if args.name == "telegram":
+                from plugins.telegram.handler import serve_forever
+                return serve_forever()
+            sys.exit("usage: urai plugin serve telegram")
+        return
+
+    if args.cmd == "browse":
+        steps = []
+        if args.steps:
+            steps = json.load(open(args.steps))
+        if args.remote or os.environ.get("URAI_REMOTE"):
+            try:
+                print(json.dumps(call("POST", "/browser/run",
+                                      {"goal": args.goal, "steps": steps}), indent=2)[:6000])
+            except Exception as e:
+                sys.exit(f"remote browse failed ({e}); check: urai whoami")
+            return
+        from . import browser as _b
+        print(json.dumps(_b.run_steps(steps, goal=args.goal), indent=2)[:6000])
         return
 
     if args.cmd == "mcp":

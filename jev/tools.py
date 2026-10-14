@@ -169,3 +169,22 @@ def web_fetch(url: str) -> dict:
 
 
 TOOLS.update({"web_search": web_search, "web_fetch": web_fetch})
+
+
+def browse(goal: str = "", steps: str = "[]") -> dict:
+    """Human-like browser run (agent tool). Auth fields pause for user approval
+    instead of failing: returns {needs_approval, run_id, fields} for the
+    human to approve with real input (see docs/agent-swarm.md safety policy)."""
+    import json as _json
+    try:
+        step_list = _json.loads(steps) if isinstance(steps, str) else (steps or [])
+    except Exception:
+        return {"ok": False, "error": "steps must be a JSON array"}
+    try:
+        from . import browser as _b
+        return _b.run_steps(step_list, goal=goal)
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
+TOOLS["browse"] = browse

@@ -31,7 +31,9 @@ SYSTEM = ("You are Urai, developed by Tynio LTD, a senior engineer runtime. Plan
           "```\n"
           "Tools: read_file {path}, run {argv:[...]}, "
           "web_search {query, top?}, web_fetch {url}, "
-          "see {image, question?}, imagine {prompt, out?}. "
+          "see {image, question?}, imagine {prompt, out?}, "
+          "browse {goal, steps:[{action, selector?, text?, value?}]}. "
+          "browse pauses (never fails) on auth fields so the human can input them. "
           "After the tool result arrives, continue the task.")
 TOOL_RE = re.compile(r"```tool\s*\n(.*?)```", re.DOTALL)
 

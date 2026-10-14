@@ -44,6 +44,10 @@ TOOLS = [
        {"prompt": {"type": "string"}, "duration": {"type": "integer", "default": 4},
         "width": {"type": "integer", "default": 512}, "height": {"type": "integer", "default": 512},
         "fps": {"type": "integer", "default": 4}, "provider": {"type": "string", "default": "auto"}}, ["prompt"]),
+    _t("urai_swarm", "Parallel multi-agent fan-out (Kimi/Hermes-style swarm).",
+       {"tasks": {"type": "array"}, "max_workers": {"type": "integer", "default": 3}}, ["tasks"]),
+    _t("urai_browse", "Human-like browser run (goto/click/fill). Auth fields pause for user approval.",
+       {"goal": {"type": "string", "default": ""}, "steps": {"type": "array"}}, []),
     _t("urai_embed", "Embed one or more texts (embedding server must be up).",
        {"texts": {"type": ["string", "array"]}}, ["texts"]),
     _t("urai_model_list", "Registry: ids, kinds, roles, availability, bench numbers.", {}),
@@ -89,6 +93,16 @@ def tool_call(name, args):
         if not res.get("ok"):
             raise RuntimeError(res.get("error", "video failed"))
         return json.dumps(res, indent=2)
+    if name == "urai_swarm":
+        from jev.swarm import run_swarm
+        tasks = args.get("tasks", [])
+        if isinstance(tasks, str):
+            tasks = [tasks]
+        return json.dumps(run_swarm(tasks, args.get("max_workers", 3)), indent=2)[:8000]
+    if name == "urai_browse":
+        from jev import browser as _b
+        res = _b.run_steps(args.get("steps", []), goal=args.get("goal", ""))
+        return json.dumps(res, indent=2)[:6000]
     if name == "urai_embed":
         from jev.backends import EmbeddingBackend
         be = EmbeddingBackend()
