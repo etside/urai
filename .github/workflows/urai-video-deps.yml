@@ -42,12 +42,16 @@ jobs:
           cmake --build third_party/stable-diffusion.cpp/build \
                 -j$(nproc) --target sd-cli
 
-      - name: Upload sd-cli artifact (manual VPS deploy)
-        uses: actions/upload-artifact@v4
-        with:
-          name: sd-cli-ubuntu-x86_64
-          path: third_party/stable-diffusion.cpp/build/bin/sd-cli
-          retention-days: 14
+      - name: Publish sd-cli to deps release (manual VPS deploy)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -la third_party/stable-diffusion.cpp/build/bin/sd-cli
+          gh release view urai-deps --repo ${{ github.repository }} >/dev/null 2>&1 || \
+            gh release create urai-deps --repo ${{ github.repository }} \
+              --title "Urai vendored deps" --notes "Binaries built by urai-video-deps.yml. Deploy by hand." --draft=false --prerelease
+          gh release upload urai-deps third_party/stable-diffusion.cpp/build/bin/sd-cli \
+            --repo ${{ github.repository }} --clobber
 
       - name: VPS deploy notes
         run: |
