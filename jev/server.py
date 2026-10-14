@@ -461,6 +461,15 @@ class Handler(BaseHTTPRequestHandler):
                     "stats": _state["stats"],
                 })
             return
+        if p.startswith("/v1/videos/"):
+            from . import video as _video
+            jid = p[len("/v1/videos/"):].split("/")[0]
+            if jid in ("generations", ""):
+                return self._send(_video.status())
+            info = _video.job_info(jid)
+            if not info.get("ok"):
+                return self._send(info, 404)
+            return self._send(info)
         if p in ("/", "/app", "/app/") or p.startswith("/app/") or p == "/superadmin":
             return self._static()
         self._send({"error": "not found"}, 404)
@@ -558,7 +567,8 @@ class Handler(BaseHTTPRequestHandler):
         # ---- token-gated AI routes ----
         gated = ("/chat", "/v1/chat/completions", "/v1/completions", "/generate",
                  "/agent", "/tools", "/evaluate", "/see", "/imagine",
-                 "/v1/images/generations", "/v1/embeddings")
+                 "/v1/images/generations", "/v1/embeddings",
+                 "/v1/videos/generations")
         needs_gate = (p == "/chat" or p.startswith("/v1/") or p in gated[2:])
         if needs_gate and p not in ("/v1/models",):
             allowed, reason, remaining = _check_access(ip, device, is_master)
@@ -660,6 +670,30 @@ class Handler(BaseHTTPRequestHandler):
             return self._send({"created": int(time.time()), "data": data,
                                **{k: v for k, v in res.items()
                                    if k not in ("path",)}})
+
+        if p in ("/video", "/v1/videos/generations"):
+            from . import video as _video
+            res = _video.generate(
+                body.get("prompt", ""), body.get("out"),
+                body.get("duration", 4), body.get("width", 512),
+                body.get("height", 512), body.get("fps", 4),
+                body.get("seed", 7), body.get("provider", "auto"),
+                body.get("provider_url"), body.get("provider_key"))
+            if not res.get("ok"):
+                return self._send({"ok": False, "error": res.get("error"),
+                                   "grade": res.get("grade", "")}, 502)
+            _record_use(ip, device, bool(body.get("_urai_authed")))
+            _log("video", ip, device, str(body.get("prompt", ""))[:160],
+                 {"master": bool(body.get("_urai_authed")), "id": res.get("id")})
+            if body.get("response_format") == "b64_json" and res.get("path"):
+                try:
+                    raw = Path(res["path"]).read_bytes()
+                    if len(raw) < 8_000_000:
+                        res["b64_json"] = base64.b64encode(raw).decode()
+                        del res["path"]
+                except Exception as e:
+                    res["file_error"] = str(e)[:120]
+            return self._send(res)
 
         if p == "/see":
             from . import vision as _vision

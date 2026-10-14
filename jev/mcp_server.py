@@ -2,7 +2,7 @@
 """Urai MCP server (Model Context Protocol, stdio, stdlib only).
 
 Lets Claude Code / opencode / Claude Desktop / OpenClaw drive Urai as tools:
-chat, agent, vision, image-gen, embeddings, model registry, evaluation.
+chat, agent, vision, image-gen, video-gen, embeddings, model registry, evaluation.
 
   Add to the MCP client config (served from this repo, no install):
     {"mcpServers": {"urai": {"command": "python3",
@@ -40,6 +40,10 @@ TOOLS = [
     _t("urai_imagine", "Generate a PNG from a prompt (stable-diffusion.cpp).",
        {"prompt": {"type": "string"}, "out": {"type": "string"},
         "steps": {"type": "integer", "default": 2}, "seed": {"type": "integer", "default": 7}}, ["prompt"]),
+    _t("urai_video", "Text-to-video: local CPU slideshow (animatic-grade) or SOTA provider proxy (Higgsfield/Runway keys).",
+       {"prompt": {"type": "string"}, "duration": {"type": "integer", "default": 4},
+        "width": {"type": "integer", "default": 512}, "height": {"type": "integer", "default": 512},
+        "fps": {"type": "integer", "default": 4}, "provider": {"type": "string", "default": "auto"}}, ["prompt"]),
     _t("urai_embed", "Embed one or more texts (embedding server must be up).",
        {"texts": {"type": ["string", "array"]}}, ["texts"]),
     _t("urai_model_list", "Registry: ids, kinds, roles, availability, bench numbers.", {}),
@@ -75,6 +79,15 @@ def tool_call(name, args):
                                args.get("height"), args.get("seed", 7))
         if not res["ok"]:
             raise RuntimeError(res["error"])
+        return json.dumps(res, indent=2)
+    if name == "urai_video":
+        from jev import video
+        res = video.generate(args.get("prompt", ""), args.get("out"),
+                             args.get("duration", 4), args.get("width", 512),
+                             args.get("height", 512), args.get("fps", 4),
+                             args.get("seed", 7), args.get("provider", "auto"))
+        if not res.get("ok"):
+            raise RuntimeError(res.get("error", "video failed"))
         return json.dumps(res, indent=2)
     if name == "urai_embed":
         from jev.backends import EmbeddingBackend

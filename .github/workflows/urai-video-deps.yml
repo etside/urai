@@ -1,0 +1,64 @@
+name: Urai Video Deps - Heavy Build via Actions (VPS-safe)
+
+# Heavy/install work runs HERE on GitHub runners — never on the M3 laptop,
+# and never touches the VPS droplet (no memory/storage/GPU changes).
+# Dispatch manually when local video is needed; deploy the artifact by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "stable-diffusion.cpp ref to build"
+        required: false
+        default: "master"
+
+jobs:
+  build-sd-cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout Urai repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake git
+
+      - name: Clone stable-diffusion.cpp
+        run: |
+          git clone --depth 1 --branch "${{ inputs.ref }}" \
+            https://github.com/leejet/stable-diffusion.cpp.git \
+            third_party/stable-diffusion.cpp
+
+      - name: Build sd-cli (CPU Release)
+        run: |
+          cmake -S third_party/stable-diffusion.cpp \
+                -B third_party/stable-diffusion.cpp/build \
+                -DCMAKE_BUILD_TYPE=Release
+          cmake --build third_party/stable-diffusion.cpp/build \
+                -j$(nproc) --target sd-cli
+
+      - name: Upload sd-cli artifact (manual VPS deploy)
+        uses: actions/upload-artifact@v4
+        with:
+          name: sd-cli-ubuntu-x86_64
+          path: third_party/stable-diffusion.cpp/build/bin/sd-cli
+          retention-days: 14
+
+      - name: VPS deploy notes
+        run: |
+          echo "========================================="
+          echo "Manual VPS deploy (user decision only):"
+          echo "1. Download sd-cli artifact to VPS:"
+          echo "   /opt/urai/third_party/stable-diffusion.cpp/build/bin/sd-cli"
+          echo "2. apt-get install -y ffmpeg  (ONLY if local video wanted;"
+          echo "   adds storage — skip to keep droplet unchanged)"
+          echo "3. urai model download sd-turbo"
+          echo "4. POST /v1/videos/generations now renders local animatics."
+          echo "For SOTA motion (Veo3-class), set HIGGSFIELD_API_KEY or"
+          echo "RUNWAY_API_KEY in the urai-api env instead — see"
+          echo "docs/video-studios.md. No VPS hardware changes needed."
+          echo "========================================="
