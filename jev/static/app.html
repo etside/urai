@@ -485,6 +485,20 @@ body{
   .msg-wrap{padding:6px 14px}
 }
 
+
+/* Token modal + superadmin */
+#token-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center}
+#token-overlay.open{display:flex}
+#token-modal{background:#171717;border:1px solid #3a3a3a;border-radius:12px;width:420px;max-width:92vw;padding:20px}
+#token-modal h2{font-size:1.05rem;margin-bottom:8px}
+#token-modal p{font-size:.85rem;color:#8e8ea0;margin:6px 0}
+#token-modal input{width:100%;padding:10px;border-radius:8px;border:1px solid #3a3a3a;background:#2f2f2f;color:#ececec;margin:6px 0}
+#token-modal button{width:100%;padding:10px;border-radius:8px;border:none;background:#10a37f;color:#fff;cursor:pointer;margin-top:6px}
+#token-banner{display:none;padding:8px 14px;background:#3a1414;border:1px solid #e94560;color:#ffb4b4;font-size:.82rem;text-align:center}
+#token-banner.show{display:block}
+#super-panel{display:none;padding:12px;border-top:1px solid #3a3a3a;background:#171717;max-height:46vh;overflow:auto;font-size:.8rem}
+#super-panel.open{display:block}
+
 /* ── Syntax highlighting (minimal, no deps) ─────────────────────────────── */
 .tok-kw   {color:#ff79c6}
 .tok-str  {color:#f1fa8c}
@@ -581,6 +595,28 @@ body{
     </div>
   </div>
 </main>
+
+
+<div id="token-banner"></div>
+<div id="token-overlay"><div id="token-modal">
+<h2>Urai Master Key</h2>
+<p>Enter master key <b>856777</b> for unlimited zero-cost access. Guests get 5 free responses, then blocked.</p>
+<input type="password" id="master-key-input" placeholder="856777" />
+<button onclick="submitMasterKey()">Unlock unlimited</button>
+<p style="margin-top:10px">No key? Request approval:</p>
+<input id="req-wa" placeholder="WhatsApp number" />
+<input id="req-gmail" placeholder="Real Gmail" />
+<input id="req-dev" placeholder="Device id (auto)" />
+<button onclick="submitApprovalRequest()" style="background:#2f2f2f">Request approval via WhatsApp/Gmail</button>
+<p id="token-msg"></p>
+</div></div>
+<div id="super-panel"><h3>Superadmin — live messages</h3>
+<div style="display:flex;gap:6px;margin:8px 0"><input id="sa-key" placeholder="master key 856777" style="flex:1" /><button onclick="loadSuperAdmin()">Load</button></div>
+<div id="sa-stats"></div><div id="sa-list"></div>
+<h4>Approve / unblock</h4>
+<input id="sa-target" placeholder="device_id or ip" /><input id="sa-wa" placeholder="whatsapp" /><input id="sa-gmail" placeholder="gmail" />
+<div style="display:flex;gap:6px;margin-top:6px"><button onclick="saApprove()">Approve</button><button onclick="saUnblock()">Unblock</button></div>
+<p style="color:#8e8ea0">Hidden access: open /superadmin or press footer 5x.</p></div>
 
 <!-- ── Model picker modal ──────────────────────────────────────────────────── -->
 <div id="modal-overlay" onclick="closeModal(event)">
@@ -1214,6 +1250,25 @@ function startVoice() {
   recognition.onend = () => { btn.textContent = '🎤'; };
   recognition.start();
 }
+
+
+// Token gate + superadmin
+let URAI_MASTER = localStorage.getItem('urai_master')||'';
+let URAI_DEVICE = localStorage.getItem('urai_device')||('dev-'+Math.random().toString(36).slice(2,10));
+localStorage.setItem('urai_device', URAI_DEVICE);
+function authHeaders(extra){ extra=extra||{}; extra['Content-Type']='application/json'; extra['X-Device-Id']=URAI_DEVICE; if(URAI_MASTER) extra['Authorization']='Bearer '+URAI_MASTER; return extra; }
+async function tokenStatus(){ try{ const r=await fetch('/v1/token/status?device_id='+encodeURIComponent(URAI_DEVICE)); return await r.json(); }catch(e){ return null; } }
+async function checkTokenBanner(){ const s=await tokenStatus(); const b=document.getElementById('token-banner'); if(!s) return; if(s.blocked_until>0){ b.classList.add('show'); b.innerHTML='Free Token Expired / 0 available Token. Submit master key 856777 as request fund message to restore access. <button onclick="openTokenModal()">Unlock</button>'; openTokenModal(); } else if(!URAI_MASTER && (s.remaining<=0)){ b.classList.add('show'); b.textContent='Free Token Expired / 0 available Token. Submit master key 856777.'; } else { b.classList.remove('show'); } const rk=document.getElementById('req-dev'); if(rk&&!rk.value) rk.value=URAI_DEVICE; }
+function openTokenModal(){ document.getElementById('token-overlay').classList.add('open'); }
+function closeTokenModal(){ document.getElementById('token-overlay').classList.remove('open'); }
+async function submitMasterKey(){ const k=document.getElementById('master-key-input').value.trim(); const m=document.getElementById('token-msg'); try{ const r=await fetch('/auth/unlock',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':URAI_DEVICE},body:JSON.stringify({master_key:k,device_id:URAI_DEVICE})}); const d=await r.json(); if(d.ok){ URAI_MASTER=k; localStorage.setItem('urai_master',k); m.style.color='#10a37f'; m.textContent='Unlocked. Cost 0.'; closeTokenModal(); checkTokenBanner(); } else { m.style.color='red'; m.textContent=d.message||'Invalid key'; } }catch(e){ m.textContent='Error: '+e.message; } }
+async function submitApprovalRequest(){ const wa=document.getElementById('req-wa').value.trim(); const gm=document.getElementById('req-gmail').value.trim(); const m=document.getElementById('token-msg'); try{ const r=await fetch('/auth/request',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':URAI_DEVICE},body:JSON.stringify({device_id:URAI_DEVICE,whatsapp:wa,gmail:gm,message:'approval request'})}); const d=await r.json(); m.style.color='#10a37f'; m.textContent=d.message||'Request sent'; }catch(e){ m.textContent='Error: '+e.message; } }
+// patch fetch to include auth headers + token modal on 403 expired
+(function(){ const _fetch=window.fetch.bind(window); window.fetch=async function(u,o){ o=o||{}; o.headers=Object.assign({},o.headers||{},authHeaders()); try{ const r=await _fetch(u,o); if(r.status===403){ try{ const d=await r.clone().json(); if(d.code==='free_token_expired'||(d.message||'').includes('Free Token Expired')){ checkTokenBanner(); openTokenModal(); } }catch(e){} } return r; }catch(e){ throw e; } }; })();
+async function loadSuperAdmin(){ const k=document.getElementById('sa-key').value.trim()||URAI_MASTER; try{ const r=await fetch('/superadmin/messages?key='+encodeURIComponent(k)); const d=await r.json(); if(d.error){ document.getElementById('sa-list').textContent='Forbidden'; return; } document.getElementById('sa-stats').innerHTML='Approved: '+(Object.keys(d.approved||{}).length)+' | Blocked: '+(Object.keys(d.blocked||{}).length)+' | Total: '+((d.stats||{}).total_requests||0); document.getElementById('sa-list').innerHTML=(d.live||[]).slice(-30).reverse().map(x=>'<div style="border-bottom:1px solid #2a2a2a;padding:4px 0"><b>'+(x.kind||'')+'</b> '+(x.ip||'')+' '+(x.device||'')+' — '+String(x.preview||'').slice(0,160)+'</div>').join(''); }catch(e){ document.getElementById('sa-list').textContent='Error '+e.message; } }
+async function saApprove(){ const k=document.getElementById('sa-key').value.trim()||URAI_MASTER; const t=document.getElementById('sa-target').value.trim(); const wa=document.getElementById('sa-wa').value.trim(); const gm=document.getElementById('sa-gmail').value.trim(); const r=await fetch('/superadmin/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k,device_id:t,whatsapp:wa,gmail:gm})}); alert(await r.text()); loadSuperAdmin(); }
+async function saUnblock(){ const k=document.getElementById('sa-key').value.trim()||URAI_MASTER; const t=document.getElementById('sa-target').value.trim(); const r=await fetch('/superadmin/unblock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k,ip:t,device_id:t})}); alert(await r.text()); loadSuperAdmin(); }
+(function(){ let clicks=0; document.addEventListener('DOMContentLoaded',()=>{ const f=document.querySelector('.sidebar-footer'); if(f) f.addEventListener('click',()=>{ clicks++; if(clicks>=5){ document.getElementById('super-panel').classList.toggle('open'); clicks=0; } }); if(location.pathname==='/superadmin') document.getElementById('super-panel').classList.add('open'); setTimeout(checkTokenBanner,800); }); })();
 
 // ── Utils ─────────────────────────────────────────────────────────────────
 function escHtml(s) {

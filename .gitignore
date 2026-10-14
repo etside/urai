@@ -16,3 +16,4 @@ __pycache__/
 *auth*.json
 opencode-migration-backup-*/
 *.safetensors
+data/token_state.json
