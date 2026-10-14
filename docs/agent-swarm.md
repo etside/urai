@@ -50,6 +50,9 @@ urai browse "check order status" --remote   # VPS /browser/run
 MCP: `urai_browse`. Status: `GET /browser/status/<run_id>`.
 
 Requires on the runner: `pip install playwright && playwright install chromium`.
+On the VPS the browsers live at `/opt/ms-playwright`, exposed to the API
+service via `/etc/systemd/system/urai-api.service.d/playwright.conf`:
+`Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`.
 
 ## 4. Safety policy — auth tasks ALWAYS ask the human first
 
