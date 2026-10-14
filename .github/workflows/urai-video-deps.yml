@@ -29,9 +29,10 @@ jobs:
 
       - name: Clone stable-diffusion.cpp
         run: |
-          git clone --depth 1 --branch "${{ inputs.ref }}" \
+          git clone --depth 1 --recursive --branch "${{ inputs.ref }}" \
             https://github.com/leejet/stable-diffusion.cpp.git \
             third_party/stable-diffusion.cpp
+          git -C third_party/stable-diffusion.cpp submodule update --init --recursive
 
       - name: Build sd-cli (CPU Release)
         run: |

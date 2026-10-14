@@ -109,11 +109,10 @@ jobs:
 
       - name: MCP tools list smoke
         run: |
-          printf '%s' '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}' \
-            | python3 jev/mcp_server.py | python3 -c "
-          import json, sys
-          d = json.load(sys.stdin)
-          names = [t['name'] for t in d['result']['tools']]
+          python3 -c "
+          from jev.mcp_server import handle
+          r = handle({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list', 'params': {}})
+          names = [t['name'] for t in r['result']['tools']]
           assert 'urai_ask' in names and 'urai_video' in names, names
           print(f'✓ MCP tools: {names}')
           "
