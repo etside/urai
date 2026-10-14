@@ -499,6 +499,67 @@ body{
 #super-panel{display:none;padding:12px;border-top:1px solid #3a3a3a;background:#171717;max-height:46vh;overflow:auto;font-size:.8rem}
 #super-panel.open{display:block}
 
+
+/* ── Premium motion + liveness ──────────────────────────────────────────── */
+.ic{width:18px;height:18px;flex-shrink:0;vertical-align:-3px}
+#status-pill{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;
+  color:var(--text-dim);background:var(--bg-hover);border:1px solid var(--border);
+  border-radius:20px;padding:3px 10px;transition:all .2s}
+#status-pill .dot{width:7px;height:7px;border-radius:50%;background:#555;transition:background .2s}
+#status-pill.online .dot{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+#status-pill.degraded .dot{background:#f59e0b;box-shadow:0 0 6px #f59e0b}
+#status-pill.offline .dot{background:#ef4444}
+@keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(16,163,127,.45)}70%{box-shadow:0 0 0 9px rgba(16,163,127,0)}100%{box-shadow:0 0 0 0 rgba(16,163,127,0)}}
+.avatar.live{background:linear-gradient(135deg,var(--accent),#5c7cfa);animation:pulseRing 1.4s infinite}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.skeleton{border-radius:8px;min-height:14px;margin:6px 0;
+  background:linear-gradient(90deg,var(--bg-hover) 25%,var(--border) 50%,var(--bg-hover) 75%);
+  background-size:800px 100%;animation:shimmer 1.3s infinite linear}
+#stream-progress{height:2px;background:transparent;position:relative;overflow:hidden;border-radius:2px;display:none;margin:0 auto;max-width:720px}
+#stream-progress.show{display:block}
+#stream-progress::after{content:'';position:absolute;inset:0;width:40%;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  animation:slideBar 1.1s infinite}
+@keyframes slideBar{0%{left:-40%}100%{left:100%}}
+#token-meter{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.72rem;color:var(--text-dim)}
+#token-bar{flex:1;height:5px;background:var(--bg-hover);border-radius:3px;overflow:hidden}
+#token-fill{height:100%;width:100%;background:linear-gradient(90deg,var(--accent),#5c7cfa);border-radius:3px;transition:width .4s ease}
+#token-unlock{background:none;border:1px solid var(--border);color:var(--accent);font-size:.7rem;
+  padding:2px 8px;border-radius:12px;cursor:pointer;transition:all .15s}
+#token-unlock:hover{border-color:var(--accent);background:rgba(16,163,127,.12)}
+#toasts{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);z-index:300;
+  display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{background:#1e1e2f;border:1px solid var(--border);color:var(--text);
+  padding:9px 16px;border-radius:12px;font-size:.83rem;display:flex;gap:8px;align-items:center;
+  box-shadow:0 8px 24px rgba(0,0,0,.45);animation:toastIn .25s ease;max-width:88vw}
+.toast.ok{border-color:var(--accent)} .toast.err{border-color:#ef4444} .toast.premium{border-color:#a78bfa;
+  background:linear-gradient(135deg,#1e1e2f,#2a2140)}
+.toast.out{opacity:0;transform:translateY(8px);transition:all .3s}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+.badge.premium{border-color:#a78bfa;color:#c4b5fd;background:linear-gradient(135deg,rgba(167,139,250,.15),transparent)}
+#modal-overlay.open #modal{animation:modalIn .22s ease}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:none}}
+#token-overlay.open #token-modal{animation:modalIn .22s ease}
+.sug-btn{animation:fadeUp .3s ease backwards}
+.sug-btn:nth-child(2){animation-delay:.05s}.sug-btn:nth-child(3){animation-delay:.1s}
+.sug-btn:nth-child(4){animation-delay:.15s}.sug-btn:nth-child(5){animation-delay:.2s}
+.sug-btn:nth-child(6){animation-delay:.25s}
+.icon-btn svg,.action-btn svg{transition:transform .15s}
+.icon-btn:hover svg{transform:scale(1.12)}
+#send-btn{transition:background .15s,transform .1s,opacity .15s}
+#send-btn:not(:disabled):active{transform:scale(.92)}
+#send-btn svg{width:16px;height:16px}
+.spin{animation:spin 1s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+#notices-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto}
+.notice{background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;
+  padding:7px 10px;font-size:.76rem;color:var(--text-dim);animation:fadeUp .25s ease}
+.notice b{color:var(--text);font-weight:600}
+.notice.premium{border-color:#a78bfa}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+
 /* ── Syntax highlighting (minimal, no deps) ─────────────────────────────── */
 .tok-kw   {color:#ff79c6}
 .tok-str  {color:#f1fa8c}
@@ -527,6 +588,13 @@ body{
       <span class="model-dot"></span>
       <span id="active-model-label">auto</span>
     </div>
+    <div id="token-meter" title="Free tokens remaining">
+      <span id="token-label">5/5</span>
+      <div id="token-bar"><div id="token-fill"></div></div>
+      <button id="token-unlock" onclick="openTokenModal()">Key</button>
+    </div>
+    <div class="sidebar-section" style="margin-top:8px">Updates <span id="notices-dot" style="display:none;color:var(--accent)">●</span></div>
+    <div id="notices-list"><div style="font-size:.76rem;color:var(--text-mute)">Loading…</div></div>
     <div style="margin-top:8px;font-size:.72rem;color:var(--text-mute)">
       urai.daddyai.online
     </div>
@@ -539,10 +607,11 @@ body{
   <div id="topbar">
     <button id="toggle-sidebar" title="Toggle sidebar">☰</button>
     <select id="model-select" title="Select model"></select>
+    <span id="status-pill"><span class="dot"></span><span id="status-text">…</span></span>
     <div class="topbar-right">
-      <button class="icon-btn" id="sys-toggle-btn" title="System prompt">⚙</button>
-      <button class="icon-btn" id="stream-btn" title="Toggle streaming" onclick="toggleStream()">⚡</button>
-      <button class="icon-btn" onclick="clearChat()" title="Clear chat">🗑</button>
+      <button class="icon-btn" id="sys-toggle-btn" title="System prompt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <button class="icon-btn" id="stream-btn" title="Toggle streaming" onclick="toggleStream()"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg></button>
+      <button class="icon-btn" onclick="clearChat()" title="Clear chat"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
     </div>
   </div>
 
@@ -562,6 +631,7 @@ body{
     </div>
   </div>
 
+  <div id="stream-progress"></div>
   <!-- Input -->
   <div id="input-area">
     <!-- System prompt row (hidden by default) -->
@@ -582,9 +652,9 @@ body{
 
         <div class="input-actions">
           <input type="file" id="file-input" accept="image/*" onchange="attachImage(event)">
-          <button id="attach-btn" onclick="document.getElementById('file-input').click()" title="Attach image">📎</button>
-          <button id="voice-btn" onclick="startVoice()" title="Voice input">🎤</button>
-          <button id="send-btn" disabled onclick="handleSendStop()">↑</button>
+          <button id="attach-btn" onclick="document.getElementById('file-input').click()" title="Attach image"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+          <button id="voice-btn" onclick="startVoice()" title="Voice input"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg></button>
+          <button id="send-btn" disabled onclick="handleSendStop()"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button>
         </div>
       </div>
 
@@ -650,6 +720,9 @@ let recognition = null;
   document.getElementById('sys-toggle-btn').addEventListener('click', toggleSystemRow);
   document.getElementById('stream-btn').classList.toggle('active', streamMode);
   document.getElementById('user-input').focus();
+  pollHealth(); refreshTokenMeter(); loadNotices();
+  setInterval(pollHealth, 30000);
+  setInterval(refreshTokenMeter, 30000);
 })();
 
 // ── Models ─────────────────────────────────────────────────────────────────
@@ -897,7 +970,7 @@ async function send() {
     saveChats();
   } catch (e) {
     removeMsg(thinkId);
-    if (e.name !== 'AbortError') appendError(e.message);
+    if (e.name !== 'AbortError') { appendError(e.message); toast('Request failed: ' + e.message, 'err'); }
   } finally {
     setSending(false);
     abortCtrl = null;
@@ -1023,12 +1096,60 @@ function appendError(msg) {
   msgs.appendChild(div);
 }
 
+const SVG_SEND_INNER = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>';
+const SVG_STOP_INNER = '<svg class="ic" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
 function setSending(on) {
   const btn = document.getElementById('send-btn');
   btn.disabled = !on;
   btn.classList.toggle('stop', on);
-  btn.textContent = on ? '■' : '↑';
+  btn.innerHTML = on ? SVG_STOP_INNER : SVG_SEND_INNER;
   document.getElementById('user-input').disabled = on;
+  document.getElementById('stream-progress').classList.toggle('show', on);
+  const av = document.querySelector('.avatar:last-of-type');
+  document.querySelectorAll('.avatar').forEach(a => a.classList.toggle('live', on));
+}
+function toast(msg, type) {
+  const box = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type ? ' ' + type : '');
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 350); }, 3200);
+}
+async function pollHealth() {
+  const pill = document.getElementById('status-pill');
+  const txt = document.getElementById('status-text');
+  try {
+    const r = await fetch('/health');
+    const d = await r.json();
+    const ok = d.local_llama;
+    pill.className = ok ? 'online' : 'degraded';
+    txt.textContent = ok ? '● Live' : '● Degraded';
+  } catch {
+    pill.className = 'offline';
+    txt.textContent = '● Offline';
+  }
+}
+async function refreshTokenMeter() {
+  try {
+    const s = await tokenStatus();
+    if (!s) return;
+    const rem = s.remaining ?? 5, lim = s.free_limit || 5;
+    document.getElementById('token-label').textContent = rem + '/' + lim;
+    document.getElementById('token-fill').style.width = (100 * rem / Math.max(lim, 1)) + '%';
+    document.getElementById('token-unlock').textContent = (localStorage.getItem('urai_master') ? '✓' : 'Key');
+  } catch {}
+}
+async function loadNotices() {
+  try {
+    const r = await fetch('/v1/notices');
+    const d = await r.json();
+    const list = document.getElementById('notices-list');
+    if (!d.notices || !d.notices.length) { list.innerHTML = '<div style="font-size:.76rem;color:var(--text-mute)">No updates</div>'; return; }
+    document.getElementById('notices-dot').style.display = 'inline';
+    list.innerHTML = d.notices.slice(-6).reverse().map(n =>
+      `<div class="notice ${n.level === 'premium' ? 'premium' : ''}"><b>${escHtml(n.title || '')}</b><br>${escHtml(n.body || '')}</div>`).join('');
+  } catch {}
 }
 
 function scrollBottom() {
@@ -1261,7 +1382,7 @@ async function tokenStatus(){ try{ const r=await fetch('/v1/token/status?device_
 async function checkTokenBanner(){ const s=await tokenStatus(); const b=document.getElementById('token-banner'); if(!s) return; if(s.blocked_until>0){ b.classList.add('show'); b.innerHTML='Free Token Expired / 0 available Token. Submit master key 856777 as request fund message to restore access. <button onclick="openTokenModal()">Unlock</button>'; openTokenModal(); } else if(!URAI_MASTER && (s.remaining<=0)){ b.classList.add('show'); b.textContent='Free Token Expired / 0 available Token. Submit master key 856777.'; } else { b.classList.remove('show'); } const rk=document.getElementById('req-dev'); if(rk&&!rk.value) rk.value=URAI_DEVICE; }
 function openTokenModal(){ document.getElementById('token-overlay').classList.add('open'); }
 function closeTokenModal(){ document.getElementById('token-overlay').classList.remove('open'); }
-async function submitMasterKey(){ const k=document.getElementById('master-key-input').value.trim(); const m=document.getElementById('token-msg'); try{ const r=await fetch('/auth/unlock',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':URAI_DEVICE},body:JSON.stringify({master_key:k,device_id:URAI_DEVICE})}); const d=await r.json(); if(d.ok){ URAI_MASTER=k; localStorage.setItem('urai_master',k); m.style.color='#10a37f'; m.textContent='Unlocked. Cost 0.'; closeTokenModal(); checkTokenBanner(); } else { m.style.color='red'; m.textContent=d.message||'Invalid key'; } }catch(e){ m.textContent='Error: '+e.message; } }
+async function submitMasterKey(){ const k=document.getElementById('master-key-input').value.trim(); const m=document.getElementById('token-msg'); try{ const r=await fetch('/auth/unlock',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':URAI_DEVICE},body:JSON.stringify({master_key:k,device_id:URAI_DEVICE})}); const d=await r.json(); if(d.ok){ URAI_MASTER=k; localStorage.setItem('urai_master',k); m.style.color='#10a37f'; m.textContent='Unlocked. Cost 0.'; closeTokenModal(); checkTokenBanner(); refreshTokenMeter(); toast('Master key accepted — unlimited, cost 0', 'ok'); } else { m.style.color='red'; m.textContent=d.message||'Invalid key'; } }catch(e){ m.textContent='Error: '+e.message; } }
 async function submitApprovalRequest(){ const wa=document.getElementById('req-wa').value.trim(); const gm=document.getElementById('req-gmail').value.trim(); const m=document.getElementById('token-msg'); try{ const r=await fetch('/auth/request',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':URAI_DEVICE},body:JSON.stringify({device_id:URAI_DEVICE,whatsapp:wa,gmail:gm,message:'approval request'})}); const d=await r.json(); m.style.color='#10a37f'; m.textContent=d.message||'Request sent'; }catch(e){ m.textContent='Error: '+e.message; } }
 // patch fetch to include auth headers + token modal on 403 expired
 (function(){ const _fetch=window.fetch.bind(window); window.fetch=async function(u,o){ o=o||{}; o.headers=Object.assign({},o.headers||{},authHeaders()); try{ const r=await _fetch(u,o); if(r.status===403){ try{ const d=await r.clone().json(); if(d.code==='free_token_expired'||(d.message||'').includes('Free Token Expired')){ checkTokenBanner(); openTokenModal(); } }catch(e){} } return r; }catch(e){ throw e; } }; })();
@@ -1277,5 +1398,6 @@ function escHtml(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 </script>
+<div id="toasts"></div>
 </body>
 </html>

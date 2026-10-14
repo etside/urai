@@ -474,6 +474,64 @@ class Handler(BaseHTTPRequestHandler):
             if not info.get("ok"):
                 return self._send(info, 404)
             return self._send(info)
+        if p == "/v1/info":
+            local = LlamaServerBackend()
+            self._send({
+                "name": "Urai", "identity": "Urai, developed by Tynio LTD",
+                "version": _repo_status().get("version"),
+                "active_model": _repo_status().get("active_model"),
+                "local_llama": local.healthy(),
+                "measured": {
+                    "gen_toks_per_s": 8.7, "prompt_toks_per_s": 25.0,
+                    "embed_dims": 768, "note": "measured on this CPU droplet (Qwen3-4B Q4_K_M); your latency varies with load",
+                },
+                "strengths": ["local-first zero-cost chat", "agent + swarm + tools",
+                              "vision + image + video-animatic", "OpenAI-compatible API + MCP",
+                              "human-like browser with approval safety"],
+                "endpoints": ["/health", "/v1/models", "/v1/chat/completions",
+                              "/v1/completions", "/v1/embeddings", "/agent", "/agent/swarm",
+                              "/tools", "/evaluate", "/see", "/imagine",
+                              "/v1/images/generations", "/video", "/v1/videos/generations",
+                              "/v1/videos/<id>", "/browser/run", "/browser/status/<id>",
+                              "/browser/approve", "/auth/unlock", "/auth/request",
+                              "/v1/token/status", "/superadmin/messages",
+                              "/v1/repo/status", "/v1/repo/sync", "/v1/info",
+                              "/v1/docs", "/v1/notices", "/docs/<file>", "/superadmin"],
+                "docs": "/v1/docs",
+            })
+            return
+        if p == "/v1/docs":
+            docs = []
+            ddir = ROOT / "docs"
+            if ddir.is_dir():
+                for f in sorted(ddir.glob("*.md")):
+                    docs.append({"name": f.name, "url": f"/docs/{f.name}"})
+            self._send({"docs": docs, "openapi": "OpenAI-compatible: /v1/chat/completions, /v1/completions, /v1/embeddings, /v1/models"})
+            return
+        if p == "/v1/notices":
+            nf = DATA_DIR / "notices.json"
+            try:
+                items = json.loads(nf.read_text()).get("notices", []) if nf.is_file() else []
+            except Exception:
+                items = []
+            self._send({"notices": items[-20:]})
+            return
+        if p == "/docs" or p.startswith("/docs/"):
+            rel = p[len("/docs/"):] if p.startswith("/docs/") else ""
+            if not rel or ".." in rel or "/" in rel or not rel.endswith(".md"):
+                return self._send({"error": "use /v1/docs for the index, /docs/<file>.md for files"}, 404)
+            f = ROOT / "docs" / rel
+            if not f.is_file():
+                return self._send({"error": "not found"}, 404)
+            data = f.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/markdown; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self._cors()
+            self.end_headers()
+            self.wfile.write(data)
+            print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
+            return
         if p in ("/", "/app", "/app/") or p.startswith("/app/") or p == "/superadmin":
             return self._static()
         self._send({"error": "not found"}, 404)
