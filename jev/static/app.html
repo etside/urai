@@ -498,6 +498,23 @@ body{
 #token-banner.show{display:block}
 #super-panel{display:none;padding:12px;border-top:1px solid #3a3a3a;background:#171717;max-height:46vh;overflow:auto;font-size:.8rem}
 #super-panel.open{display:block}
+#super-panel h3{font-size:.95rem;margin-bottom:2px}
+#super-panel h4{font-size:.8rem;margin:10px 0 4px;color:var(--text-dim)}
+#super-panel input{background:var(--bg-input);border:1px solid var(--border);
+  color:var(--text);border-radius:8px;padding:7px 10px;font-size:.8rem;outline:none;min-width:0}
+#super-panel input:focus{border-color:var(--accent)}
+#super-panel input::placeholder{color:var(--text-mute)}
+#super-panel button{background:var(--bg-hover);border:1px solid var(--border);
+  color:var(--text);border-radius:8px;padding:7px 12px;font-size:.8rem;cursor:pointer;
+  transition:all .15s;white-space:nowrap}
+#super-panel button:hover{border-color:var(--accent);color:var(--accent)}
+.sa-row{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}
+.sa-row input{flex:1;min-width:120px}
+#sa-stats{font-size:.76rem;color:var(--text-dim);margin:6px 0}
+#sa-list .sa-item{border-bottom:1px solid #2a2a2a;padding:5px 0;font-size:.78rem}
+#sa-list .sa-item b{color:var(--accent)}
+#sa-list .sa-kind{display:inline-block;background:var(--bg-hover);border:1px solid var(--border);
+  border-radius:8px;padding:0 7px;font-size:.7rem;margin-right:6px}
 
 
 /* ── Premium motion + liveness ──────────────────────────────────────────── */
@@ -681,12 +698,12 @@ body{
 <p id="token-msg"></p>
 </div></div>
 <div id="super-panel"><h3>Superadmin — live messages</h3>
-<div style="display:flex;gap:6px;margin:8px 0"><input id="sa-key" placeholder="master key 856777" style="flex:1" /><button onclick="loadSuperAdmin()">Load</button></div>
+<div class="sa-row"><input id="sa-key" type="password" placeholder="master key 856777" /><button onclick="loadSuperAdmin()">Load</button></div>
 <div id="sa-stats"></div><div id="sa-list"></div>
 <h4>Approve / unblock</h4>
-<input id="sa-target" placeholder="device_id or ip" /><input id="sa-wa" placeholder="whatsapp" /><input id="sa-gmail" placeholder="gmail" />
-<div style="display:flex;gap:6px;margin-top:6px"><button onclick="saApprove()">Approve</button><button onclick="saUnblock()">Unblock</button></div>
-<p style="color:#8e8ea0">Hidden access: open /superadmin or press footer 5x.</p></div>
+<div class="sa-row"><input id="sa-target" placeholder="device_id or ip" /><input id="sa-wa" placeholder="whatsapp" /><input id="sa-gmail" placeholder="gmail" /></div>
+<div class="sa-row"><button onclick="saApprove()">Approve</button><button onclick="saUnblock()">Unblock</button></div>
+<p style="color:var(--text-mute);font-size:.75rem">Hidden access: open /superadmin or press footer 5x.</p></div>
 
 <!-- ── Model picker modal ──────────────────────────────────────────────────── -->
 <div id="modal-overlay" onclick="closeModal(event)">
@@ -1386,9 +1403,9 @@ async function submitMasterKey(){ const k=document.getElementById('master-key-in
 async function submitApprovalRequest(){ const wa=document.getElementById('req-wa').value.trim(); const gm=document.getElementById('req-gmail').value.trim(); const m=document.getElementById('token-msg'); try{ const r=await fetch('/auth/request',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':URAI_DEVICE},body:JSON.stringify({device_id:URAI_DEVICE,whatsapp:wa,gmail:gm,message:'approval request'})}); const d=await r.json(); m.style.color='#10a37f'; m.textContent=d.message||'Request sent'; }catch(e){ m.textContent='Error: '+e.message; } }
 // patch fetch to include auth headers + token modal on 403 expired
 (function(){ const _fetch=window.fetch.bind(window); window.fetch=async function(u,o){ o=o||{}; o.headers=Object.assign({},o.headers||{},authHeaders()); try{ const r=await _fetch(u,o); if(r.status===403){ try{ const d=await r.clone().json(); if(d.code==='free_token_expired'||(d.message||'').includes('Free Token Expired')){ checkTokenBanner(); openTokenModal(); } }catch(e){} } return r; }catch(e){ throw e; } }; })();
-async function loadSuperAdmin(){ const k=document.getElementById('sa-key').value.trim()||URAI_MASTER; try{ const r=await fetch('/superadmin/messages?key='+encodeURIComponent(k)); const d=await r.json(); if(d.error){ document.getElementById('sa-list').textContent='Forbidden'; return; } document.getElementById('sa-stats').innerHTML='Approved: '+(Object.keys(d.approved||{}).length)+' | Blocked: '+(Object.keys(d.blocked||{}).length)+' | Total: '+((d.stats||{}).total_requests||0); document.getElementById('sa-list').innerHTML=(d.live||[]).slice(-30).reverse().map(x=>'<div style="border-bottom:1px solid #2a2a2a;padding:4px 0"><b>'+(x.kind||'')+'</b> '+(x.ip||'')+' '+(x.device||'')+' — '+String(x.preview||'').slice(0,160)+'</div>').join(''); }catch(e){ document.getElementById('sa-list').textContent='Error '+e.message; } }
-async function saApprove(){ const k=document.getElementById('sa-key').value.trim()||URAI_MASTER; const t=document.getElementById('sa-target').value.trim(); const wa=document.getElementById('sa-wa').value.trim(); const gm=document.getElementById('sa-gmail').value.trim(); const r=await fetch('/superadmin/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k,device_id:t,whatsapp:wa,gmail:gm})}); alert(await r.text()); loadSuperAdmin(); }
-async function saUnblock(){ const k=document.getElementById('sa-key').value.trim()||URAI_MASTER; const t=document.getElementById('sa-target').value.trim(); const r=await fetch('/superadmin/unblock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k,ip:t,device_id:t})}); alert(await r.text()); loadSuperAdmin(); }
+async function loadSuperAdmin(){ const k=document.getElementById('sa-key').value.trim()||URAI_MASTER; try{ const r=await fetch('/superadmin/messages?key='+encodeURIComponent(k)); const d=await r.json(); if(d.error){ document.getElementById('sa-list').textContent='Forbidden'; return; } document.getElementById('sa-stats').innerHTML='Approved: '+(Object.keys(d.approved||{}).length)+' | Blocked: '+(Object.keys(d.blocked||{}).length)+' | Total: '+((d.stats||{}).total_requests||0); document.getElementById('sa-list').innerHTML=(d.live||[]).slice(-30).reverse().map(x=>'<div class="sa-item"><span class="sa-kind">'+(x.kind||'')+'</span>'+(x.ip||'')+' '+(x.device||'')+' — '+String(x.preview||'').slice(0,160)+'</div>').join(''); }catch(e){ document.getElementById('sa-list').textContent='Error '+e.message; } }
+async function saApprove(){ const k=document.getElementById('sa-key').value.trim()||URAI_MASTER; const t=document.getElementById('sa-target').value.trim(); const wa=document.getElementById('sa-wa').value.trim(); const gm=document.getElementById('sa-gmail').value.trim(); const r=await fetch('/superadmin/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k,device_id:t,whatsapp:wa,gmail:gm})}); const atxt=await r.text(); let ad={}; try{ad=JSON.parse(atxt)}catch(e){ad={raw:atxt}} toast(ad.ok?('Approved '+t):('Failed: '+(ad.error||ad.raw||r.status)), ad.ok?'ok':'err'); loadSuperAdmin(); refreshTokenMeter(); }
+async function saUnblock(){ const k=document.getElementById('sa-key').value.trim()||URAI_MASTER; const t=document.getElementById('sa-target').value.trim(); const r=await fetch('/superadmin/unblock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k,ip:t,device_id:t})}); const utxt=await r.text(); let ud={}; try{ud=JSON.parse(utxt)}catch(e){ud={raw:utxt}} toast(ud.ok?('Unblocked '+t):('Failed: '+(ud.error||ud.raw||r.status)), ud.ok?'ok':'err'); loadSuperAdmin(); refreshTokenMeter(); }
 (function(){ let clicks=0; document.addEventListener('DOMContentLoaded',()=>{ const f=document.querySelector('.sidebar-footer'); if(f) f.addEventListener('click',()=>{ clicks++; if(clicks>=5){ document.getElementById('super-panel').classList.toggle('open'); clicks=0; } }); if(location.pathname==='/superadmin') document.getElementById('super-panel').classList.add('open'); setTimeout(checkTokenBanner,800); }); })();
 
 // ── Utils ─────────────────────────────────────────────────────────────────

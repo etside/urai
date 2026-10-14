@@ -210,6 +210,17 @@ def _check_access(ip, device, is_master):
         return True, "free", max(0, FREE_LIMIT - used - 1)
 
 
+def _prune_store():
+    # bound memory: keep at most 2000 free-counters / 1000 blocks (oldest out)
+    if len(_state["free_used"]) > 2000:
+        for k in list(_state["free_used"])[:len(_state["free_used"]) - 2000]:
+            _state["free_used"].pop(k, None)
+    if len(_state["blocked"]) > 1000:
+        ordered = sorted(_state["blocked"].items(), key=lambda kv: kv[1])
+        for k, _ in ordered[:len(ordered) - 1000]:
+            _state["blocked"].pop(k, None)
+
+
 def _record_use(ip, device, is_master):
     ident = _identity(ip, device)
     with _lock:
@@ -217,6 +228,7 @@ def _record_use(ip, device, is_master):
             return
         if _is_approved_locked(ident, ip, device):
             return
+        _prune_store()
         _state["free_used"][ident] = int(_state["free_used"].get(ident, 0)) + 1
         if int(_state["free_used"][ident]) >= FREE_LIMIT:
             _state["blocked"][ident] = time.time() + BLOCK_SECONDS
@@ -242,8 +254,21 @@ def _needs_key(path: str) -> bool:
 
 def _models():
     local = LlamaServerBackend()
-    ms = [{"id": "jev-local-student", "owned_by": "ownai",
-           "available": local.healthy()}]
+    up = local.healthy()
+    ms = [{"id": "jev-local-student", "owned_by": "ownai", "available": up}]
+    try:
+        from . import models_registry as _reg
+        reg = _reg.load()
+        for mid, m in reg.get("models", {}).items():
+            if m.get("kind") != "chat":
+                continue
+            mp = ROOT / m["path"]
+            ms.append({"id": mid, "owned_by": "urai-local",
+                       "available": bool(up and mp.exists()),
+                       "active": mid == reg.get("active"),
+                       "params": m.get("params", ""), "role": m.get("role", "")})
+    except Exception:
+        pass
     ms.append({"id": "jev-teacher-fallback", "owned_by": "external",
                "available": False})
     return ms
@@ -502,17 +527,21 @@ class Handler(BaseHTTPRequestHandler):
             return
         if p == "/v1/benchmarks":
             rdir = ROOT / "eval" / "reports"
-            reps = sorted(rdir.glob("bench-*.json")) if rdir.is_dir() else []
-            latest = None
-            if reps:
+            reps = sorted(rdir.glob("bench-*.json"),
+                          key=lambda f: f.stat().st_mtime) if rdir.is_dir() else []
+            latest, latest_name = None, None
+            for fp in reversed(reps):
                 try:
-                    latest = json.loads(reps[-1].read_text())
-                    latest = {k: latest.get(k) for k in
-                              ("tag", "started", "categories", "calls", "total_s")}
-                    latest["report"] = reps[-1].name
+                    d = json.loads(fp.read_text())
+                    if isinstance(d.get("categories"), dict):
+                        latest = {k: d.get(k) for k in
+                                  ("tag", "started", "categories", "calls", "total_s")}
+                        latest["report"] = fp.name
+                        latest_name = fp.name
+                        break
                 except Exception:
-                    latest = {"error": "unreadable"}
-            self._send({"latest": latest,
+                    continue
+            self._send({"latest": latest, "latest_report": latest_name,
                         "reports": [r.name for r in reps[-10:]],
                         "method_doc": "/docs/BENCHMARKS.md"})
             return
@@ -907,6 +936,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
+        self._cors()
         self.end_headers()
         for i in range(0, len(content), 64):
             piece = json.dumps({

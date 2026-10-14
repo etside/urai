@@ -2,7 +2,7 @@
 """Urai MCP server (Model Context Protocol, stdio, stdlib only).
 
 Lets Claude Code / opencode / Claude Desktop / OpenClaw drive Urai as tools:
-chat, agent, vision, image-gen, video-gen, embeddings, model registry, evaluation.
+chat, agent, swarm, vision, image-gen, video-gen, browse, embeddings, model registry, evaluation (10 tools).
 
   Add to the MCP client config (served from this repo, no install):
     {"mcpServers": {"urai": {"command": "python3",

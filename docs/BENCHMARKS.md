@@ -11,9 +11,9 @@ the harness reports every item. Re-run anytime:
 | report | started (UTC) | knowledge | math | code | calls | wall time |
 |---|---|---|---|---|---|---|
 | `bench-bench-first.json` | 2026-10-14T23:19:15Z | 1.0 | 0.833 | 1.0 | 66 | 292.2s |
-| `bench-coder05-kv8fa.json` | error: 'list' object has no attribute 'get' | - | - | - | - | - |
-| `bench-coder05-plain.json` | error: 'list' object has no attribute 'get' | - | - | - | - | - |
-| `bench-qwen25vl.json` | error: 'list' object has no attribute 'get' | - | - | - | - | - |
+| `bench-coder05-kv8fa.json` | legacy format | - | - | - | - | - |
+| `bench-coder05-plain.json` | legacy format | - | - | - | - | - |
+| `bench-qwen25vl.json` | legacy format | - | - | - | - | - |
 
 Honest framing: these scores measure **this deployment** (Qwen3-4B Q4_K_M,
 CPU, self-consistency + verifier re-rank on). They show the system working
