@@ -1,0 +1,14 @@
+{
+  "tag": "first-loop",
+  "probes": 10,
+  "passed": 9,
+  "failed": 1,
+  "by_kind": {
+    "reasoning": 1
+  },
+  "tasks_written": 1,
+  "calls": 10,
+  "bench_window": [],
+  "regression": null,
+  "safety": "data-only output; no serving-code changes, no deploys, no credential storage, previews PII-scrubbed"
+}
