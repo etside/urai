@@ -1,0 +1,613 @@
+{
+  "tag": "bench-first",
+  "base": "https://urai.daddyai.online",
+  "started": "2026-10-14T23:19:15Z",
+  "identity": "Urai, developed by Tynio LTD",
+  "categories": {
+    "knowledge": {
+      "passed": 12,
+      "total": 12,
+      "items": [
+        {
+          "q": "What is the capital of Bangladesh?",
+          "expected": [
+            "dhaka"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The capital of Bangladesh is **Dhaka**."
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "How many planets are in the solar system?",
+          "expected": [
+            "8",
+            "eight"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "As of now, the **solar system is known to have 8 planets**. These are:\n\n1. **Mercury**  \n2. **Venus**  \n3. **Earth**  \n4. **Mars**  \n5. **Jupiter**  \n6. **Saturn"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What does CPU stand for?",
+          "expected": [
+            "central processing unit"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "CPU stands for **Central Processing Unit**. It is the main component of a computer responsible for executing instructions and processing data. Often referred to as the \"brain\" of the computer, the CPU"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "Which language has the most native speakers?",
+          "expected": [
+            "mandarin",
+            "chinese"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The language with the most native speakers is **Mandarin Chinese**. It is spoken by approximately **1.3 billion people** worldwide, making it the most spoken language in terms of native speakers. \n\nHo"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What is H2O commonly known as?",
+          "expected": [
+            "water"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "H\u2082O is commonly known as **water**. It is the chemical formula for the molecule that is essential for life and is the main component of Earth's oceans, lakes, rivers, and even the human body."
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "How many days are in a leap year?",
+          "expected": [
+            "366"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "A **leap year** has **366 days**.\n\nThis is because, in a regular year, there are 365 days. A leap year adds an extra day, known as **February 29**, to keep the calendar year in sync with the solar yea"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What is the largest ocean?",
+          "expected": [
+            "pacific"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The largest ocean in the world is the **Pacific Ocean**. It covers approximately **165 million square kilometers** (about **63.8 million square miles**), making it more than twice the size of the Atla"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What year did the first moon landing occur?",
+          "expected": [
+            "1969"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The first moon landing occurred in **1969**. It took place on **July 20, 1969**, when NASA's **Apollo 11** mission landed the **Apollo 11 lunar module**, **Eagle**, on the Moon. Astronauts"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What does HTTP stand for?",
+          "expected": [
+            "hypertext transfer protocol"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "HTTP stands for **HyperText Transfer Protocol**.\n\nIt is the foundation of data communication on the World Wide Web. HTTP is an application-layer protocol used to transfer hypertext documents between s"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "How many bits are in a byte?",
+          "expected": [
+            "8",
+            "eight"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "A byte is made up of **8 bits**. \n\nSo, the answer is **8 bits**."
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What is the chemical symbol for gold?",
+          "expected": [
+            "au"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The chemical symbol for gold is **Au**."
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "Which planet is known as the Red Planet?",
+          "expected": [
+            "mars"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The planet known as the **Red Planet** is **Mars**. It receives this name because its surface appears reddish when viewed from Earth, due to the presence of iron oxide (rust) in its soil and atmospher"
+            }
+          },
+          "pass": true
+        }
+      ],
+      "latency_s": [
+        3.56,
+        10.0,
+        9.57,
+        9.16,
+        7.65,
+        10.65,
+        10.41,
+        9.97,
+        7.32,
+        4.55,
+        3.09,
+        7.62
+      ],
+      "accuracy": 1.0,
+      "avg_latency_s": 7.8
+    },
+    "math": {
+      "passed": 10,
+      "total": 12,
+      "items": [
+        {
+          "q": "What is 15 + 27? Reply with just the number.",
+          "expected": "42",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "42"
+            },
+            "consistent": {
+              "pass": true,
+              "votes": [
+                42.0,
+                42.0,
+                42.0
+              ],
+              "final": 42.0
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "A shop has 3 boxes with 12 apples each. How many apples total? Reply with just the number.",
+          "expected": "36",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "36"
+            },
+            "consistent": {
+              "pass": true,
+              "votes": [
+                36.0,
+                36.0,
+                36.0
+              ],
+              "final": 36.0
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What is 7 * 8? Reply with just the number.",
+          "expected": "56",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "56"
+            },
+            "consistent": {
+              "pass": true,
+              "votes": [
+                56.0,
+                56.0,
+                56.0
+              ],
+              "final": 56.0
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "If a train travels 60 km in 1 hour, how far in 2.5 hours? Reply with just the number.",
+          "expected": "150",
+          "modes": {
+            "direct": {
+              "pass": false,
+              "answer": "300"
+            },
+            "consistent": {
+              "pass": false,
+              "votes": [
+                300.0,
+                300.0,
+                300.0
+              ],
+              "final": 300.0
+            }
+          },
+          "pass": false
+        },
+        {
+          "q": "What is 100 - 37? Reply with just the number.",
+          "expected": "63",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "63"
+            },
+            "consistent": {
+              "pass": true,
+              "votes": [
+                63.0,
+                63.0,
+                63.0
+              ],
+              "final": 63.0
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "A rectangle is 9 by 4. What is its area? Reply with just the number.",
+          "expected": "36",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "36"
+            },
+            "consistent": {
+              "pass": true,
+              "votes": [
+                36.0,
+                36.0,
+                36.0
+              ],
+              "final": 36.0
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What is 144 / 12? Reply with just the number.",
+          "expected": "12",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "12"
+            },
+            "consistent": {
+              "pass": true,
+              "votes": [
+                12.0,
+                12.0,
+                12.0
+              ],
+              "final": 12.0
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What is 2 to the power of 10? Reply with just the number.",
+          "expected": "1024",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "1024"
+            },
+            "consistent": {
+              "pass": true,
+              "votes": [
+                1024.0,
+                1024.0,
+                1024.0
+              ],
+              "final": 1024.0
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "A book costs $15, discount 20%. Final price? Reply with just the number.",
+          "expected": "12",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "$12"
+            },
+            "consistent": {
+              "pass": true,
+              "votes": [
+                12.0,
+                12.0,
+                12.0
+              ],
+              "final": 12.0
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What is the average of 10, 20, 30? Reply with just the number.",
+          "expected": "20",
+          "modes": {
+            "direct": {
+              "pass": false,
+              "answer": "30"
+            },
+            "consistent": {
+              "pass": false,
+              "votes": [
+                30.0,
+                30.0,
+                30.0
+              ],
+              "final": 30.0
+            }
+          },
+          "pass": false
+        },
+        {
+          "q": "If x + 5 = 12, what is x? Reply with just the number.",
+          "expected": "7",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "7"
+            },
+            "consistent": {
+              "pass": true,
+              "votes": [
+                7.0,
+                7.0,
+                7.0
+              ],
+              "final": 7.0
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "How many minutes are in 3 hours? Reply with just the number.",
+          "expected": "180",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "180"
+            },
+            "consistent": {
+              "pass": true,
+              "votes": [
+                180.0,
+                180.0,
+                180.0
+              ],
+              "final": 180.0
+            }
+          },
+          "pass": true
+        }
+      ],
+      "latency_s": [
+        2.2,
+        1.51,
+        1.54,
+        3.17,
+        1.61,
+        1.57,
+        2.71,
+        1.6,
+        1.57,
+        3.32,
+        1.74,
+        1.62,
+        2.67,
+        1.61,
+        1.52,
+        2.71,
+        1.54,
+        1.6,
+        2.65,
+        1.6,
+        1.53,
+        2.77,
+        1.73,
+        1.78,
+        2.85,
+        1.64,
+        1.7,
+        2.82,
+        1.56,
+        1.56,
+        2.94,
+        1.42,
+        1.5,
+        2.66,
+        1.72,
+        1.78
+      ],
+      "accuracy": 0.833,
+      "avg_latency_s": 2.0
+    },
+    "code": {
+      "passed": 6,
+      "total": 6,
+      "items": [
+        {
+          "q": "Write a Python function named solve(n) that returns the factorial of n. Reply wi",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "log": "BENCH-OK\n"
+            },
+            "consistent": {
+              "pass": true,
+              "per_sample": [
+                true,
+                true,
+                true
+              ]
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "Write a Python function named solve(s) that returns True if s is a palindrome (i",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "log": "BENCH-OK\n"
+            },
+            "consistent": {
+              "pass": true,
+              "per_sample": [
+                true,
+                true,
+                false
+              ]
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "Write a Python function named solve(lst) that returns the list sorted ascending ",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "log": "BENCH-OK\n"
+            },
+            "consistent": {
+              "pass": true,
+              "per_sample": [
+                true,
+                true,
+                true
+              ]
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "Write a Python function named solve(a, b) that returns the greatest common divis",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "log": "BENCH-OK\n"
+            },
+            "consistent": {
+              "pass": true,
+              "per_sample": [
+                true,
+                true,
+                true
+              ]
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "Write a Python function named solve(s) that counts vowels (aeiou, any case) in s",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "log": "BENCH-OK\n"
+            },
+            "consistent": {
+              "pass": true,
+              "per_sample": [
+                true,
+                true,
+                true
+              ]
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "Write a Python function named solve(n) that returns the nth Fibonacci number (so",
+          "modes": {
+            "direct": {
+              "pass": true,
+              "log": "BENCH-OK\n"
+            },
+            "consistent": {
+              "pass": true,
+              "per_sample": [
+                true,
+                true,
+                true
+              ]
+            }
+          },
+          "pass": true
+        }
+      ],
+      "latency_s": [
+        7.55,
+        5.11,
+        5.31,
+        5.8,
+        4.7,
+        4.39,
+        10.83,
+        9.58,
+        9.91,
+        6.63,
+        4.86,
+        4.92,
+        5.6,
+        4.51,
+        4.21,
+        11.63,
+        10.05,
+        10.86
+      ],
+      "accuracy": 1.0,
+      "avg_latency_s": 7.03
+    }
+  },
+  "calls": 66,
+  "total_s": 292.2
+}
