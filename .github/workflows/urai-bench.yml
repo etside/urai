@@ -59,6 +59,9 @@ jobs:
               try:
                   d = json.load(open(fp))
                   c = d.get("categories", {})
+                  if not isinstance(c, dict):
+                      lines.append(f"| `{os.path.basename(fp)}` | legacy format (pre-v2 harness) | - | - | - | - | - |")
+                      continue
                   acc = lambda k: (c.get(k, {}).get("accuracy", "-"))
                   calls = d.get("calls", "-")
                   ts = d.get("total_s", "-")
