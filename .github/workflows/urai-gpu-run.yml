@@ -1,0 +1,27 @@
+name: Urai GPU Run (DO ephemeral, cost-guarded)
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Dataset tag in data/verified/<tag>.jsonl"
+        required: false
+        default: "distill-now"
+      max_steps:
+        description: "Max training steps (300 fits ~1h on H100)"
+        required: false
+        default: "300"
+permissions:
+  contents: write
+jobs:
+  gpu-train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ephemeral H100 train (auto-destroy, 1h cap)
+        env:
+          DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          URAI_TRAIN_TAG: ${{ inputs.tag }}
+          MAX_TRAIN_STEPS: ${{ inputs.max_steps }}
+        run: bash scripts/train/gpu_train.sh create
