@@ -78,8 +78,12 @@ def main():
             break
         print(f"  [{idx}/{len(tasks)}] {task.get("id", task.get("category", "?"))[:40]}", flush=True)
         out = teacher.generate(task)
-        verdict = score_completion(task, out, exec_python=args.exec_python,
-                                   use_judge=args.judge, teacher=teacher)
+        if not (out.content or "").strip():
+            verdict = {"score": 0.0, "checks": 0, "passed": 0,
+                       "failures": ["empty-completion"], "exec": []}
+        else:
+            verdict = score_completion(task, out, exec_python=args.exec_python,
+                                       use_judge=args.judge, teacher=teacher)
         scored.append({"record": build_record(task, out, verdict),
                        "verdict": verdict})
 

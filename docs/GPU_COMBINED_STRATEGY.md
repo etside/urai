@@ -54,3 +54,8 @@ This is the controlled path. Do NOT run long GPU jobs on the 8GB CPU droplet.
   - CPU threads locked to `4`
   - KV-cache/prefetch caution under 8GB memory
   - GPU training adapters merged offline, not in runtime<|constrain|>
+## 2026-10-15 probe result (token-safe, via Actions)
+- DO account: active, droplet_limit 3, **0 GPU sizes on self-service API = contract-only**.
+- DO GPU create would fail; path blocked pending sales access.
+- Real fastest path: free Kaggle T4 + scripts/train/sft_unsloth.py (fixed to read
+  distill prompt/completion records); single-GPU QLoRA, rank 16, 4-bit.

@@ -85,7 +85,11 @@ class LlamaServerBackend(Backend):
             "max_tokens": max_tokens, "temperature": temperature,
             "stream": False,
         })
-        out = {"content": data["choices"][0]["message"]["content"],
+        _msg = data["choices"][0]["message"]
+        _content = _msg.get("content") or ""
+        if not _content.strip() and _msg.get("reasoning_content"):
+            _content = _msg["reasoning_content"]
+        out = {"content": _content,
                "backend": self.name, "model": self.model}
         if isinstance(data.get("usage"), dict):
             out["usage"] = data["usage"]
@@ -140,7 +144,11 @@ class TeacherAPIBackend(Backend):
             "model": self.model, "messages": messages,
             "max_tokens": max_tokens, "temperature": temperature,
         }, key=self.key)
-        out = {"content": data["choices"][0]["message"]["content"],
+        _msg = data["choices"][0]["message"]
+        _content = _msg.get("content") or ""
+        if not _content.strip() and _msg.get("reasoning_content"):
+            _content = _msg["reasoning_content"]
+        out = {"content": _content,
                "backend": self.name, "model": self.model}
         if isinstance(data.get("usage"), dict):
             out["usage"] = data["usage"]
