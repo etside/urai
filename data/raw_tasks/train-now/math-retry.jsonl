@@ -1,0 +1,8 @@
+{"task": "A train travels 80 km in 1 hour. How far does it travel in 3.5 hours at the same speed? Reply with just the number.", "expected": "280", "kind": "selfimprove-math", "failure_kind": "reasoning", "source": "variant:rate-word-problem"}
+{"task": "What is the average of 5, 15, 25 and 35? Reply with just the number.", "expected": "25", "kind": "selfimprove-math", "failure_kind": "reasoning", "source": "variant:average-word-problem"}
+{"task": "What is 17 multiplied by 6? Reply with just the number.", "expected": "102", "kind": "selfimprove-math", "failure_kind": "reasoning", "source": "variant:multiplication"}
+{"task": "A jacket costs $45 with a 20 percent discount. What is the sale price? Reply with just the number.", "expected": "36", "kind": "selfimprove-math", "failure_kind": "reasoning", "source": "variant:percentage-word-problem"}
+{"task": "What is 144 divided by 9? Reply with just the number.", "expected": "16", "kind": "selfimprove-math", "failure_kind": "reasoning", "source": "variant:division"}
+{"task": "What is 11 squared? Reply with just the number.", "expected": "121", "kind": "selfimprove-math", "failure_kind": "reasoning", "source": "variant:square"}
+{"task": "How many eggs are in 3 dozen? Reply with just the number.", "expected": "36", "kind": "selfimprove-math", "failure_kind": "reasoning", "source": "variant:dozen-word-problem"}
+{"task": "What is 1000 minus 467? Reply with just the number.", "expected": "533", "kind": "selfimprove-math", "failure_kind": "reasoning", "source": "variant:subtraction"}

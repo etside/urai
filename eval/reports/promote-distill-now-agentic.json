@@ -1,0 +1,8 @@
+{
+  "tag": "distill-now",
+  "chunk": "agentic",
+  "scanned": 1,
+  "promoted": 0,
+  "threshold": 0.8,
+  "fewshots_total": 0
+}
