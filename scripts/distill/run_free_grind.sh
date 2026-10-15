@@ -28,7 +28,7 @@ for tf in "$SRC"/*.jsonl; do
   if [ -s "$OUTDIR/$cat.jsonl" ]; then echo "SKIP done: $cat"; continue; fi
   echo "== chunk $cat =="
   python3 scripts/distill/run_distill.py --tasks "$tf" \
-    --out "$OUTDIR/$cat.jsonl" \
+    --out "$OUTDIR/$cat.jsonl" --system "${URAI_DISTILL_SYSTEM:-default}" \
     --report "eval/reports/$TAG-$cat.json" --exec --judge \
     || echo "CHUNK-FAILED: $cat (continuing)"
 done
