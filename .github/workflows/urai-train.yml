@@ -1,0 +1,29 @@
+name: Urai Train - LoRA Stage 2 (GPU runner required)
+
+# Independence Stage 2: LoRA fine-tune on the verified distill set.
+# FAILS FAST without CUDA — it will never fake-train on CPU.
+# Needs a GPU runner: set runs-on to your GPU label when commissioned.
+# Until then this workflow documents the contract; dispatching on the
+# default runner exits at the preflight check by design.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Dataset tag in data/verified/<tag>.jsonl"
+        required: false
+        default: "distill-now"
+      base:
+        description: "Base model id"
+        required: false
+        default: "Qwen/Qwen3-4B"
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: GPU preflight (expected to refuse until a GPU runner exists)
+        run: |
+          python3 scripts/train/lora_urai.py --data data/verified/${{ inputs.tag }}.jsonl --tag ${{ inputs.tag }} --base "${{ inputs.base }}" || \
+            echo "::warning::Stage-2 training refused (no GPU) — Stages 0-1 continue on the VPS. See docs/INDEPENDENCE.md."

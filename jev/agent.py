@@ -112,6 +112,17 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
                          + skills_block(task)})
         trace.append({"step": "skills",
                       "loaded": [s["name"] for s in loaded]})
+    # Few-shot memory: solved examples promoted from landed distill chunks.
+    # This is how each chunk immediately improves answers (no retraining).
+    if r["level"] >= 1:
+        try:
+            from .fewshots import context_block as few_block
+            fb = few_block(task)
+            if fb:
+                messages.append({"role": "system", "content": fb})
+                trace.append({"step": "fewshots", "chars": len(fb)})
+        except Exception as e:
+            trace.append({"step": "fewshots-skip", "error": str(e)[:120]})
 
     answer, fixes, tool_calls = "", 0, 0
     failure_kind = None

@@ -31,6 +31,11 @@ for tf in "$SRC"/*.jsonl; do
     --out "$OUTDIR/$cat.jsonl" --system "${URAI_DISTILL_SYSTEM:-default}" \
     --report "eval/reports/$TAG-$cat.json" --exec --judge \
     || echo "CHUNK-FAILED: $cat (continuing)"
+  # self-improvement trigger: every landed chunk immediately promotes
+  # verified completions into live few-shot behavior (never fails grind)
+  if [ -s "$OUTDIR/$cat.jsonl" ]; then
+    python3 scripts/distill/promote_chunk.py --chunk "$OUTDIR/$cat.jsonl" --tag "$TAG" || true
+  fi
 done
 python3 - "$OUTDIR" "data/verified/$TAG.jsonl" <<'EOF'
 import json, sys
