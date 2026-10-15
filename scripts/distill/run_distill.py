@@ -77,8 +77,17 @@ def main():
             print(f"  stopped at --max-examples {args.max_examples}", flush=True)
             break
         print(f"  [{idx}/{len(tasks)}] {task.get("id", task.get("category", "?"))[:40]}", flush=True)
-        out = teacher.generate(task)
-        if not (out.content or "").strip():
+        out = None
+        for _attempt in (1, 2):
+            try:
+                out = teacher.generate(task)
+            except Exception as e:
+                print(f"  teacher-error attempt {_attempt}: {str(e)[:120]}", flush=True)
+                continue
+            if (out.content or "").strip():
+                break
+            print(f"  empty-completion, retrying ({_attempt}/2)", flush=True)
+        if out is None or not (out.content or "").strip():
             verdict = {"score": 0.0, "checks": 0, "passed": 0,
                        "failures": ["empty-completion"], "exec": []}
         else:

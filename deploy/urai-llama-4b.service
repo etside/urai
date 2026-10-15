@@ -1,0 +1,16 @@
+[Unit]
+Description=Urai llama-server Qwen3-4B (chat, :8080)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=urai
+WorkingDirectory=/opt/urai
+ExecStart=/opt/urai/third_party/llama.cpp/build/bin/llama-server -m model/base/Qwen3-4B-Q4_K_M.gguf --host 127.0.0.1 --port 8080 -c 2048 -t 2 -fa on --no-webui
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
