@@ -35,7 +35,8 @@ set -x
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq python3-pip git gh
-pip3 install --quiet --break-system-packages "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git" trl peft accelerate bitsandbytes datasets 2>&1 | tail -n 5
+pip3 install --quiet --break-system-packages torch --index-url https://download.pytorch.org/whl/cu124 2>&1 | tail -n 3
+pip3 install --quiet --break-system-packages unsloth trl peft accelerate bitsandbytes datasets 2>&1 | tail -n 5
 BASE="${URAI_BASE:-unsloth/Qwen3-4B-bnb-4bit}"
 MAX_STEPS="${MAX_TRAIN_STEPS:-300}"
 echo "BASE=$BASE MAX_STEPS=$MAX_STEPS"
@@ -57,7 +58,7 @@ ls -la "data/verified/${TAG}.jsonl" || { echo "MISSING dataset tag: $TAG"; exit 
 echo "== creating GPU droplet ($SIZE @ $REGION, image $IMAGE) =="
 CREATE=$(api -X POST "https://api.digitalocean.com/v2/droplets" -d "{
   \"name\": \"urai-train-${TAG}\", \"region\": \"$REGION\", \"size\": \"$SIZE\",
-  \"image\": \"ubuntu-24-04-x64\",
+  \"image\": \"$IMAGE\",
   \"user_data\": $(printf '%s' "$USERDATA" | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))"),
   \"tags\": [\"urai-train\", \"ephemeral\"]
 }")
