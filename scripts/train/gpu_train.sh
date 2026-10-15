@@ -57,11 +57,30 @@ if [ "$ACTION" != "create" ]; then
   exit 0
 fi
 ls -la "data/verified/${TAG}.jsonl" || { echo "MISSING dataset tag: $TAG"; exit 1; }
+# GPU-ready images refuse password auth: register an ephemeral SSH key
+# (created here, deleted on exit — never touches the repo or logs).
+SSH_KEY_ID="${DO_SSH_KEY_IDS:-}"
+cleanup_key() {
+  if [ -n "${SSH_KEY_ID:-}" ] && [ -z "${DO_SSH_KEY_IDS:-}" ]; then
+    api -X DELETE "https://api.digitalocean.com/v2/account/keys/$SSH_KEY_ID" >/dev/null 2>&1 || true
+  fi
+  rm -f /tmp/urai-train-key /tmp/urai-train-key.pub
+}
+trap cleanup_key EXIT
+if [ -z "$SSH_KEY_ID" ]; then
+  ssh-keygen -t ed25519 -f /tmp/urai-train-key -N "" -C "urai-train-ephemeral" >/dev/null
+  PUB="$(cat /tmp/urai-train-key.pub)"
+  KEYNAME="urai-train-$(date +%s)"
+  RESP=$(api -X POST "https://api.digitalocean.com/v2/account/keys" -d "$(python3 -c "import json; print(json.dumps({'name': '$KEYNAME', 'public_key': open('/tmp/urai-train-key.pub').read().strip()}))")")
+  SSH_KEY_ID=$(echo "$RESP" | python3 -c "import json,sys; print(json.load(sys.stdin)['ssh_key']['id'])")
+  echo "ephemeral ssh key id: $SSH_KEY_ID (deleted on exit)"
+fi
 echo "== creating GPU droplet ($SIZE @ $REGION, image $IMAGE) =="
 CREATE=$(api -X POST "https://api.digitalocean.com/v2/droplets" -d "{
   \"name\": \"urai-train-${TAG}\", \"region\": \"$REGION\", \"size\": \"$SIZE\",
   \"image\": \"$IMAGE\",
   \"user_data\": $(printf '%s' "$USERDATA" | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))"),
+  \"ssh_keys\": [$SSH_KEY_ID],
   \"tags\": [\"urai-train\", \"ephemeral\"]
 }")
 echo "$CREATE" | python3 -c "import json,sys; d=json.load(sys.stdin); print('droplet:', d['droplet']['id'], d['droplet']['name']) if 'droplet' in d else print('DO-REJECTED:', str(d.get('message', d))[:300])"
