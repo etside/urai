@@ -87,7 +87,10 @@ def main():
             if (out.content or "").strip():
                 break
             print(f"  empty-completion, retrying ({_attempt}/2)", flush=True)
-        if out is None or not (out.content or "").strip():
+        if out is None:
+            from teacher_client import TeacherOutput
+            out = TeacherOutput(content="", model="error", meta={})
+        if not (out.content or "").strip():
             verdict = {"score": 0.0, "checks": 0, "passed": 0,
                        "failures": ["empty-completion"], "exec": []}
         else:
