@@ -65,6 +65,8 @@ def main():
                 if not line:
                     continue
                 task = json.loads(line)
+                if "prompt" not in task and "task" in task:
+                    task["prompt"] = task["task"]
                 if args.system != "default":
                     task["system"] = SYSTEMS[args.system]
                 out = teacher.generate(task)

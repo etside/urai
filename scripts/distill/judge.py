@@ -24,7 +24,12 @@ def judge(task: dict, completion: str, teacher=None) -> dict:
     try:
         out = teacher.generate({"id": "judge", "prompt": prompt,
                                 "system": "You are a strict evaluator. JSON only."})
-        data = json.loads(out.content.strip().strip("`").replace("json\n", ""))
+        txt = out.content
+        import re as _re
+        txt = _re.sub(r"<think>.*?</think>", "", txt, flags=_re.DOTALL)
+        txt = _re.sub(r"```think.*?```", "", txt, flags=_re.DOTALL)
+        m = _re.search(r"\{[^{}]*\}", txt, _re.DOTALL)
+        data = json.loads(m.group(0) if m else txt.strip().strip("`").replace("json\n", ""))
         s = max(0.0, min(1.0, float(data.get("score", 0.5))))
         return {"score": round(s, 3), "reasons": data.get("reasons", []),
                 "judge": getattr(teacher, "name", "unknown")}
