@@ -29,6 +29,7 @@ for tf in "$SRC"/*.jsonl; do
   echo "== chunk $cat =="
   python3 scripts/distill/run_distill.py --tasks "$tf" \
     --out "$OUTDIR/$cat.jsonl" --system "${URAI_DISTILL_SYSTEM:-default}" \
+    --threshold "${URAI_DISTILL_THRESHOLD:-0.6}" \
     --report "eval/reports/$TAG-$cat.json" --exec --judge \
     || echo "CHUNK-FAILED: $cat (continuing)"
   # self-improvement trigger: every landed chunk immediately promotes

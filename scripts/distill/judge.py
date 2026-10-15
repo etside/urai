@@ -34,4 +34,13 @@ def judge(task: dict, completion: str, teacher=None) -> dict:
         return {"score": round(s, 3), "reasons": data.get("reasons", []),
                 "judge": getattr(teacher, "name", "unknown")}
     except Exception as e:
+        import re as _re
+        m = _re.search(r"\"?score\"?\s*:\s*([0-9]+(?:\.[0-9]+)?)", txt)
+        if m:
+            try:
+                s = max(0.0, min(1.0, float(m.group(1))))
+                return {"score": round(s, 3), "reasons": ["regex-fallback"],
+                        "judge": getattr(teacher, "name", "unknown")}
+            except Exception:
+                pass
         return {"score": 0.5, "reasons": [f"judge-error: {e}"], "judge": "error"}
