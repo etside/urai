@@ -64,7 +64,8 @@ CREATE=$(api -X POST "https://api.digitalocean.com/v2/droplets" -d "{
   \"user_data\": $(printf '%s' "$USERDATA" | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))"),
   \"tags\": [\"urai-train\", \"ephemeral\"]
 }")
-echo "$CREATE" | python3 -c "import json,sys; d=json.load(sys.stdin)['droplet']; print('droplet:', d['id'], d['name'])"
+echo "$CREATE" | python3 -c "import json,sys; d=json.load(sys.stdin); print('droplet:', d['droplet']['id'], d['droplet']['name']) if 'droplet' in d else print('DO-REJECTED:', str(d.get('message', d))[:300])"
+echo "$CREATE" | python3 -c "import json,sys; sys.exit(0 if 'droplet' in json.load(sys.stdin) else 3)" || { echo "STOP: droplet not created, no spend, destroying nothing."; exit 1; }
 ID=$(echo "$CREATE" | python3 -c "import json,sys; print(json.load(sys.stdin)['droplet']['id'])")
 
 echo "== waiting for adapters asset (up to ${MAX_HOURS}h), then destroying =="
