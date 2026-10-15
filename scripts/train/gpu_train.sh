@@ -8,7 +8,7 @@
 #   DO_API_TOKEN   DigitalOcean API token
 #   GH_TOKEN       GitHub token with repo scope (private etside/urai)
 #   URAI_TRAIN_TAG dataset tag in data/verified/<TAG>.jsonl (default distill-now)
-# Optional: DO_REGION (default blr1), DO_GPU_SIZE (default nvidia-h100x1-80gb,
+# Optional: DO_REGION (default tor1), DO_GPU_SIZE (default gpu-4000adax1-20gb ~$0.76/hr),
 #   confirmed via API before create), MAX_HOURS (default 3)
 set -euo pipefail
 : "${DO_API_TOKEN:?set DO_API_TOKEN}"
@@ -17,9 +17,9 @@ TAG="${URAI_TRAIN_TAG:-distill-now}"
 ACTION="${1:-prices}"
 # NOTE: GPU Droplets need a GPU-ready image; if plain ubuntu fails at create
 # time, list GPU images via the API and set DO_IMAGE accordingly.
-IMAGE="${DO_IMAGE:-ubuntu-24-04-x64}"
-REGION="${DO_REGION:-blr1}"
-SIZE="${DO_GPU_SIZE:-nvidia-h100x1-80gb}"
+IMAGE="${DO_IMAGE:-gpu-h100x1-base}"
+REGION="${DO_REGION:-tor1}"
+SIZE="${DO_GPU_SIZE:-gpu-4000adax1-20gb}"
 MAX_HOURS="${MAX_HOURS:-3}"
 
 api() { curl -s -H "Authorization: Bearer $DO_API_TOKEN" \
