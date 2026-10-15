@@ -29,7 +29,7 @@ SYSTEM = ("You are Urai, developed by Tynio LTD, a senior engineer runtime. Plan
           "```tool\n"
           '{"tool": "<name>", "args": {...}}\n'
           "```\n"
-          "Tools: read_file {path}, run {argv:[...]}, "
+          "Tools: read_file {path}, run {argv:[...]}, analyze {target}, "
           "web_search {query, top?}, web_fetch {url}, "
           "see {image, question?}, imagine {prompt, out?}, "
           "browse {goal, steps:[{action, selector?, text?, value?}]}. "

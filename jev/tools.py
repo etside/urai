@@ -188,3 +188,9 @@ def browse(goal: str = "", steps: str = "[]") -> dict:
 
 
 TOOLS["browse"] = browse
+
+def analyze(target: str = "", max_bytes: int = 1000000) -> dict:
+    from . import analyze as _a
+    return _a.analyze(target, max_bytes)
+
+TOOLS["analyze"] = analyze
