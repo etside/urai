@@ -8,7 +8,7 @@
 #   DO_API_TOKEN   DigitalOcean API token
 #   GH_TOKEN       GitHub token with repo scope (private etside/urai)
 #   URAI_TRAIN_TAG dataset tag in data/verified/<TAG>.jsonl (default distill-now)
-# Optional: DO_REGION (default tor1), DO_GPU_SIZE (default gpu-4000adax1-20gb ~$0.76/hr),
+# Optional defaults: TOR1 x 1 x H100 (~$4.41/hr), capped at 1 hour.
 #   confirmed via API before create), MAX_HOURS (default 3)
 set -euo pipefail
 : "${DO_API_TOKEN:?set DO_API_TOKEN}"
@@ -19,8 +19,8 @@ ACTION="${1:-prices}"
 # time, list GPU images via the API and set DO_IMAGE accordingly.
 IMAGE="${DO_IMAGE:-gpu-h100x1-base}"
 REGION="${DO_REGION:-tor1}"
-SIZE="${DO_GPU_SIZE:-gpu-4000adax1-20gb}"
-MAX_HOURS="${MAX_HOURS:-3}"
+SIZE="${DO_GPU_SIZE:-gpu-h100x1-80gb}"
+MAX_HOURS="${MAX_HOURS:-1}"
 
 api() { curl -s -H "Authorization: Bearer $DO_API_TOKEN" \
   -H "Content-Type: application/json" "$@"; }
@@ -35,10 +35,13 @@ set -x
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq python3-pip git gh
-pip3 install --quiet --break-system-packages torch transformers peft trl datasets accelerate 2>&1 | tail -n 1
+pip3 install --quiet --break-system-packages "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git" trl peft accelerate bitsandbytes datasets 2>&1 | tail -n 5
+BASE="${URAI_BASE:-unsloth/Qwen3-4B-bnb-4bit}"
+MAX_STEPS="${MAX_TRAIN_STEPS:-300}"
+echo "BASE=$BASE MAX_STEPS=$MAX_STEPS"
 git clone https://x-access-token:${GH_TOKEN}@github.com/etside/urai.git /root/urai
 cd /root/urai
-python3 scripts/train/lora_urai.py --data data/verified/${TAG}.jsonl --tag ${TAG}-gpu
+python3 scripts/train/sft_unsloth.py --model "${BASE}" --train data/verified/${TAG}.jsonl --out adapters/${TAG}-gpu --epochs 1 --rank 16 --seq-len 2048 --max-steps "${MAX_STEPS}"
 tar -czf /tmp/adapters-${TAG}-gpu.tgz adapters/${TAG}-gpu || tar -czf /tmp/adapters-${TAG}-gpu.tgz adapters
 GH_TOKEN=${GH_TOKEN} gh release view urai-deps --repo etside/urai >/dev/null 2>&1 || GH_TOKEN=${GH_TOKEN} gh release create urai-deps --repo etside/urai --title "Urai vendored deps" --notes "Binaries + adapters." --prerelease
 GH_TOKEN=${GH_TOKEN} gh release upload urai-deps /tmp/adapters-${TAG}-gpu.tgz --repo etside/urai --clobber
