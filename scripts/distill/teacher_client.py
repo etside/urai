@@ -258,6 +258,6 @@ class SelfTeacher(Teacher):
         res = self._be.complete(
             [{"role": "system", "content": system},
              {"role": "user", "content": task["prompt"]}],
-            max_tokens=512, temperature=0.2)
+            max_tokens=256, temperature=0.2)
         return TeacherOutput(content=res["content"], model=self.model,
                              meta={"backend": self._be.name})

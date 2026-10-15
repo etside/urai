@@ -33,7 +33,7 @@ class MockBackend(Backend):
                 "backend": self.name, "mock": True}
 
 
-def _post_json(url, payload, key=None, timeout=300):
+def _post_json(url, payload, key=None, timeout=900):
     headers = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = "Bearer " + key
@@ -85,8 +85,13 @@ class LlamaServerBackend(Backend):
             "max_tokens": max_tokens, "temperature": temperature,
             "stream": False,
         })
-        return {"content": data["choices"][0]["message"]["content"],
-                "backend": self.name, "model": self.model}
+        out = {"content": data["choices"][0]["message"]["content"],
+               "backend": self.name, "model": self.model}
+        if isinstance(data.get("usage"), dict):
+            out["usage"] = data["usage"]
+        if isinstance(data.get("timings"), dict):
+            out["timings"] = data["timings"]
+        return out
 
 
 class EmbeddingBackend(Backend):
@@ -135,5 +140,10 @@ class TeacherAPIBackend(Backend):
             "model": self.model, "messages": messages,
             "max_tokens": max_tokens, "temperature": temperature,
         }, key=self.key)
-        return {"content": data["choices"][0]["message"]["content"],
-                "backend": self.name, "model": self.model}
+        out = {"content": data["choices"][0]["message"]["content"],
+               "backend": self.name, "model": self.model}
+        if isinstance(data.get("usage"), dict):
+            out["usage"] = data["usage"]
+        if isinstance(data.get("timings"), dict):
+            out["timings"] = data["timings"]
+        return out

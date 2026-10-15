@@ -705,7 +705,7 @@ class Handler(BaseHTTPRequestHandler):
                  {"master": bool(body.get("_urai_authed"))})
             if body.get("stream"):
                 return self._stream(content, res.get("model", "jev-local-student"))
-            usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0}
+            usage = res.get("usage") or {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0}
             return self._send({
                 "id": "chatcmpl-urai", "object": "chat.completion",
                 "model": res.get("model", "jev-local-student"),
@@ -752,7 +752,7 @@ class Handler(BaseHTTPRequestHandler):
                 "choices": [{"index": 0, "message": {"role": "assistant",
                                                      "content": content},
                              "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 0, "completion_tokens": 0,
+                "usage": res.get("usage") or {"prompt_tokens": 0, "completion_tokens": 0,
                           "total_tokens": 0, "cost": 0},
                 "urai": {"tokens_remaining": body.get("_urai_remaining", 0),
                          "auth": body.get("_urai_reason", "free")}})

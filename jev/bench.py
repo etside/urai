@@ -94,7 +94,7 @@ def chat(base, messages, key, device, max_tokens=128, temperature=0.2):
                "max_tokens": max_tokens, "temperature": temperature,
                "device_id": device}, key, device)
     dt = time.time() - t0
-    return d["choices"][0]["message"]["content"], dt, d.get("urai", {})
+    return d["choices"][0]["message"]["content"], dt, d.get("usage", {})
 
 
 def _num(s):
@@ -138,8 +138,13 @@ def main():
     ap.add_argument("--key", default="856777")
     ap.add_argument("--modes", default="direct,consistent",
                     help="comma list: direct, consistent")
+    ap.add_argument("--categories", default="knowledge,math,code",
+                    help="comma list: knowledge, math, code")
+    ap.add_argument("--quick", action="store_true",
+                    help="single sample, smaller output (smoke benchmark)")
     args = ap.parse_args()
     modes = [m.strip() for m in args.modes.split(",") if m.strip()]
+    cats = [c.strip() for c in args.categories.split(",") if c.strip()]
     device = f"bench-{args.tag}"
     out = {"tag": args.tag, "base": args.base,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -150,8 +155,10 @@ def main():
     # knowledge: single sample (deterministic scoring). math/code: 3 samples
     # in consistent mode for majority-vote / exec-pass selection.
     for cat, items, max_tok in (("knowledge", KNOWLEDGE, 64), ("math", MATH, 32)):
-        force_single = (cat == "knowledge")
-        rec = {"passed": 0, "total": 0, "items": [], "latency_s": []}
+        if cat not in cats:
+            continue
+        force_single = (cat == "knowledge" or args.quick)
+        rec = {"passed": 0, "total": 0, "items": [], "latency_s": [], "usage_tokens": 0}
         for q, exp in items:
             entry = {"q": q, "expected": exp, "modes": {}}
             cands, lats = [], []
@@ -159,10 +166,11 @@ def main():
             for i in range(n):
                 temp = 0.7 if (n > 1) else 0.2
                 try:
-                    txt, dt, _ = chat(args.base, [{"role": "user", "content": q}],
+                    txt, dt, usage = chat(args.base, [{"role": "user", "content": q}],
                                       args.key, device, max_tok, temp)
+                    rec["usage_tokens"] += int((usage or {}).get("total_tokens", 0))
                 except Exception as e:
-                    txt, dt = f"ERROR: {e}"[:200], 0.0
+                    txt, dt, usage = f"ERROR: {e}"[:200], 0.0, {}
                 cands.append(txt)
                 lats.append(round(dt, 2))
                 out["calls"] += 1
@@ -188,19 +196,21 @@ def main():
             print(f"[{cat}] {'PASS' if entry['pass'] else 'FAIL'} q={q[:50]!r}", flush=True)
         rec["accuracy"] = round(rec["passed"] / max(rec["total"], 1), 3)
         rec["avg_latency_s"] = round(sum(rec["latency_s"]) / max(len(rec["latency_s"]), 1), 2)
+        rec["tokens_per_s"] = round(rec["usage_tokens"] / max(sum(rec["latency_s"]), 0.01), 2)
         out["categories"][cat] = rec
 
     # code: best-of-N by execution
-    rec = {"passed": 0, "total": 0, "items": [], "latency_s": []}
-    for item in CODE:
+    rec = {"passed": 0, "total": 0, "items": [], "latency_s": [], "usage_tokens": 0}
+    for item in (CODE if "code" in cats else []):
         entry = {"q": item["prompt"][:80], "modes": {}}
         cands = []
         n = 3 if "consistent" in modes else 1
         for i in range(n):
             temp = 0.7 if n > 1 else 0.2
             try:
-                txt, dt, _ = chat(args.base, [{"role": "user", "content": item["prompt"]}],
+                txt, dt, usage = chat(args.base, [{"role": "user", "content": item["prompt"]}],
                                   args.key, device, 256, temp)
+                rec["usage_tokens"] += int((usage or {}).get("total_tokens", 0))
             except Exception as e:
                 txt, dt = f"ERROR: {e}"[:200], 0.0
             cands.append(txt)
@@ -218,6 +228,7 @@ def main():
         print(f"[code] {'PASS' if entry['pass'] else 'FAIL'} {item['prompt'][:50]!r}", flush=True)
     rec["accuracy"] = round(rec["passed"] / max(rec["total"], 1), 3)
     rec["avg_latency_s"] = round(sum(rec["latency_s"]) / max(len(rec["latency_s"]), 1), 2)
+    rec["tokens_per_s"] = round(rec["usage_tokens"] / max(sum(rec["latency_s"]), 0.01), 2)
     out["categories"]["code"] = rec
 
     out["total_s"] = round(time.time() - t_all, 1)

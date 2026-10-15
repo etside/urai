@@ -23,15 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "model" / "registry.json"
 
 DEFAULTS = {
-    "active": "qwen05-fast",
+    "active": "qwen3-4b",
     "models": {
-        "qwen05-fast": {
-            "path": "model/base/qwen2.5-0.5b-instruct-q4_k_m.gguf",
-            "params": "0.5B", "quant": "Q4_K_M", "role": "fast",
-            "kind": "chat",
-            "hf": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
-            "pp_toks": 28.6, "tg_toks": 6.9, "ram_mb": 592,
-        },
         "coder05-fast": {
             "path": "model/base/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
             "params": "0.5B", "quant": "Q4_K_M", "role": "fast-coding",
@@ -77,11 +70,12 @@ DEFAULTS = {
         #   https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF
         #   https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF
         #   https://github.com/QwenLM/Qwen3
-        "qwen3-06b": {
-            "path": "model/base/Qwen3-0.6B-Q8_0.gguf",
-            "params": "0.6B", "quant": "Q8_0", "role": "fast",
+        "qwen3-4b": {
+            "path": "model/base/Qwen3-4B-Q4_K_M.gguf",
+            "params": "4B", "quant": "Q4_K_M", "role": "primary",
             "kind": "chat",
-            "hf": "https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf",
+            "hf": "https://huggingface.co/ggml-org/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
+            "pp_toks": 12, "tg_toks": 6, "ram_mb": 2600,
         },
         "qwen3-17b": {
             "path": "model/base/Qwen3-1.7B-Q4_K_M.gguf",
