@@ -226,10 +226,11 @@ def main():
         rec["total"] += 1
         rec["items"].append(entry)
         print(f"[code] {'PASS' if entry['pass'] else 'FAIL'} {item['prompt'][:50]!r}", flush=True)
-    rec["accuracy"] = round(rec["passed"] / max(rec["total"], 1), 3)
-    rec["avg_latency_s"] = round(sum(rec["latency_s"]) / max(len(rec["latency_s"]), 1), 2)
-    rec["tokens_per_s"] = round(rec["usage_tokens"] / max(sum(rec["latency_s"]), 0.01), 2)
-    out["categories"]["code"] = rec
+    if "code" in cats:
+        rec["accuracy"] = round(rec["passed"] / max(rec["total"], 1), 3)
+        rec["avg_latency_s"] = round(sum(rec["latency_s"]) / max(len(rec["latency_s"]), 1), 2)
+        rec["tokens_per_s"] = round(rec["usage_tokens"] / max(sum(rec["latency_s"]), 0.01), 2)
+        out["categories"]["code"] = rec
 
     out["total_s"] = round(time.time() - t_all, 1)
     REPORTS.mkdir(parents=True, exist_ok=True)

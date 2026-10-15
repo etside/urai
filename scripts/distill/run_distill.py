@@ -49,6 +49,8 @@ def main():
     ap.add_argument("--system", default="default",
                     choices=sorted(SYSTEMS),
                     help="teacher system prompt (reasoning = R1-style think traces)")
+    ap.add_argument("--max-examples", type=int, default=0,
+                    help="0 = all tasks; >0 = stop after N tasks")
     args = ap.parse_args()
 
     teacher = get_teacher()
@@ -56,8 +58,8 @@ def main():
 
     scored = []
     import glob as _glob
-    task_files = sorted(_glob.glob(str(Path(args.tasks) / "*.jsonl"))) \
-        if Path(args.tasks).is_dir() else [args.tasks]
+    task_files = sorted(_glob.glob(str(Path(args.tasks) / "*.jsonl")))         if Path(args.tasks).is_dir() else [args.tasks]
+    tasks = []
     for tf in task_files:
         with open(tf) as f:
             for line in f:
@@ -69,11 +71,17 @@ def main():
                     task["prompt"] = task["task"]
                 if args.system != "default":
                     task["system"] = SYSTEMS[args.system]
-                out = teacher.generate(task)
-                verdict = score_completion(task, out, exec_python=args.exec_python,
-                                           use_judge=args.judge, teacher=teacher)
-                scored.append({"record": build_record(task, out, verdict),
-                               "verdict": verdict})
+                tasks.append(task)
+    for idx, task in enumerate(tasks, 1):
+        if args.max_examples and idx > args.max_examples:
+            print(f"  stopped at --max-examples {args.max_examples}", flush=True)
+            break
+        print(f"  [{idx}/{len(tasks)}] {task.get("id", task.get("category", "?"))[:40]}", flush=True)
+        out = teacher.generate(task)
+        verdict = score_completion(task, out, exec_python=args.exec_python,
+                                   use_judge=args.judge, teacher=teacher)
+        scored.append({"record": build_record(task, out, verdict),
+                       "verdict": verdict})
 
     result = filter_batch(scored, args.threshold)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)

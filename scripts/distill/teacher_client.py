@@ -255,9 +255,10 @@ class SelfTeacher(Teacher):
 
     def generate(self, task: dict) -> TeacherOutput:
         system = task.get("system", DEFAULT_SYSTEM)
+        max_tokens = 512 if system == REASONING_SYSTEM else 256
         res = self._be.complete(
             [{"role": "system", "content": system},
              {"role": "user", "content": task["prompt"]}],
-            max_tokens=256, temperature=0.2)
+            max_tokens=max_tokens, temperature=0.2)
         return TeacherOutput(content=res["content"], model=self.model,
                              meta={"backend": self._be.name})
