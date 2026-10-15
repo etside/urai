@@ -19,12 +19,23 @@ self-improve run. Promotion gate: bench math/code must not regress
 (`eval/reports/regression-*.json`, advisory). Target: ≥2,000 verified
 examples with think traces before Stage 2.
 
-## Stage 2 — LoRA fine-tune (needs GPU — not this droplet)
+## Stage 2 — LoRA fine-tune (three routes, pick one)
 
 `scripts/train/lora_urai.py` + `urai-train.yml` (dispatch): LoRA on the
 Qwen3-4B base with the verified set, eval-gated (bench must improve or the
-run is discarded). Runs on a GPU runner / Modal — this 8 GB CPU droplet
-cannot train. Commission a GPU box (or free Colab/Kaggle tier) and dispatch.
+run is discarded).
+
+Route A — free Kaggle T4 (recommended, $0): new Notebook → GPU T4 x2 →
+`!pip install torch transformers peft trl datasets accelerate` → upload
+`data/verified/<tag>.jsonl` as an input dataset → run this script
+(it auto-uses CUDA) → download `adapters/<tag>/` → send the folder back
+for GGUF export. ~30 free GPU-hours/week is enough for the full set.
+
+Route B — this droplet, capped CPU demo: add `--allow-cpu` (<=300 examples,
+r=8, 1 epoch, hours of runtime, demonstration-grade adapter only). Proves
+the pipeline end-to-end; does not replace GPU training.
+
+Route C — commissioned GPU box / Modal / RunPod: full run, then Stage 3.
 
 ## Stage 3 — GGUF export + shadow serve
 
@@ -41,5 +52,6 @@ lapse and Urai stands alone.
 ## What "not depend on Qwen" honestly requires
 
 Weights, not prompts. Stages 0–1 squeeze the teacher's knowledge into
-behavior; only Stage 2+ moves it into Urai-owned weights. There is no
-CPU-only shortcut — anyone promising otherwise is selling something.
+behavior; only Stage 2+ moves it into Urai-owned weights. The CPU path
+exists and is honest about being demo-grade — anyone promising a
+competitive CPU-trained 4B model in an afternoon is selling something.

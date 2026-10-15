@@ -4,7 +4,10 @@ name: Urai Train - LoRA Stage 2 (GPU runner required)
 # FAILS FAST without CUDA — it will never fake-train on CPU.
 # Needs a GPU runner: set runs-on to your GPU label when commissioned.
 # Until then this workflow documents the contract; dispatching on the
-# default runner exits at the preflight check by design.
+# default runner exits at the preflight check by design. Routes:
+#  A) free Kaggle T4 notebook (see docs/INDEPENDENCE.md) — recommended;
+#  B) --allow-cpu capped demo (slow, demonstration-grade);
+#  C) set runs-on to your GPU label for the full run.
 
 on:
   workflow_dispatch:
@@ -26,4 +29,4 @@ jobs:
       - name: GPU preflight (expected to refuse until a GPU runner exists)
         run: |
           python3 scripts/train/lora_urai.py --data data/verified/${{ inputs.tag }}.jsonl --tag ${{ inputs.tag }} --base "${{ inputs.base }}" || \
-            echo "::warning::Stage-2 training refused (no GPU) — Stages 0-1 continue on the VPS. See docs/INDEPENDENCE.md."
+            echo "::warning::Stage-2 refused (no GPU here). Routes: Kaggle T4 free tier (recommended), --allow-cpu demo, or GPU runner. See docs/INDEPENDENCE.md."
