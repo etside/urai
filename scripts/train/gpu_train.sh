@@ -29,7 +29,7 @@ echo "== GPU sizes available (price/hr USD) =="
 api "https://api.digitalocean.com/v2/sizes" \
   | python3 -c "import json,sys; [print(s['slug'], s.get('price_hourly'), s.get('regions', [])[:4]) for s in json.load(sys.stdin).get('sizes', []) if 'gpu' in s['slug'] or 'h100' in s['slug'] or 'l40' in s['slug'] or 'mi300' in s['slug'] or 'rtx' in s['slug']]" || true
 
-read -r -d '' USERDATA <<EOF || true
+read -r -d '' USERDATA <<'EOF' || true
 #!/bin/bash
 set -x
 export DEBIAN_FRONTEND=noninteractive
@@ -40,15 +40,17 @@ pip3 install --quiet --break-system-packages unsloth trl peft accelerate bitsand
 BASE="${URAI_BASE:-unsloth/Qwen3-4B-bnb-4bit}"
 MAX_STEPS="${MAX_TRAIN_STEPS:-300}"
 echo "BASE=$BASE MAX_STEPS=$MAX_STEPS"
-git clone https://x-access-token:${GH_TOKEN}@github.com/etside/urai.git /root/urai
+git clone https://x-access-token:__GH_TOKEN__@github.com/etside/urai.git /root/urai
 cd /root/urai
-python3 scripts/train/sft_unsloth.py --model "${BASE}" --train data/verified/${TAG}.jsonl --out adapters/${TAG}-gpu --epochs 1 --rank 16 --seq-len 2048 --max-steps "${MAX_STEPS}"
-tar -czf /tmp/adapters-${TAG}-gpu.tgz adapters/${TAG}-gpu || tar -czf /tmp/adapters-${TAG}-gpu.tgz adapters
-GH_TOKEN=${GH_TOKEN} gh release view urai-deps --repo etside/urai >/dev/null 2>&1 || GH_TOKEN=${GH_TOKEN} gh release create urai-deps --repo etside/urai --title "Urai vendored deps" --notes "Binaries + adapters." --prerelease
-GH_TOKEN=${GH_TOKEN} gh release upload urai-deps /tmp/adapters-${TAG}-gpu.tgz --repo etside/urai --clobber
+python3 scripts/train/sft_unsloth.py --model "${BASE}" --train data/verified/__TAG__.jsonl --out adapters/__TAG__-gpu --epochs 1 --rank 16 --seq-len 2048 --max-steps "${MAX_STEPS}"
+tar -czf /tmp/adapters-__TAG__-gpu.tgz adapters/__TAG__-gpu || tar -czf /tmp/adapters-__TAG__-gpu.tgz adapters
+GH_TOKEN=__GH_TOKEN__ gh release view urai-deps --repo etside/urai >/dev/null 2>&1 || GH_TOKEN=__GH_TOKEN__ gh release create urai-deps --repo etside/urai --title "Urai vendored deps" --notes "Binaries + adapters." --prerelease
+GH_TOKEN=__GH_TOKEN__ gh release upload urai-deps /tmp/adapters-__TAG__-gpu.tgz --repo etside/urai --clobber
 echo TRAIN_DONE
 EOF
 
+USERDATA="${USERDATA//__TAG__/$TAG}"
+USERDATA="${USERDATA//__GH_TOKEN__/$GH_TOKEN}"
 if [ "$ACTION" != "create" ]; then
   echo "DRY RUN: pass 'create' to actually spin the droplet (money spends)."
   echo "Dataset check:"; ls -la "data/verified/${TAG}.jsonl" || echo "MISSING: pick an existing tag"
