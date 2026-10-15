@@ -10,6 +10,10 @@ on:
         description: "Max training steps (300 fits ~1h on H100)"
         required: false
         default: "300"
+      phases:
+        description: "Parallel H100 phases 1-2 (auto-capped by headroom)"
+        required: false
+        default: "2"
 permissions:
   contents: write
 jobs:
@@ -18,10 +22,11 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
-      - name: Ephemeral H100 train (auto-destroy, 1h cap)
+      - name: Ephemeral H100 phases (auto-destroy, 1h cap)
         env:
           DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           URAI_TRAIN_TAG: ${{ inputs.tag }}
           MAX_TRAIN_STEPS: ${{ inputs.max_steps }}
+          URAI_PHASES: ${{ inputs.phases }}
         run: bash scripts/train/gpu_train.sh create
