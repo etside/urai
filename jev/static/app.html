@@ -480,6 +480,9 @@ body{
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media(max-width:640px){
+  #harness-panel{width:100vw}
+  #input-area{padding:10px 10px 12px}
+  .suggestions{max-width:100%}
   #sidebar{position:fixed;height:100dvh;z-index:50;width:260px;transform:translateX(-100%);transition:transform .2s}
   #sidebar.mobile-open{transform:none}
   #sidebar.collapsed{transform:translateX(-100%)}
@@ -678,6 +681,7 @@ body{
     <div class="topbar-right">
       <button class="icon-btn" id="sys-toggle-btn" title="System prompt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
       <button class="icon-btn" id="stream-btn" title="Toggle streaming" onclick="toggleStream()"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg></button>
+      <a class="icon-btn" href="/welcome" title="About Urai" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">✨</a>
       <button class="icon-btn" id="plan-btn" title="Plan mode: propose file writes, apply on approval" onclick="togglePlan()"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></button>
       <button class="icon-btn" id="harness-btn" title="Harness: sessions, jobs, memory, focus" onclick="toggleHarness()"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
       <button class="icon-btn" onclick="clearChat()" title="Clear chat"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
@@ -729,7 +733,7 @@ body{
 
       <div id="input-footer">
         <span id="char-count"></span>
-        <span id="footer-note">Local model · zero cost · no login</span>
+        <span id="footer-note">Local model · zero cost · no login · <a href="/welcome" style="color:var(--accent)">What is Urai?</a></span>
       </div>
     </div>
   </div>
@@ -767,6 +771,9 @@ body{
 <h4>Approve / unblock</h4>
 <div class="sa-row"><input id="sa-target" placeholder="device_id or ip" /><input id="sa-wa" placeholder="whatsapp" /><input id="sa-gmail" placeholder="gmail" /></div>
 <div class="sa-row"><button onclick="saApprove()">Approve</button><button onclick="saUnblock()">Unblock</button></div>
+<h4>API tokens</h4>
+<div class="sa-row"><input id="tk-label" placeholder="label (e.g. my-app)" /><input id="tk-quota" type="number" value="0" title="quota, 0 = unlimited" style="max-width:110px" /><button onclick="tkIssue()">Issue</button><button onclick="tkList()">Refresh</button></div>
+<div id="tk-new" style="word-break:break-all"></div><div id="tk-list"></div>
 <p style="color:var(--text-mute);font-size:.75rem">Hidden access: open /superadmin or press footer 5x.</p></div>
 
 <!-- ── Model picker modal ──────────────────────────────────────────────────── -->
@@ -1490,6 +1497,32 @@ function escHtml(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+async function tkApi(action, extra){
+  const k = document.getElementById('sa-key').value.trim() || URAI_MASTER;
+  const r = await fetch('/superadmin/tokens', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(Object.assign({key:k, action}, extra||{}))});
+  return await r.json();
+}
+async function tkIssue(){
+  const d = await tkApi('issue', {label:document.getElementById('tk-label').value,
+    quota:parseInt(document.getElementById('tk-quota').value, 10) || 0});
+  document.getElementById('tk-new').innerHTML = d.token
+    ? `<b>New token (copy once):</b> <code>${escHtml(d.token)}</code> — quota ${d.quota || '∞'}, label ${escHtml(d.label||'')}`
+    : 'Error ' + hpEsc(d.error || 'unknown');
+  tkList();
+}
+async function tkList(){
+  const d = await tkApi('list');
+  document.getElementById('tk-list').innerHTML = ((d.tokens||[]).map(t =>
+    `<div class="sa-item"><code>${hpEsc(t.token)}</code> ${hpEsc(t.label||'')} ` +
+    `<span class="badge ${t.active ? 'ok' : 'err'}">${t.active ? 'active' : 'revoked'}</span> ` +
+    `<span class="badge">${t.used}/${t.quota || '∞'}</span> ` +
+    (t.active ? `<button onclick="tkRevoke('${hpEsc(t.id)}')">Revoke</button>` : '') +
+    `</div>`).join('') || 'No tokens yet.');
+}
+async function tkRevoke(id){ await tkApi('revoke', {id}); tkList(); }
+
 // ── Harness drawer: sessions / jobs / memory / focus + plan mode ──────────
 let planMode = false, lastProposals = [];
 function togglePlan(){

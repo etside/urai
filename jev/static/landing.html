@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Urai — agent harness + local AI</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#171717;--bg2:#212121;--border:#3a3a3a;--text:#ececec;--dim:#8e8ea0;
+--accent:#10a37f;--radius:14px;--font:'Söhne',system-ui,sans-serif}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.6}
+#bg-fx{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5}
+.wrap{position:relative;z-index:1;max-width:1024px;margin:0 auto;padding:0 20px}
+nav{display:flex;align-items:center;gap:18px;padding:18px 0}
+.logo{font-weight:700;font-size:1.25rem}.logo span{color:var(--accent)}
+nav .links{margin-left:auto;display:flex;gap:16px;font-size:.88rem}
+nav a{color:var(--dim);text-decoration:none}nav a:hover{color:var(--text)}
+.pill{display:inline-flex;align-items:center;gap:8px;font-size:.78rem;border:1px solid var(--border);
+border-radius:20px;padding:4px 14px;color:var(--dim)}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);
+box-shadow:0 0 8px var(--accent);animation:blink 2s infinite}
+@keyframes blink{50%{opacity:.4}}
+.hero{text-align:center;padding:72px 0 48px}
+.hero h1{font-size:clamp(2.2rem,6vw,3.8rem);font-weight:800;letter-spacing:-.03em;line-height:1.1}
+.hero h1 span{background:linear-gradient(90deg,var(--accent),#5c7cfa,#a78bfa,var(--accent));
+background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+animation:grad 8s ease-in-out infinite}
+@keyframes grad{50%{background-position:100% 50%}}
+.hero p{color:var(--dim);max-width:620px;margin:18px auto 28px;font-size:1.05rem}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px 26px;
+font-size:.95rem;cursor:pointer;text-decoration:none;font-weight:600}
+.btn:hover{filter:brightness(1.1)}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:40px 0}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;
+transition:transform .15s,border-color .15s}
+.card:hover{transform:translateY(-3px);border-color:var(--accent)}
+.card h3{font-size:1rem;margin-bottom:6px}.card p{color:var(--dim);font-size:.86rem}
+section{padding:28px 0}h2{font-size:1.5rem;margin-bottom:6px;letter-spacing:-.02em}
+.sub{color:var(--dim);font-size:.92rem;margin-bottom:16px}
+pre{background:#0f0f0f;border:1px solid var(--border);border-radius:10px;padding:14px 16px;
+overflow-x:auto;font-size:.8rem;margin:10px 0}
+code{font-family:ui-monospace,monospace}
+table{width:100%;border-collapse:collapse;font-size:.86rem}
+td,th{border:1px solid var(--border);padding:8px 12px;text-align:left}
+th{color:var(--dim);font-weight:600}
+footer{border-top:1px solid var(--border);margin-top:40px;padding:22px 0;color:var(--dim);font-size:.8rem;
+display:flex;gap:16px;flex-wrap:wrap}
+footer a{color:var(--dim)}
+@media (max-width:640px){nav .links{display:none}.hero{padding:48px 0 32px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="bg-fx" aria-hidden="true"></canvas>
+<div class="wrap">
+<nav><div class="logo">U<span>rai</span></div>
+<div class="links"><a href="#harness">Harness</a><a href="#models">Models</a><a href="#api">API</a><a href="#cli">CLI</a><a href="#tokens">Tokens</a><a href="/v1/docs">Docs</a></div></nav>
+
+<div class="hero">
+<div class="pill"><span class="dot"></span><span id="live-line">checking live status…</span></div>
+<h1>One harness.<br /><span>Every agent superpower.</span></h1>
+<p>Urai is an OpenCode-class agent harness with its own local models: verify-first agents, parallel swarm, conductor orchestration, browser, skills, memory, scheduler — served over an OpenAI-compatible API. Zero cost, no keys, privacy by default.</p>
+<div class="cta"><a class="btn" href="/app">Open the app</a><a class="btn ghost" href="#api">Use the API</a></div>
+</div>
+
+<section id="harness"><h2>Harness</h2><p class="sub">Not a chatbot — a runtime that plans, acts, verifies.</p>
+<div class="grid">
+<div class="card"><h3>Verify-first agent</h3><p>Plan → tool → observe → verify → correct, with budgets and full traces.</p></div>
+<div class="card"><h3>Conductor</h3><p>Thinker splits, workers run in parallel, verifier merges. Fugu-style roles, local pool.</p></div>
+<div class="card"><h3>Swarm</h3><p>Fan-out up to 8 tasks across workers with isolated failures.</p></div>
+<div class="card"><h3>Browser + approvals</h3><p>Human-like automation; auth fields pause for your approval, never fail.</p></div>
+<div class="card"><h3>Memory + focus</h3><p>Active memory with recency scoring and a focus anchor injected every run.</p></div>
+<div class="card"><h3>Scheduler + sessions</h3><p>Cron-style background agents and server-side conversations that survive restarts.</p></div>
+</div></section>
+
+<section id="models"><h2>Models</h2><p class="sub">One brand surface. Internal teachers stay under the hood.</p>
+<table><tr><th>ID</th><th>Behavior</th><th>Best for</th></tr>
+<tr><td><code>urai</code></td><td>Balanced default</td><td>Everyday chat + agents</td></tr>
+<tr><td><code>urai-fast</code></td><td>Short, quick</td><td>Q&amp;A, latency-sensitive</td></tr>
+<tr><td><code>urai-ultra</code></td><td>Consistency + verify</td><td>Hard reasoning</td></tr>
+<tr><td><code>urai-cyber</code></td><td>Security skills + verify</td><td>Audits, reviews</td></tr>
+<tr><td><code>laya</code></td><td>Urai-owned student</td><td>Landing soon — same API</td></tr></table></section>
+
+<section id="api"><h2>OpenAI-compatible API</h2><p class="sub">Point any OpenAI client at Urai. Same shapes, zero cost.</p>
+<pre><code>export URAI=https://urai.daddyai.online
+curl $URAI/v1/chat/completions \
+  -H "Authorization: Bearer urai_YOUR_TOKEN" \
+  -H Content-Type:application/json -d '{
+  "model": "urai",
+  "messages": [{"role":"user","content":"Hello Urai"}]}'</code></pre>
+<p class="sub">Agents, tiers and tools: <code>POST /agent</code> (tier, plan, session) · <code>POST /agent/swarm</code> (parallel/conductor) · <code>POST /tools</code> · full reference in <a href="/v1/docs">docs</a>.</p></section>
+
+<section id="cli"><h2>CLI</h2><p class="sub">Remote-first: nothing heavy installs locally.</p>
+<pre><code>git clone --depth 1 https://github.com/etside/urai.git ~/.local/share/urai
+ln -sf ~/.local/share/urai/bin/urai ~/.local/bin/urai
+urai login 856777
+urai ask --remote "hello"        # chat
+urai agent --remote "do research" --plan   # propose first
+urai swarm --remote "task one" "task two"  # fan out</code></pre></section>
+
+<section id="tokens"><h2>Tokens</h2><p class="sub">Guests get 5 free responses per device. Apps get issued tokens.</p>
+<table><tr><th>Kind</th><th>Access</th><th>How</th></tr>
+<tr><td>Guest</td><td>5 free responses</td><td>Just open the app</td></tr>
+<tr><td>Master <code>856777</code></td><td>Unlimited, zero cost</td><td>Unlock in the app</td></tr>
+<tr><td>API token <code>urai_…</code></td><td>Quotas you set, usage tracked</td><td>Superadmin issues + revokes</td></tr></table></section>
+
+<footer><span>Urai, developed by Tynio LTD</span><a href="/status">live status</a><a href="/app">app</a><a href="/superadmin">superadmin</a><a href="/v1/docs">docs</a></footer>
+</div>
+<script>
+try{
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+const cv=document.getElementById('bg-fx'),ctx=cv.getContext('2d');let t=0,run=true;
+const DPR=Math.min(devicePixelRatio||1,1.5);
+function size(){cv.width=innerWidth*DPR;cv.height=innerHeight*DPR;cv.style.width=innerWidth+'px';cv.style.height=innerHeight+'px'}
+size();addEventListener('resize',size);
+document.addEventListener('visibilitychange',()=>{run=!document.hidden;if(run)requestAnimationFrame(f)});
+const B=[{x:.2,y:.25,r:.34,c:'16,163,127',s:.00021,p:0},{x:.85,y:.7,r:.38,c:'92,124,250',s:.00016,p:2},{x:.6,y:.1,r:.26,c:'167,139,250',s:.00026,p:4}];
+(function f(){if(!run)return;t++;ctx.clearRect(0,0,cv.width,cv.height);ctx.globalCompositeOperation='lighter';
+for(const b of B){const bx=(b.x+Math.sin(t*b.s+b.p)*.06)*cv.width,by=(b.y+Math.cos(t*b.s*1.3+b.p)*.06)*cv.height,br=b.r*Math.min(cv.width,cv.height);
+const g=ctx.createRadialGradient(bx,by,0,bx,by,br);g.addColorStop(0,`rgba(${b.c},.10)`);g.addColorStop(1,`rgba(${b.c},0)`);ctx.fillStyle=g;ctx.fillRect(0,0,cv.width,cv.height)}
+requestAnimationFrame(f)})();}
+fetch('/health').then(r=>r.json()).then(d=>{
+document.getElementById('live-line').textContent=d.local_llama?'● live — local models online':'● live — serving (teacher warming up)'}).catch(()=>{
+document.getElementById('live-line').textContent='● live'});
+}catch(e){}
+</script>
+</body>
+</html>

@@ -390,6 +390,14 @@ class Handler(BaseHTTPRequestHandler):
             tok = got[7:].strip()
             if tok == API_KEY or tok == MASTER_API_KEY:
                 return True
+            try:
+                from . import apitokens as _at
+                _rec = _at.check(tok)
+                if _rec:
+                    _at.record_use(_rec["id"])
+                    return True
+            except Exception:
+                pass
         return False
 
     def do_OPTIONS(self):
@@ -425,6 +433,7 @@ class Handler(BaseHTTPRequestHandler):
         p = self._path()
         # hidden superadmin served by same app.html; JS detects path
         rel = "app.html" if p in ("/", "/app", "/app/", "/superadmin") else \
+              "landing.html" if p in ("/welcome", "/welcome/") else \
             p[len("/app/"):] if p.startswith("/app/") else None
         if rel is None or ".." in rel:
             return self._send({"error": "not found"}, 404)
@@ -456,6 +465,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send({"object": "list",
                         "data": [{"object": "model", **m} for m in _models()]})
             return
+        if p == "/status":
+            return self._status_page()
         if p == "/v1/integrations":
             from .integrations import report as _ireport
             return self._send(_ireport())
@@ -580,7 +591,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
             return
-        if p in ("/", "/app", "/app/") or p.startswith("/app/") or p == "/superadmin":
+        if p in ("/", "/app", "/app/", "/welcome", "/welcome/") or p.startswith("/app/") or p == "/superadmin":
             return self._static()
         self._send({"error": "not found"}, 404)
 
@@ -599,6 +610,23 @@ class Handler(BaseHTTPRequestHandler):
         device = _device_id(body if isinstance(body, dict) else {}, self.headers, q)
         ident = _identity(ip, device)
         is_master = _extract_master(body if isinstance(body, dict) else {}, self.headers, q)
+        _tok, _tok_id = None, ""
+        if not is_master:
+            try:
+                from . import apitokens as _at
+                _raw = ""
+                _h = self.headers.get("Authorization", "") if self.headers else ""
+                if _h.startswith("Bearer "):
+                    _raw = _h[7:]
+                if not _raw and isinstance(body, dict):
+                    _raw = str(body.get("api_token", "") or "")
+                if not _raw and isinstance(q, dict):
+                    _raw = str(q.get("api_token", "") or "")
+                _tok = _at.check(_raw)
+                _tok_id = _tok["id"] if _tok else ""
+            except Exception:
+                _tok, _tok_id = None, ""
+        authed = bool(is_master or _tok)
 
         # ---- open auth / repo / superadmin routes (token-gated internally) ----
         if p == "/auth/unlock":
@@ -630,6 +658,18 @@ class Handler(BaseHTTPRequestHandler):
             _save_state()
             return self._send({"ok": True, "pending": True,
                                "message": "Request sent to superadmin. You will be approved after WhatsApp/Gmail verification."})
+
+        if p == "/superadmin/tokens":
+            if not is_master:
+                return self._send({"error": "forbidden - master key required"}, 403)
+            from . import apitokens as _at
+            action = body.get("action", "list")
+            if action == "issue":
+                return self._send(_at.issue(body.get("label", ""),
+                                            body.get("quota", 0)))
+            if action == "revoke":
+                return self._send(_at.revoke(body.get("id", "")))
+            return self._send({"ok": True, "tokens": _at.list_tokens()})
 
         if p == "/superadmin/approve":
             if not is_master:
@@ -682,7 +722,14 @@ class Handler(BaseHTTPRequestHandler):
         needs_gate = (p == "/chat" or p.startswith("/v1/") or p in gated[2:]
                       or p.startswith("/agent") or p.startswith("/browser/"))
         if needs_gate and p not in ("/v1/models",):
-            allowed, reason, remaining = _check_access(ip, device, is_master)
+            allowed, reason, remaining = _check_access(ip, device, authed)
+            if _tok:
+                try:
+                    from . import apitokens as _at2
+                    _at2.record_use(_tok_id)
+                except Exception:
+                    pass
+                reason = "api_token"
             if not allowed:
                 with _lock:
                     blk = float(_state["blocked"].get(ident, 0))
@@ -690,7 +737,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(_expired_payload(blk), 403)
             # record use AFTER success? record now for simplicity (prevents abuse on errors too)
             # we record after successful generation below; store flag
-            body["_urai_authed"] = bool(is_master)
+            body["_urai_authed"] = bool(is_master or _tok_id)
             body["_urai_reason"] = reason
             body["_urai_remaining"] = remaining
 
@@ -1088,6 +1135,39 @@ class Handler(BaseHTTPRequestHandler):
                              "finish_reason": None}]})
             self.wfile.write(f"data: {piece}\n\n".encode())
         self.wfile.write(b"data: [DONE]\n\n")
+
+
+    def _status_page(self):
+        import time as _t
+        from .integrations import report as _rep
+        try:
+            r = _rep()
+        except Exception as e:
+            r = {"ok": False, "items": []}
+        rows = "".join(
+            f"<tr><td>{i['name']}</td><td>{i['kind']}</td><td>{i['status']}</td></tr>"
+            for i in r.get("items", []))
+        html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Urai — live status</title>
+<style>body{{background:#171717;color:#ececec;font-family:system-ui,sans-serif;
+max-width:760px;margin:0 auto;padding:24px}}h1 span{{color:#10a37f}}
+table{{width:100%;border-collapse:collapse}}td{{border:1px solid #3a3a3a;
+padding:6px 10px;font-size:.85rem}}.ok{{color:#10a37f}}a{{color:#10a37f}}</style>
+</head><body><h1>Urai is <span class="ok">● live</span></h1>
+<p>Urai, developed by Tynio LTD · {_t.strftime('%Y-%m-%d %H:%M UTC', _t.gmtime())} ·
+<a href="/welcome">landing</a> · <a href="/app">open app</a> ·
+<a href="/v1/docs">docs</a></p>
+<table>{rows}</table></body></html>"""
+        return self._send_raw(html.encode(), "text/html")
+
+    def _send_raw(self, data: bytes, ctype: str):
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(data)
 
 
 def serve(port=PORT, host="127.0.0.1"):
