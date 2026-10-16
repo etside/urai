@@ -1,1 +1,13 @@
-{"servers": {}}
+{
+  "servers": {
+    "urai-local": {
+      "cmd": [
+        "python3",
+        "/opt/urai/mcp_servers/urai_local.py"
+      ],
+      "enabled": true,
+      "cwd": "/opt/urai",
+      "description": "Self-loop: Urai agent calling Urai internals over MCP"
+    }
+  }
+}
