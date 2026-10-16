@@ -78,6 +78,16 @@
       "kind": "chat",
       "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
       "ram_mb": 1200
+    },
+    "laya": {
+      "path": "model/base/laya-Q4_K_M.gguf",
+      "params": "4B",
+      "quant": "Q4_K_M-imatrix+LoRA",
+      "role": "student",
+      "kind": "chat",
+      "status": "landing",
+      "hf": "",
+      "note": "Urai-owned student. See docs/LAYA.md. Absent until promotion."
     }
   }
 }

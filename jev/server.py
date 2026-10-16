@@ -255,12 +255,15 @@ def _needs_key(path: str) -> bool:
 def _models():
     local = LlamaServerBackend()
     up = local.healthy()
-    ms = [{"id": "jev-local-student", "owned_by": "ownai", "available": up}]
+    from .brand import brand_list
+    ms = brand_list(up)
+    ms.append({"id": "jev-local-student", "owned_by": "Urai", "available": up,
+               "legacy": True})
     try:
         from . import models_registry as _reg
         reg = _reg.load()
         for mid, m in reg.get("models", {}).items():
-            if m.get("kind") != "chat":
+            if m.get("kind") != "chat" or mid == "laya":
                 continue
             mp = ROOT / m["path"]
             ms.append({"id": mid, "owned_by": "urai-local",
@@ -693,7 +696,8 @@ class Handler(BaseHTTPRequestHandler):
             msgs = _as_messages(body.get("messages", []))
             # identity guard: always Urai / Tynio LTD
             try:
-                r = route(_text_of(msgs))
+                from .brand import tier_of_brand as _tier_of
+                r = route(_text_of(msgs), tier=_tier_of(body.get("model", "urai")))
                 res = r["backend"].complete(
                     msgs, body.get("max_tokens", 256),
                     body.get("temperature", 0.2))
@@ -704,11 +708,11 @@ class Handler(BaseHTTPRequestHandler):
             _log("chat", ip, device, _text_of(msgs)[:160] + " -> " + content[:120],
                  {"master": bool(body.get("_urai_authed"))})
             if body.get("stream"):
-                return self._stream(content, res.get("model", "jev-local-student"))
+                return self._stream(content, __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")))
             usage = res.get("usage") or {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0}
             return self._send({
                 "id": "chatcmpl-urai", "object": "chat.completion",
-                "model": res.get("model", "jev-local-student"),
+                "model": __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")),
                 "choices": [{"index": 0, "message": {"role": "assistant",
                                                      "content": content},
                              "finish_reason": "stop"}],
@@ -733,14 +737,15 @@ class Handler(BaseHTTPRequestHandler):
                 content = res["answer"]
             else:
                 try:
-                    r = route(_text_of(msgs))
+                    from .brand import tier_of_brand as _tier_of
+                    r = route(_text_of(msgs), tier=_tier_of(body.get("model", "urai")))
                     res = r["backend"].complete(
                         msgs, body.get("max_tokens", 256),
                         body.get("temperature", 0.2))
                     content = res["content"]
                 except Exception as e:
                     return self._send({"error": str(e)[:300]}, 502)
-            model = body.get("model", res.get("model", "jev-local-student"))
+            model = body.get("model", __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")))
             _record_use(ip, device, bool(body.get("_urai_authed")))
             _log("chat", ip, device, _text_of(msgs)[:160] + " -> " + str(content)[:120],
                  {"master": bool(body.get("_urai_authed")), "model": model})
@@ -852,7 +857,7 @@ class Handler(BaseHTTPRequestHandler):
                     body.get("temperature", 0.2))
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
-            model = body.get("model", res.get("model", "jev-local-student"))
+            model = body.get("model", __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")))
             _record_use(ip, device, bool(body.get("_urai_authed")))
             if body.get("stream"):
                 return self._stream(res["content"], model)

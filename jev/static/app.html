@@ -815,9 +815,11 @@ async function loadModels() {
   } catch {
     allModels = [
       { id:'auto',        owned_by:'Urai',     local:true  },
-      { id:'local/qwen3-17b', owned_by:'Local', local:true  },
-      { id:'gpt-4o',      owned_by:'OpenAI',   local:false },
-      { id:'claude-3-5-sonnet-20241022', owned_by:'Anthropic', local:false },
+      { id:'urai',        owned_by:'Urai',     local:true  },
+      { id:'urai-fast',   owned_by:'Urai',     local:true  },
+      { id:'urai-ultra',  owned_by:'Urai',     local:true  },
+      { id:'urai-cyber',  owned_by:'Urai',     local:true  },
+      { id:'laya',        owned_by:'Urai',     local:true  },
     ];
   }
   populateModelSelect();
