@@ -890,6 +890,8 @@ class Handler(BaseHTTPRequestHandler):
             if action == "history":
                 return self._send({"ok": True, "session_id": sid,
                                    "history": _sess.history(sid)})
+            if action == "clear":
+                return self._send(_sess.clear(sid))
             return self._send({"error": "unknown action"}, 400)
 
         if p == "/agent/jobs":

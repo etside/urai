@@ -38,6 +38,14 @@ def append(sid: str, role: str, content: str) -> str:
     return sid
 
 
+def clear(sid: str) -> dict:
+    try:
+        (SESS_DIR / f"{sid}.jsonl").unlink()
+    except Exception:
+        pass
+    return {"ok": True, "session_id": sid}
+
+
 def history(sid: str, limit: int = 40) -> list:
     try:
         rows = []
