@@ -1,0 +1,1 @@
+{"task_id": "7a8844363541", "category": "general", "prompt": "A box holds 24 eggs. How many in 5 boxes? Reply with just the number.", "completion": "40", "teacher": "qwen3-17b", "score": 0.6, "checks": 0, "failures": [], "content_hash": "d59eced1ded07f84", "pipeline_version": "distill-v0.1"}

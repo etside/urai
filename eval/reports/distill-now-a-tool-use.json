@@ -1,0 +1,12 @@
+{
+  "teacher": "self-local",
+  "total": 28,
+  "kept": 9,
+  "rejected": 19,
+  "dupes": 0,
+  "reject_reasons": {
+    "leaked-password": 1,
+    "leaked-secret": 2,
+    "empty-completion": 17
+  }
+}

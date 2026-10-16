@@ -1,0 +1,8 @@
+{
+  "tag": "distill-now-a",
+  "chunk": "code-generation",
+  "scanned": 30,
+  "promoted": 9,
+  "threshold": 0.8,
+  "fewshots_total": 46
+}

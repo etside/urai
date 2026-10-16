@@ -1,0 +1,10 @@
+{
+  "teacher": "self-local",
+  "total": 4,
+  "kept": 0,
+  "rejected": 4,
+  "dupes": 0,
+  "reject_reasons": {
+    "empty-completion": 4
+  }
+}

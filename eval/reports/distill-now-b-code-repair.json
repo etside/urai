@@ -1,0 +1,13 @@
+{
+  "teacher": "self-local",
+  "total": 28,
+  "kept": 24,
+  "rejected": 4,
+  "dupes": 0,
+  "reject_reasons": {
+    "syntax-error: 'return' outside function (<candidate>, line 1)": 2,
+    "syntax-error: expected an indented block after 'for' statement on line 1 (<candidate>, line 1)": 2,
+    "syntax-error: expected an indented block after 'for' statement on line 2 (<candidate>, line 3)": 1,
+    "syntax-error: expected an indented block after 'with' statement on line 2 (<candidate>, line 3)": 2
+  }
+}
