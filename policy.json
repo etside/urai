@@ -1,0 +1,32 @@
+{
+  "allowed_binaries": [
+    "awk",
+    "cargo",
+    "cat",
+    "df",
+    "diff",
+    "du",
+    "file",
+    "find",
+    "free",
+    "git",
+    "grep",
+    "head",
+    "ls",
+    "lsblk",
+    "node",
+    "npm",
+    "pytest",
+    "python3",
+    "rg",
+    "ruff",
+    "sed",
+    "sort",
+    "tail",
+    "tsc",
+    "uniq",
+    "wc"
+  ],
+  "max_write_bytes": 200000,
+  "toolpacks_enabled": true
+}

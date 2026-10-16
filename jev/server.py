@@ -893,6 +893,18 @@ class Handler(BaseHTTPRequestHandler):
                                    "history": _sess.history(sid)})
             if action == "clear":
                 return self._send(_sess.clear(sid))
+            if action == "summarize":
+                hist = _sess.history(sid, limit=60)
+                if not hist:
+                    return self._send({"ok": False, "error": "empty session"})
+                comp = run_agent(
+                    "Condense this conversation into 5-8 durable bullets "
+                    "(decisions, facts, open loops). Reply bullets only.",
+                    {}, 1024, 1, history=hist)
+                from . import memory as _mem
+                rec = _mem.remember(comp.get("answer", "")[:1500], "fact")
+                return self._send({"ok": True, "summary": comp.get("answer", ""),
+                                   "memory": rec})
             if action == "list":
                 return self._send({"ok": True,
                                    "sessions": _sess.list_sessions()})
@@ -1020,6 +1032,13 @@ class Handler(BaseHTTPRequestHandler):
             _log("browser_approve", ip, device, f"run={body.get('run_id','')[:20]}",
                  {"ok": bool(res.get("ok"))})
             return self._send(res, 200 if res.get("ok") else 400)
+
+        if p == "/tools/reload":
+            if not is_master:
+                return self._send({"error": "forbidden - master key required"}, 403)
+            import importlib as _il
+            _il.reload(tool_engine)
+            return self._send(tool_engine.reload_policy())
 
         if p == "/tools":
             fn = tool_engine.TOOLS.get(body.get("tool", ""))

@@ -27,7 +27,7 @@ def append(sid: str, role: str, content: str) -> str:
     SESS_DIR.mkdir(parents=True, exist_ok=True)
     fp = SESS_DIR / f"{sid}.jsonl"
     with open(fp, "a") as f:
-        f.write(json.dumps({"role": role, "content": (content or "")[:8000],
+        f.write(json.dumps({"v": 1, "role": role, "content": (content or "")[:8000],
                             "ts": int(time.time())}, ensure_ascii=False) + "\n")
     try:
         lines = fp.read_text().splitlines()

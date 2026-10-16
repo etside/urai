@@ -1,0 +1,11 @@
+{
+  "name": "repo-log",
+  "description": "Recent repo commits (read-only git log)",
+  "argv": [
+    "git",
+    "log",
+    "--oneline",
+    "-8"
+  ],
+  "enabled": true
+}

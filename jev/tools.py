@@ -13,6 +13,7 @@ to the agent trace by agent.py.
 """
 
 import html as _html
+import json
 import os
 import re as _re
 import subprocess
@@ -22,6 +23,25 @@ import urllib.request as _urlreq
 WORKSPACE = os.path.realpath(os.environ.get("JEV_WORKSPACE", os.getcwd()))
 TIMEOUT_S = 30
 OUT_CAP = 8000
+
+
+def _load_policy() -> dict:
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "..", "policy.json")) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+POLICY = _load_policy()
+
+
+def reload_policy() -> dict:
+    global POLICY
+    POLICY = _load_policy()
+    load_toolpacks()
+    return {"ok": True, "policy_keys": sorted(POLICY)}
 WEB_TIMEOUT = 25
 WEB_MAX_BYTES = 300_000
 
@@ -29,6 +49,7 @@ SAFE_BINARIES = {"ls", "cat", "head", "tail", "wc", "grep", "rg", "find",
                  "git", "python3", "node", "npm", "lsblk", "df", "free",
                  "du", "sed", "awk", "sort", "uniq", "diff", "file",
                  "pytest", "ruff", "tsc", "cargo"}
+SAFE_BINARIES = set(POLICY.get("allowed_binaries", sorted(SAFE_BINARIES)))
 GIT_SAFE = {"status", "log", "diff", "show", "branch", "rev-parse"}
 BLOCKED_RE = ("rm ", "mv ", "dd ", ">", "mkfs", ":(){", "chmod 777")
 
@@ -196,7 +217,7 @@ def analyze(target: str = "", max_bytes: int = 1000000) -> dict:
 TOOLS["analyze"] = analyze
 
 
-WRITE_MAX_BYTES = 200_000
+WRITE_MAX_BYTES = int(POLICY.get("max_write_bytes", 200_000))
 
 
 def write_file(path: str, content: str = "") -> dict:
@@ -258,3 +279,43 @@ def mcp(server: str = "", tool: str = "", args=None) -> dict:
 
 TOOLS["mcp_servers"] = mcp_servers
 TOOLS["mcp"] = mcp
+
+
+def load_toolpacks() -> dict:
+    """Everything-is-a-plugin tools: toolpacks/*.json manifests become tools.
+
+    Manifest: {"name","description","argv":["git","log","--oneline"],
+               "timeout_s": 30}. Fixed argv only (no interpolation) — safe.
+    Disabled with {"enabled": false} or policy flag.
+    """
+    import glob as _glob
+    loaded = []
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "..", "toolpacks")
+    if POLICY.get("toolpacks_enabled", True):
+        for mf in sorted(_glob.glob(os.path.join(base, "*.json"))):
+            try:
+                with open(mf) as f:
+                    m = json.load(f)
+                name = m.get("name", "")
+                argv = m.get("argv", [])
+                if not name or not argv or not m.get("enabled", True):
+                    continue
+                if name in TOOLS:
+                    continue
+                def _make(a, t):
+                    def _run(extra_args=None):
+                        if extra_args:
+                            return {"ok": False,
+                                    "error": "toolpack takes no arguments"}
+                        return run_cmd(list(a))
+                    _run.__doc__ = t
+                    return _run
+                TOOLS[name] = _make(list(argv), m.get("description", name))
+                loaded.append(name)
+            except Exception:
+                continue
+    return {"ok": True, "toolpacks": loaded}
+
+
+load_toolpacks()
