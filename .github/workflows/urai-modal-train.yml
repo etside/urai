@@ -1,0 +1,41 @@
+name: Urai Modal Train (A100, metered, ~$1.50/run)
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Dataset tag in data/verified/<tag>.jsonl"
+        required: false
+        default: "distill-now"
+      max_steps:
+        description: "Max training steps"
+        required: false
+        default: "300"
+permissions:
+  contents: write
+jobs:
+  modal-train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Modal CLI
+        run: pip install -q modal
+      - name: Train on Modal A100-40GB
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          URAI_TRAIN_TAG: ${{ inputs.tag }}
+        run: modal run modal/modal_train.py --tag "$URAI_TRAIN_TAG" --max-steps ${{ inputs.max_steps }}
+      - name: Fetch adapter + publish to urai-deps release
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          modal volume get urai-adapters "${{ inputs.tag }}-modal" "./adapters/${{ inputs.tag }}-modal"
+          tar -czf "/tmp/adapters-${{ inputs.tag }}-modal.tgz" "adapters/${{ inputs.tag }}-modal"
+          gh release view urai-deps --repo etside/urai >/dev/null 2>&1 || gh release create urai-deps --repo etside/urai --title "Urai vendored deps" --notes "Binaries + adapters." --prerelease
+          gh release upload urai-deps "/tmp/adapters-${{ inputs.tag }}-modal.tgz" --repo etside/urai --clobber
