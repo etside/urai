@@ -2,23 +2,36 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- CyberUrai guard: enumerate installed apps + read usage/app-ops. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <!-- Notification for monitor alerts (runtime-requested on API 33+). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- The monitor is a passive observer: it never records audio, opens the
+         camera or reads location itself. It therefore declares the generic
+         "specialUse" foreground-service type instead of microphone/camera/
+         location (which would require RECORD_AUDIO / ACCESS_*_LOCATION). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Camera is used only when the user attaches a photo via the See tab. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <!-- cleartext for LAN servers (https still recommended via Caddy) -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:label="Urai"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:usesCleartextTraffic="true"
-        android:allowBackup="true">
+        android:allowBackup="false"
+        android:usesCleartextTraffic="true">
+        <!-- usesCleartextTraffic stays true on purpose: the default endpoint is
+             the emulator loopback http://10.0.2.2:8777/ and users configure
+             http://<host>:8777/ LAN servers, which are plain HTTP. HTTPS is
+             recommended (and is the default for real devices), but blocking
+             cleartext would make the loopback/LAN setup unusable. -->
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -28,8 +41,12 @@
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".cyber.CyberActivity" android:exported="false" />
         <service android:name=".cyber.PrivacyMonitorService"
-            android:foregroundServiceType="microphone|camera|location"
-            android:exported="false" />
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="passive privacy and app-ops monitoring" />
+        </service>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

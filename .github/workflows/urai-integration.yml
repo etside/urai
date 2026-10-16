@@ -1,0 +1,111 @@
+# Urai integration tests — API contract + CLI + offline self-test.
+# Stdlib only: no model weights, no installs, deterministic (mock backend).
+name: Urai Integration
+
+on:
+  push:
+    branches: ["feat/unified-urai-surface"]
+  pull_request:
+    branches: ["feat/unified-urai-surface"]
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: API contract against a locally-started (mock) server
+  # ---------------------------------------------------------------------------
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Start Urai API (deterministic mock backend)
+        env:
+          URAI_API_KEY: testkey
+          URAI_FORCE_MOCK: "1"
+          URAI_AUTH_GET: "1"
+          URAI_PORT: "8771"
+          JEV_LLAMA_URL: "http://127.0.0.1:9"
+          URAI_EMBED_URL: "http://127.0.0.1:9"
+          URAI_DATA_DIR: ${{ runner.temp }}/urai-data
+        run: |
+          python3 -m jev.server > /tmp/urai-server.log 2>&1 &
+          echo $! > /tmp/urai-server.pid
+          python3 - <<'PY'
+          import sys, time, urllib.request
+          for _ in range(30):
+              try:
+                  urllib.request.urlopen("http://127.0.0.1:8771/health", timeout=2)
+                  print("server is up")
+                  sys.exit(0)
+              except Exception:
+                  time.sleep(1)
+          print("server never became healthy", file=sys.stderr)
+          sys.exit(1)
+          PY
+          echo "----- server log -----"; cat /tmp/urai-server.log
+
+      - name: Run API integration test
+        env:
+          URAI_BASE: http://127.0.0.1:8771
+          URAI_API_KEY: testkey
+        run: python3 scripts/integration/api_test.py
+
+      - name: Server log on failure
+        if: failure()
+        run: cat /tmp/urai-server.log || true
+
+      - name: Stop Urai API
+        if: always()
+        run: kill "$(cat /tmp/urai-server.pid)" 2>/dev/null || true
+
+  # ---------------------------------------------------------------------------
+  # Job 2: CLI surface — compile + nlp/vibe module CLIs + help
+  # ---------------------------------------------------------------------------
+  cli:
+    name: cli
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile every jev module
+        run: python3 -m py_compile jev/*.py
+
+      - name: nlp CLI detects negative sentiment
+        run: |
+          out=$(python3 -m jev.nlp "this is broken and I'm frustrated, fix asap")
+          echo "$out"
+          echo "$out" | grep -q '"negative"'
+
+      - name: vibe CLI emits a style directive
+        run: |
+          out=$(python3 -m jev.vibe "thanks, great work")
+          echo "$out"
+          echo "$out" | grep -q 'directive'
+
+      - name: CLI help
+        run: bin/urai --help
+
+  # ---------------------------------------------------------------------------
+  # Job 3: offline self-test — nlp / vibe / profile / retrieval, no network
+  # ---------------------------------------------------------------------------
+  selftest:
+    name: selftest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Offline smoke self-test
+        run: python3 scripts/smoke_urai.py --offline

@@ -1,0 +1,213 @@
+/* ==========================================================================
+   Urai shared design tokens
+   One source of truth for every client surface: webapp, APK WebView, CLI docs.
+   Light theme lives in :root; dark theme under [data-theme="dark"].
+
+   Contrast notes (WCAG AA, 4.5:1 for normal text — verified):
+     light  text #16181d / bg #f7f7f8  = 16.6:1
+     light  text-dim #3f434d / bg     =  9.3:1   (on surface-1 #fff = 9.9:1)
+     light  text-mute #5c606c / bg    =  5.9:1   (on surface-3 = 5.1:1)
+     light  accent #0b7d62 / #ffffff  =  5.1:1
+     dark   text #eceef2 / bg #0e0f12 = 16.5:1
+     dark   text-dim #a7adba / bg     =  8.5:1   (on surface-2 = 7.2:1)
+     dark   text-mute #8b92a1 / bg    =  6.1:1   (on surface-3 = 4.7:1)
+     dark   accent #10a37f / bg       =  6.0:1
+   ========================================================================== */
+
+:root {
+  /* ── Core surfaces ───────────────────────────────────────────────────── */
+  --bg:            #f7f7f8;
+  --bg-elev:       #ffffff;
+  --surface-1:     #ffffff;
+  --surface-2:     #f1f1f3;
+  --surface-3:     #e8e8ec;
+  --ink:           #0b0c0f;   /* "over ink" deepest layer */
+
+  /* ── Lines ───────────────────────────────────────────────────────────── */
+  --border:        #d9d9e0;
+  --border-strong: #b9b9c4;
+  --border-lume:   rgba(255, 255, 255, 0.65); /* 1px luminous top edge */
+
+  /* ── Text ────────────────────────────────────────────────────────────── */
+  --text:          #16181d;
+  --text-dim:      #3f434d;
+  --text-mute:     #5c606c;
+  --text-invert:   #ffffff;
+
+  /* ── Accents ─────────────────────────────────────────────────────────── */
+  --accent:        #0b7d62;   /* emerald, darkened for AA on light */
+  --accent-2:      #4257d0;   /* indigo  */
+  --accent-3:      #7c5cf0;   /* violet  */
+  --accent-raw:    #10a37f;   /* brand emerald, for gradients/fills only  */
+  --accent-soft:   rgba(11, 125, 98, 0.10);
+  --accent-contrast: #ffffff; /* text on solid accent                    */
+
+  --danger:        #c02a3c;
+  --danger-soft:   rgba(192, 42, 60, 0.10);
+  --warn:          #9a6400;
+  --warn-soft:     rgba(154, 100, 0, 0.12);
+  --ok:            #0b7d62;
+  --ok-soft:       rgba(11, 125, 98, 0.12);
+
+  /* ── Signature gradient (emerald → indigo → violet) ─────────────────── */
+  --grad-signature: linear-gradient(120deg, #10a37f 0%, #5c7cfa 52%, #a78bfa 100%);
+  --grad-signature-loop: linear-gradient(90deg,
+      #10a37f, #5c7cfa, #a78bfa, #10a37f);
+  --grad-text: var(--grad-signature);
+
+  /* ── Radii ───────────────────────────────────────────────────────────── */
+  --r-sm:   10px;
+  --r-md:   16px;
+  --r-lg:   24px;
+  --r-pill: 999px;
+
+  /* ── Depth glass (layered elevation) ─────────────────────────────────── */
+  --shadow-inset:  inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-1:
+      inset 0 1px 0 rgba(255, 255, 255, 0.65),
+      0 1px 2px rgba(16, 18, 24, 0.08),
+      0 8px 30px rgba(16, 18, 24, 0.10);
+  --shadow-2:
+      inset 0 1px 0 rgba(255, 255, 255, 0.75),
+      0 1px 2px rgba(16, 18, 24, 0.10),
+      0 14px 40px rgba(16, 18, 24, 0.16);
+  --shadow-3:
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      0 2px 4px rgba(16, 18, 24, 0.12),
+      0 24px 60px rgba(16, 18, 24, 0.22);
+  --shadow-glass:
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      0 1px 2px rgba(16, 18, 24, 0.10),
+      0 8px 30px rgba(16, 18, 24, 0.14);
+  /* 3D pop used by tilt + press states */
+  --shadow-tilt:
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 18px 40px rgba(16, 18, 24, 0.22);
+
+  /* ── Glass translucency ──────────────────────────────────────────────── */
+  --glass-bg:     rgba(255, 255, 255, 0.72);
+  --glass-blur:   14px;
+
+  /* ── Spacing scale (4px base) ────────────────────────────────────────── */
+  --sp-0: 0;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* ── Type ────────────────────────────────────────────────────────────── */
+  --font-sans: 'Inter', 'Söhne', -apple-system, BlinkMacSystemFont,
+               'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace,
+               Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --fs-xs:  0.75rem;
+  --fs-sm:  0.8125rem;
+  --fs-base:0.9375rem;
+  --fs-md:  1rem;
+  --fs-lg:  1.125rem;
+  --fs-xl:  1.375rem;
+  --fs-2xl: 1.75rem;
+  --fs-3xl: 2.25rem;
+
+  --lh-tight: 1.25;
+  --lh-base:  1.55;
+  --lh-loose: 1.7;
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semi:    600;
+  --fw-bold:    700;
+
+  --tracking-tight: -0.02em;
+  --tracking-wide:  0.08em;
+
+  /* ── Motion ──────────────────────────────────────────────────────────── */
+  --dur-fast: 120ms;
+  --dur:      180ms;
+  --dur-slow: 240ms;
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Layout metrics ──────────────────────────────────────────────────── */
+  --sidebar-w:      280px;
+  --sidebar-rail:   72px;
+  --topbar-h:       56px;
+  --content-max:    760px;
+
+  /* Pointer-3D tilt, driven by JS setting --rx / --ry */
+  --rx: 0deg;
+  --ry: 0deg;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg:            #0e0f12;
+  --bg-elev:       #14161a;
+  --surface-1:     #171a1f;
+  --surface-2:     #1d2127;
+  --surface-3:     #242932;
+  --ink:           #050608;
+
+  --border:        #2a2f38;
+  --border-strong: #3a414d;
+  --border-lume:   rgba(255, 255, 255, 0.06);
+
+  --text:          #eceef2;
+  --text-dim:      #a7adba;
+  --text-mute:     #8b92a1;
+  --text-invert:   #0e0f12;
+
+  --accent:        #10a37f;
+  --accent-2:      #5c7cfa;
+  --accent-3:      #a78bfa;
+  --accent-raw:    #10a37f;
+  --accent-soft:   rgba(16, 163, 127, 0.14);
+  --accent-contrast: #06231b;
+
+  --danger:        #f26b7a;
+  --danger-soft:   rgba(242, 107, 122, 0.14);
+  --warn:          #f0b429;
+  --warn-soft:     rgba(240, 180, 41, 0.14);
+  --ok:            #2fd6a5;
+  --ok-soft:       rgba(47, 214, 165, 0.14);
+
+  --shadow-inset:  inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-1:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 1px 2px rgba(0, 0, 0, 0.2),
+      0 8px 30px rgba(0, 0, 0, 0.35);
+  --shadow-2:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      0 1px 2px rgba(0, 0, 0, 0.25),
+      0 14px 40px rgba(0, 0, 0, 0.45);
+  --shadow-3:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 2px 4px rgba(0, 0, 0, 0.3),
+      0 24px 60px rgba(0, 0, 0, 0.55);
+  --shadow-glass:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 1px 2px rgba(0, 0, 0, 0.2),
+      0 8px 30px rgba(0, 0, 0, 0.35);
+  --shadow-tilt:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 18px 40px rgba(0, 0, 0, 0.5);
+
+  --glass-bg:     rgba(23, 26, 31, 0.62);
+  --glass-blur:   16px;
+
+  color-scheme: dark;
+}
+
+/* Respect the OS preference when the page has no explicit data-theme yet. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+  }
+}
