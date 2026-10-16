@@ -566,6 +566,20 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
         print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
 
+    def _send_static_file(self, f, ctype):
+        if not f.is_file():
+            return self._send({"error": "not found"}, 404)
+        data = f.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.send_header("X-Request-Id", self._reqid())
+        self._cors()
+        self.end_headers()
+        self.wfile.write(data)
+        print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
+
     # ---------------- GET ----------------
     def do_GET(self):
         p = self._path()
@@ -715,6 +729,12 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
             return
+        if p == "/favicon.ico":
+            return self._send_static_file(ROOT / "frontend" / "brand" / "favicon-32.png",
+                                          "image/png")
+        if p == "/manifest.webmanifest":
+            return self._send_static_file(ROOT / "frontend" / "manifest.webmanifest",
+                                          "application/manifest+json")
         if p.startswith("/frontend/"):
             return self._frontend()
         if p in ("/", "/app", "/app/", "/welcome", "/welcome/") or p.startswith("/app/") or p == "/superadmin":
@@ -1302,20 +1322,26 @@ class Handler(BaseHTTPRequestHandler):
         html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Urai — live status</title>
+<meta name="theme-color" content="#0060fc">
+<link rel="icon" type="image/png" sizes="32x32" href="/frontend/brand/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/frontend/brand/apple-touch-icon.png">
 <style>body{{margin:0;background:#171717;color:#ececec;font-family:system-ui,sans-serif;line-height:1.5}}
 .wrap{{max-width:760px;margin:0 auto;padding:clamp(16px,4vw,24px)}}
-h1{{font-size:clamp(1.3rem,5vw,1.7rem)}}h1 span{{color:#10a37f}}
-.live{{display:inline-block;width:9px;height:9px;border-radius:50%;background:#10a37f;
-box-shadow:0 0 8px #10a37f;animation:blink 2s infinite;vertical-align:middle;margin-right:7px}}
+.brand{{height:30px;width:auto;display:block;margin-bottom:10px}}
+h1{{font-size:clamp(1.3rem,5vw,1.7rem)}}h1 span{{color:#4d94ff}}
+.live{{display:inline-block;width:9px;height:9px;border-radius:50%;background:#00d890;
+box-shadow:0 0 8px #00d890;animation:blink 2s infinite;vertical-align:middle;margin-right:7px}}
 @keyframes blink{{50%{{opacity:.4}}}}
 .tablewrap{{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:14px;border-radius:10px}}
 table{{width:100%;border-collapse:collapse;min-width:420px}}
 td{{border:1px solid #3a3a3a;padding:8px 10px;font-size:.85rem}}
-.ok{{color:#10a37f}}a{{color:#10a37f}}
+.ok{{color:#4d94ff}}a{{color:#4d94ff}}
 @media(prefers-reduced-motion:reduce){{.live{{animation:none}}}}
 @supports(padding:max(0px)){{.wrap{{padding-left:max(clamp(16px,4vw,24px),env(safe-area-inset-left));
 padding-right:max(clamp(16px,4vw,24px),env(safe-area-inset-right))}}}}</style>
-</head><body><div class="wrap"><h1><span class="live"></span>Urai is <span class="ok">live</span></h1>
+</head><body><div class="wrap">
+<img class="brand" src="/frontend/brand/urai-logo-trans.png" alt="Urai">
+<h1><span class="live"></span>Urai is <span class="ok">live</span></h1>
 <p>Urai, developed by Tynio LTD · {_t.strftime('%Y-%m-%d %H:%M UTC', _t.gmtime())} ·
 <a href="/welcome">landing</a> · <a href="/app">open app</a> ·
 <a href="/v1/docs">docs</a></p>
