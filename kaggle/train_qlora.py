@@ -15,7 +15,7 @@ import glob
 import json
 import os
 
-DATA = sorted(glob.glob("/kaggle/input/*/distill-now.jsonl"))
+DATA = sorted(glob.glob("/kaggle/input/**/*.jsonl", recursive=True))
 DATA = DATA[0] if DATA else "distill-now.jsonl"
 OUT = "/kaggle/working/urai-adapter"
 MODEL = os.environ.get("URAI_BASE", "unsloth/Qwen3-4B-bnb-4bit")
