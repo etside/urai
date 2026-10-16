@@ -53,7 +53,40 @@ def status() -> dict:
         st["local_frames"] = False
     for name in ("HIGGSFIELD", "RUNWAY"):
         st["providers"][name.lower()] = bool(os.environ.get(name + "_API_KEY"))
+    # H3 Ref2VA VSA (character-consistent, local ComfyUI) — never fakes presence.
+    try:
+        from . import ref2va as _ref
+        r = _ref.status()
+        st["ref2va"] = {"installed": r.get("installed"),
+                        "comfy_up": r.get("comfy_up"),
+                        "missing": r.get("missing", []),
+                        "profile": r.get("profile"),
+                        "grade": "SOTA character-consistent (MiniMax H3 Ref2VA + VSA)"}
+    except Exception as e:
+        st["ref2va"] = {"installed": False, "error": str(e)[:160]}
+    st["profiles"] = profiles()
     return st
+
+
+def profiles() -> list:
+    """Media profiles surfaced to the UI/API (kept separate per requirement)."""
+    from . import ref2va as _ref
+    r = _ref.status()
+    return [
+        {"id": "ref2va_vsa", "label": "H3 Ref2VA VSA",
+         "kind": "video", "grade": "SOTA character-consistent",
+         "available": bool(r.get("installed") and r.get("comfy_up")),
+         "detail": "MiniMax H3 reference-to-video + Visual Sparse Attention "
+                   "(dense reference prefix, 4-step turbo, ~72s warm on RTX 4090)"},
+        {"id": "wan3", "label": "Wan 3.0",
+         "kind": "video", "grade": "SOTA t2v/i2v (API relay)",
+         "available": bool(os.environ.get("DASHSCOPE_API_KEY")),
+         "detail": "Alibaba Wan 3.0 (opt-in Prime fast profile)"},
+        {"id": "seedream4", "label": "Seedream 4.0",
+         "kind": "image", "grade": "SOTA image gen/edit (API relay)",
+         "available": bool(os.environ.get("ARK_API_KEY")),
+         "detail": "BytePlus ModelArk Seedream 4.0"},
+    ]
 
 
 def _post_json(url, payload, key=None, timeout=300):
@@ -98,8 +131,16 @@ def _provider_call(provider, prompt, duration, width, height, provider_url=None,
 def generate(prompt: str, out: str = None, duration: int = 4, width: int = 512,
              height: int = 512, fps: int = 4, seed: int = 7,
              provider: str = "auto", provider_url: str = None,
-             provider_key: str = None) -> dict:
-    """Render prompt to MP4. Returns {"ok", "id", "path"|"error", ...}."""
+             provider_key: str = None, ref_images=None, profile=None,
+             settings=None) -> dict:
+    """Render prompt to MP4. Returns {"ok", "id", "path"|"error", ...}.
+
+    provider:
+      auto      -> H3 Ref2VA VSA when installed -> configured provider -> local
+      ref2va    -> H3 Ref2VA VSA (MiniMax H3 + VSA, local ComfyUI; needs ref_images)
+      higgsfield/runway/custom -> provider proxy
+      local     -> sd-turbo frames + ffmpeg animatic
+    """
     prompt = (prompt or "").strip()
     if not prompt:
         return {"ok": False, "error": "prompt required"}
@@ -107,10 +148,45 @@ def generate(prompt: str, out: str = None, duration: int = 4, width: int = 512,
     fps = max(1, min(int(fps or 4), 12))
     n_frames = min(duration * fps, MAX_FRAMES)
 
+    prov = (provider or "auto").lower()
+
+    # 0. H3 Ref2VA VSA path (character-consistent reference-to-video).
+    if prov in ("ref2va", "ref2va-vsa", "ref2va_vsa", "h3", "h3-vsa", "vsa"):
+        from . import ref2va as _ref
+        st = _ref.status()
+        if not st.get("installed"):
+            return {"ok": False, "installed": False, "provider": "ref2va-vsa",
+                    "grade": "unavailable",
+                    "error": ("H3 Ref2VA VSA not installed"
+                              + (f"; missing: {', '.join(st.get('missing', []))}"
+                                 if st.get("missing") else
+                                 "; run scripts/video/install_ref2va_vsa.sh")),
+                    "status": st}
+        prof = dict(_ref.PROFILE)
+        prof.update({k: v for k, v in (profile or {}).items() if v is not None})
+        if settings:
+            prof.update({k: v for k, v in settings.items() if v is not None})
+        nframes = int(settings.get("frames") if settings and settings.get("frames")
+                      else round(duration * prof.get("fps", 24)))
+        return _ref.generate(prompt, ref_images=ref_images, out=out, seed=seed,
+                             width=width if width != 512 else prof["width"],
+                             height=height if height != 512 else prof["height"],
+                             length=nframes, sparsity=prof.get("sparsity"),
+                             profile=prof)
+    if prov == "auto":
+        try:
+            from . import ref2va as _ref
+            if ref_images and _ref.status().get("installed") and _ref.status().get("comfy_up"):
+                return generate(prompt, out=out, duration=duration, width=width,
+                                height=height, fps=fps, seed=seed, provider="ref2va",
+                                ref_images=ref_images, profile=profile, settings=settings)
+        except Exception:
+            pass
+
     # 1. External SOTA provider path (honest Veo3-class route).
-    use_provider = (provider or "auto").lower() not in ("", "auto", "local", "none")
+    use_provider = prov not in ("", "auto", "local", "none")
     env_provider = os.environ.get("HIGGSFIELD_API_KEY") or os.environ.get("RUNWAY_API_KEY")
-    if use_provider or (provider == "auto" and env_provider and not _ffmpeg()):
+    if use_provider or (prov == "auto" and env_provider and not _ffmpeg()):
         res = _provider_call(provider if use_provider else "", prompt, duration,
                              width, height, provider_url, provider_key)
         if res["ok"] or use_provider:

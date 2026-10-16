@@ -9,11 +9,11 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import io.github.tukitattu.urai.cyber.CyberActivity;
 import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -22,19 +22,26 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
+import android.widget.LinearLayout;
+
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
+import io.github.tukitattu.urai.cyber.CyberActivity;
+
 public class MainActivity extends Activity {
-    static final String PREFS = "urai";
-    static final String KEY_EP = "endpoint";
-    static final String KEY_APIKEY = "apikey";
+    public static final String PREFS = "urai";
+    public static final String KEY_EP = "endpoint";
+    public static final String KEY_APIKEY = "apikey";
     // emulator loopback default; real devices get the hosted endpoint below
     static final String EMULATOR_EP = "http://10.0.2.2:8777/";
     static final String DEFAULT_EP = "https://urai.daddyai.online/";
@@ -44,11 +51,38 @@ public class MainActivity extends Activity {
     private Uri cameraUri;
     private static final int REQ_FILE = 1001;
 
+    // Credentials for the endpoint currently loaded, used by the injected
+    // bridge. Kept in sync with SharedPreferences in applySaved().
+    private String savedEp = DEFAULT_EP;
+    private String savedKey = "";
+    private String currentEp;
+    private String currentKey;
+
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+
         web = new WebView(this);
-        setContentView(web);
+        root.addView(web, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        // Native bottom navigation: the WebView is the content, these entries
+        // stay reachable even if the page fails to load.
+        LinearLayout nav = new LinearLayout(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.addView(navButton("Home", v -> web.reload()), navParams());
+        nav.addView(navButton("Settings", v ->
+                startActivity(new Intent(this, SettingsActivity.class))), navParams());
+        nav.addView(navButton("Cyber guard", v ->
+                startActivity(new Intent(this, CyberActivity.class))), navParams());
+        root.addView(nav, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        setContentView(root);
+
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -80,7 +114,22 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
-        loadSaved();
+
+        installWebViewClient();
+        applySaved(true);
+    }
+
+    private Button navButton(String label, View.OnClickListener onClick) {
+        Button btn = new Button(this);
+        btn.setText(label);
+        btn.setAllCaps(false);
+        btn.setOnClickListener(onClick);
+        return btn;
+    }
+
+    private LinearLayout.LayoutParams navParams() {
+        return new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
     }
 
     private void ensureCameraPermission() {
@@ -97,44 +146,70 @@ public class MainActivity extends Activity {
         return File.createTempFile(name, ".jpg", dir);
     }
 
-    private void loadSaved() {
+    /** Read endpoint + key, then (re)load or re-inject. A reload only happens
+     *  when the configured endpoint/key actually changed, so returning from
+     *  Settings/file-picker does not blow away an in-progress page. */
+    private void applySaved(boolean firstRun) {
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
-        final String ep = p.getString(KEY_EP, defaultEndpoint());
-        final String key = p.getString(KEY_APIKEY, "");
-        // Client MUST be set before the first load, otherwise a failed load
-        // renders a blank white page with no way back.
+        savedEp = p.getString(KEY_EP, defaultEndpoint());
+        savedKey = p.getString(KEY_APIKEY, "");
+        if (savedEp == null || savedEp.trim().isEmpty()) savedEp = defaultEndpoint();
+
+        boolean changed = !savedEp.equals(currentEp) || !savedKey.equals(currentKey);
+        if (firstRun || changed || web.getUrl() == null) {
+            currentEp = savedEp;
+            currentKey = savedKey;
+            web.loadUrl(savedEp);
+        } else {
+            // Same origin: refresh the stored credentials in place. The page
+            // may already be booted, so only re-boot a not-yet-booted client.
+            web.evaluateJavascript(credScript(), null);
+        }
+    }
+
+    private void installWebViewClient() {
         web.setWebViewClient(new WebViewClient() {
+            // onPageStarted fires before the page's own scripts run, so the
+            // shared api.js sees urai_ep/urai_key at load time. Only inject
+            // for the endpoint we actually configured (never for redirects to
+            // third parties, e.g. an external login page).
+            @Override
+            public void onPageStarted(WebView v, String url, android.graphics.Bitmap favicon) {
+                if (isEndpointUrl(url)) v.evaluateJavascript(credScript(), null);
+            }
+
             @Override
             public void onPageFinished(WebView v, String url) {
-                String js = "(function(){try{localStorage.urai_ep="
-                        + JSONObject.quote(ep) + ";localStorage.urai_key="
-                        + JSONObject.quote(key)
-                        + ";if(typeof boot==='function')boot();}catch(e){}})();";
-                v.evaluateJavascript(js, null);
+                if (!isEndpointUrl(url)) return;
+                // Set credentials, then hand control to the frontend's own
+                // boot(). `window.Urai.boot` is defined by the loaded
+                // frontend (frontend/api.js); we no longer call an undefined
+                // global `boot`.
+                v.evaluateJavascript(credScript() + bootScript(), null);
             }
 
             @Override
             public void onReceivedError(WebView v, WebResourceRequest req, WebResourceError err) {
                 if (req != null && req.isForMainFrame()) {
-                    showLoadError(ep, err != null ? err.getDescription() : "network error");
+                    showLoadError(savedEp, err != null ? err.getDescription() : "network error");
                 }
             }
 
             @SuppressWarnings("deprecation")
             @Override
             public void onReceivedError(WebView v, int code, String desc, String failingUrl) {
-                showLoadError(ep, desc);
+                if (Build.VERSION.SDK_INT >= 23) return; // handled above
+                if (failingUrl != null && failingUrl.equals(savedEp)) showLoadError(savedEp, desc);
             }
 
             @Override
             public void onReceivedHttpError(WebView v, WebResourceRequest req, WebResourceResponse res) {
                 if (req != null && req.isForMainFrame() && res != null
                         && res.getStatusCode() >= 400) {
-                    showLoadError(ep, "HTTP " + res.getStatusCode());
+                    showLoadError(savedEp, "HTTP " + res.getStatusCode());
                 }
             }
         });
-        web.loadUrl(ep);
     }
 
     private String defaultEndpoint() {
@@ -143,6 +218,46 @@ public class MainActivity extends Activity {
                 || Build.MODEL.contains("Emulator")
                 || Build.MODEL.contains("Android SDK");
         return emulator ? EMULATOR_EP : DEFAULT_EP;
+    }
+
+    /** True when the loaded URL shares scheme/host/port with the configured
+     *  endpoint, i.e. the origin whose localStorage we own. */
+    private boolean isEndpointUrl(String url) {
+        if (url == null || savedEp == null) return false;
+        try {
+            URI loaded = new URI(url);
+            URI ep = new URI(savedEp);
+            if (loaded.getScheme() == null || ep.getScheme() == null) return false;
+            if (!loaded.getScheme().equalsIgnoreCase(ep.getScheme())) return false;
+            String lh = loaded.getHost();
+            String eh = ep.getHost();
+            if (lh == null || eh == null) return url.startsWith(savedEp);
+            return lh.equalsIgnoreCase(eh) && defaultPort(loaded) == defaultPort(ep);
+        } catch (Exception e) {
+            return url.startsWith(savedEp);
+        }
+    }
+
+    private static int defaultPort(URI u) {
+        if (u.getPort() != -1) return u.getPort();
+        String scheme = u.getScheme() == null ? "" : u.getScheme().toLowerCase(Locale.US);
+        if (scheme.equals("https")) return 443;
+        if (scheme.equals("http")) return 80;
+        return -1;
+    }
+
+    private String credScript() {
+        return "(function(){try{localStorage.setItem('urai_ep',"
+                + JSONObject.quote(savedEp) + ");localStorage.setItem('urai_key',"
+                + JSONObject.quote(savedKey) + ");}catch(e){}})();";
+    }
+
+    private String bootScript() {
+        return "(function(){try{var u=window.Urai;"
+                + "var f=(u&&typeof u.boot==='function')?u.boot:"
+                + "(typeof window.boot==='function'?window.boot:null);"
+                + "if(f&&!window.__uraiBooted){window.__uraiBooted=true;f.call(u||window);}"
+                + "}catch(e){}})();";
     }
 
     // Never leave the user on a blank white screen: explain and offer retry.
@@ -180,9 +295,9 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onCreateOptionsMenu(Menu m) {
-        m.add(0, 1, 0, "Settings").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
-        m.add(0, 2, 0, "Reload").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
-        m.add(0, 3, 0, "Cyber guard");
+        m.add(0, 1, 0, "Settings").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        m.add(0, 2, 0, "Reload").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        m.add(0, 3, 0, "Cyber guard").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         return true;
     }
 
@@ -197,7 +312,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        loadSaved();
+        applySaved(false);
     }
 
     @Override

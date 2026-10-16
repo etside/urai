@@ -1,9 +1,37 @@
-# Caddy front for Urai: automatic HTTPS + API key stays server-side.
-#   1. point DNS ai.example.com -> VPS
-#   2. cp deploy/Caddyfile /etc/caddy/Caddyfile (edit domain)
-#   3. systemctl reload caddy
+# Caddy front for Urai. With Cloudflare Tunnel the origin has no public port;
+# Caddy still terminates TLS for non-tunnelled/local access and adds headers.
+#
+#   1. (tunnel mode) run cloudflared -> http://127.0.0.1:8777, skip TLS here
+#   2. (direct mode) point DNS at the VPS, edit the domain below, then:
+#        cp deploy/Caddyfile /etc/caddy/Caddyfile
+#        systemctl reload caddy
 ai.example.com {
-	reverse_proxy 127.0.0.1:8777
-	# optional: rate-limit the expensive endpoints
-	# rate_limit { zone imagine { key {remote_host} events 10 window 1m } }
+	encode zstd gzip
+
+	# security headers (app also sets its own; belt and braces at the edge)
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(self), camera=(self)"
+		-Server
+	}
+
+	# TLS 1.3 only; post-quantum key agreement is negotiated by Cloudflare in
+	# front of this (X25519MLKEM768). Caddy matches with min TLS 1.3 here.
+	tls {
+		protocols tls1.3
+	}
+
+	# rate-limit expensive/media endpoints (requires the caddy ratelimit module)
+	# rate_limit {
+	# 	zone imagine { key {remote_host} events 10 window 1m }
+	# 	zone chat    { key {remote_host} events 60 window 1m }
+	# }
+
+	reverse_proxy 127.0.0.1:8777 {
+		# never expose internal admin surfaces without Cloudflare Access
+		header_up X-Forwarded-Proto {scheme}
+	}
 }

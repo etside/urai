@@ -296,6 +296,7 @@ def _capabilities() -> dict:
             "large context window (configurable, q8_0 KV cache)",
             "tool-use + agent + parallel swarm",
             "vision (images) + image generation + video animatic",
+            "character-consistent video: H3 Ref2VA VSA + Wan 3.0 + Seedream 4.0",
             "OpenAI-compatible API + MCP + IDE integration",
             "human-like browser with approval safety",
             "memory, focus, schedules and few-shot self-learning",
@@ -309,11 +310,20 @@ def _capabilities() -> dict:
             {"id": "tools", "desc": "repo/tool packs with jail + plan-approval guards"},
         ],
         "plugins": plugins,
+        "media": _media_profiles(),
         "context_window": {
             "default": int(os.environ.get("URAI_CTX", "8192")),
             "note": "raise with URAI_CTX / --ctx; q8_0 KV keeps RAM low",
         },
     }
+
+
+def _media_profiles() -> list:
+    try:
+        from .video import profiles as _p
+        return _p()
+    except Exception:
+        return []
 
 
 def _as_messages(raw) -> list:
@@ -490,6 +500,31 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
         print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
 
+    def _frontend(self):
+        p = self._path()
+        rel = p[len("/frontend/"):]
+        if not rel or ".." in rel or rel.startswith("/"):
+            return self._send({"error": "not found"}, 404)
+        base = (ROOT / "frontend").resolve()
+        f = (base / rel).resolve()
+        try:
+            f.relative_to(base)
+        except ValueError:
+            return self._send({"error": "not found"}, 404)
+        if not f.is_file():
+            return self._send({"error": "not found"}, 404)
+        data = f.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type",
+                         mimetypes.guess_type(str(f))[0] or
+                         "application/octet-stream")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=3600")
+        self._cors()
+        self.end_headers()
+        self.wfile.write(data)
+        print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
+
     # ---------------- GET ----------------
     def do_GET(self):
         p = self._path()
@@ -554,6 +589,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(info)
         if p == "/v1/capabilities":
             return self._send(_capabilities())
+        if p == "/v1/media/profiles":
+            from . import video as _video
+            return self._send({"profiles": _video.profiles()})
         if p == "/v1/info":
             local = LlamaServerBackend()
             self._send({
@@ -632,6 +670,8 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
             return
+        if p.startswith("/frontend/"):
+            return self._frontend()
         if p in ("/", "/app", "/app/", "/welcome", "/welcome/") or p.startswith("/app/") or p == "/superadmin":
             return self._static()
         self._send({"error": "not found"}, 404)
@@ -879,10 +919,19 @@ class Handler(BaseHTTPRequestHandler):
                 body.get("duration", 4), body.get("width", 512),
                 body.get("height", 512), body.get("fps", 4),
                 body.get("seed", 7), body.get("provider", "auto"),
-                body.get("provider_url"), body.get("provider_key"))
+                body.get("provider_url"), body.get("provider_key"),
+                ref_images=body.get("ref_images") or body.get("reference_images"),
+                profile=body.get("profile"),
+                settings=body.get("settings"))
             if not res.get("ok"):
-                return self._send({"ok": False, "error": res.get("error"),
-                                   "grade": res.get("grade", "")}, 502)
+                err = {"ok": False, "error": res.get("error"),
+                       "grade": res.get("grade", ""),
+                       "provider": res.get("provider", body.get("provider"))}
+                if "installed" in res:
+                    err["installed"] = res["installed"]
+                if res.get("status"):
+                    err["status"] = res["status"]
+                return self._send(err, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
             _log("video", ip, device, str(body.get("prompt", ""))[:160],
                  {"master": bool(body.get("_urai_authed")), "id": res.get("id")})
@@ -1191,15 +1240,24 @@ class Handler(BaseHTTPRequestHandler):
         html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Urai — live status</title>
-<style>body{{background:#171717;color:#ececec;font-family:system-ui,sans-serif;
-max-width:760px;margin:0 auto;padding:24px}}h1 span{{color:#10a37f}}
-table{{width:100%;border-collapse:collapse}}td{{border:1px solid #3a3a3a;
-padding:6px 10px;font-size:.85rem}}.ok{{color:#10a37f}}a{{color:#10a37f}}</style>
-</head><body><h1>Urai is <span class="ok">● live</span></h1>
+<style>body{{margin:0;background:#171717;color:#ececec;font-family:system-ui,sans-serif;line-height:1.5}}
+.wrap{{max-width:760px;margin:0 auto;padding:clamp(16px,4vw,24px)}}
+h1{{font-size:clamp(1.3rem,5vw,1.7rem)}}h1 span{{color:#10a37f}}
+.live{{display:inline-block;width:9px;height:9px;border-radius:50%;background:#10a37f;
+box-shadow:0 0 8px #10a37f;animation:blink 2s infinite;vertical-align:middle;margin-right:7px}}
+@keyframes blink{{50%{{opacity:.4}}}}
+.tablewrap{{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:14px;border-radius:10px}}
+table{{width:100%;border-collapse:collapse;min-width:420px}}
+td{{border:1px solid #3a3a3a;padding:8px 10px;font-size:.85rem}}
+.ok{{color:#10a37f}}a{{color:#10a37f}}
+@media(prefers-reduced-motion:reduce){{.live{{animation:none}}}}
+@supports(padding:max(0px)){{.wrap{{padding-left:max(clamp(16px,4vw,24px),env(safe-area-inset-left));
+padding-right:max(clamp(16px,4vw,24px),env(safe-area-inset-right))}}}}</style>
+</head><body><div class="wrap"><h1><span class="live"></span>Urai is <span class="ok">live</span></h1>
 <p>Urai, developed by Tynio LTD · {_t.strftime('%Y-%m-%d %H:%M UTC', _t.gmtime())} ·
 <a href="/welcome">landing</a> · <a href="/app">open app</a> ·
 <a href="/v1/docs">docs</a></p>
-<table>{rows}</table></body></html>"""
+<div class="tablewrap"><table>{rows}</table></div></div></body></html>"""
         return self._send_raw(html.encode(), "text/html")
 
     def _send_raw(self, data: bytes, ctype: str):

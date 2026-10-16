@@ -118,8 +118,58 @@ def main():
               or "api_key" in f.lower() or "secret" in f.lower()]
     check("no secrets/binaries tracked", not leaked, str(leaked))
 
+    check_understanding()
+
     print(f"\n{len(FAIL)} failure(s)" if FAIL else "\nall smoke checks passed")
     return 1 if FAIL else 0
+
+
+def check_understanding():
+    """Offline assertions for the NLP / vibe / profile / retrieval pillars.
+
+    Deterministic and network-free: the embedding path is forced to its
+    hashed bag-of-words fallback by pointing URAI_EMBED_URL at a dead port.
+    """
+    import importlib
+    import os
+    import tempfile
+
+    os.environ["URAI_EMBED_URL"] = "http://127.0.0.1:9"
+
+    from jev import nlp as _nlp, vibe as _vibe, retrieval as _ret
+    a = _nlp.analyze("this is broken and I'm frustrated, fix asap")
+    check("nlp sentiment negative", a["sentiment"]["label"] == "negative",
+          str(a["sentiment"]))
+    check("nlp intent debug", a["intent"] == "debug", a["intent"])
+    check("nlp language en", a["language"] == "en", a["language"])
+    check("nlp redflags empty for benign text", a["redflags"] == [], str(a["redflags"]))
+
+    v = _vibe.plan_for("thanks, great work")
+    check("vibe plan has nlp", "sentiment" in v.get("nlp", {}))
+    check("vibe renders directive", "Style contract" in v.get("directive", ""),
+          v.get("directive", "")[:80])
+    check("vibe positive -> warm", v.get("warmth", 0) > 0.5, str(v.get("warmth")))
+
+    docs = ["heap memory leak in C++ allocation", "how to bake sourdough bread"]
+    rows = _ret.rank("heap memory leak", docs, top=2)
+    check("retrieval ranks relevant first", bool(rows) and rows[0]["text"] == docs[0],
+          str([r["text"] for r in rows]))
+    hv = _ret.hash_vector("heap memory leak")
+    check("retrieval hash vector normalised",
+          abs(sum(x * x for x in hv) - 1.0) < 1e-6)
+
+    with tempfile.TemporaryDirectory() as td:
+        os.environ["URAI_PROFILES"] = os.path.join(td, "profiles.json")
+        from jev import profile as _prof
+        importlib.reload(_prof)
+        r = _prof.set_pref("ci-user", "warmth", 0.9)
+        check("profile set_pref", r.get("ok") and
+              _prof.get("ci-user").get("warmth") == 0.9, str(r))
+        _prof.observe("ci-user", {}, targets={"warmth": 0.1})
+        check("profile observe nudges", "warmth" in _prof.get("ci-user"),
+              str(_prof.get("ci-user")))
+        bad = _prof.set_pref("ci-user", "not_a_field", 1)
+        check("profile rejects bad key", bad.get("ok") is False, str(bad))
 
 
 if __name__ == "__main__":
