@@ -21,6 +21,12 @@ code must compile (exec with `--exec` in distill).
 ## Swarm (`/agent/swarm`, `urai swarm`)
 Up to 8 tasks, 3 workers, isolated failures. Each task is a full agent run.
 
+## Conductor (mode conductor, Fugu-style)
+Thinker decomposes into subtasks, Workers execute shards in parallel, Verifier merges. One pool, one endpoint, no API keys. Roles are prompt-specialized runs of the local student (teacher-backed when TEACHER env is set).
+
+## Tiers (one API, four behaviors, no keys)
+urai-fast (quick, short), urai (balanced default), urai-ultra (consistency sampling plus verify), urai-cyber (security skills plus verify). Pass tier to /agent. Outcomes per level and backend accumulate in data/routing_scores.json (learning loop, stage 1: measure); pool opt-in and opt-out via the routing endpoint.
+
 ## Sessions (`/agent/sessions`: list/history/clear)
 Server-side JSONL memory per session id. Web UI drawer opens/imports them;
 Telegram keeps one session per chat (`/new` resets).

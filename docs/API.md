@@ -21,10 +21,11 @@ Header `X-Device-Id: <id>` tracks guest usage.
 - `POST /v1/embeddings {input}` → vectors.
 
 ## Agent harness
-- `POST /agent {task, files, budget_tokens, consistency, plan, session_id, remember}`
+- `POST /agent {task, files, budget_tokens, consistency, plan, session_id, remember, tier: urai|urai-fast|urai-ultra|urai-cyber}`
   → `{ok, answer, proposals, session_id, trace, level, backend, usage}`
 - `POST /agent/apply {proposals}` *(master)* → applies write/edit specs.
-- `POST /agent/swarm {tasks[], max_workers}` → parallel runs + stats.
+- `POST /agent/swarm {tasks[], max_workers, mode: parallel|conductor}`
+- `POST /agent/routing {action: scores|pool|pool_set}` → parallel runs + stats.
 - `POST /agent/sessions {action: list|history|clear, session_id}`
 - `POST /agent/jobs {action: list|add|toggle|delete|run|runs, id?, task?, every_s?}`
 - `POST /agent/memory {action: remember|recall|forget|list, text?, kind?, query?, top?, id?}`
