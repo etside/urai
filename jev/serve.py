@@ -74,6 +74,11 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/status":
             active_id, entry = reg.active_model()
             running = ctl.is_up()
+            try:
+                from jev import cache as _cache
+                cache_stats = _cache.get_cache().stats()
+            except Exception:
+                cache_stats = {}
             self.send_json({
                 "ok": True,
                 "active_model": active_id,
@@ -82,6 +87,7 @@ class Handler(BaseHTTPRequestHandler):
                 "model_params": entry.get("params"),
                 "tg_toks": entry.get("tg_toks"),
                 "repo_root": str(ROOT),
+                "cache": cache_stats,
             })
         elif p == "/gpu":
             self.send_json(detect())
@@ -130,6 +136,14 @@ class Handler(BaseHTTPRequestHandler):
                     print(f"[sidecar] download {model_id}: {e}", flush=True)
             threading.Thread(target=_dl, daemon=True).start()
             self.send_json({"ok": True, "message": f"downloading {model_id}"})
+
+        elif p == "/cache/clear":
+            try:
+                from jev import cache as _cache
+                cleared = _cache.get_cache().clear()
+            except Exception as e:
+                self.send_json({"error": str(e)}, 500); return
+            self.send_json({"ok": True, "cleared": cleared})
 
         elif p == "/nlp":
             # Request understanding + style plan (Phase 2). Pure, deterministic.

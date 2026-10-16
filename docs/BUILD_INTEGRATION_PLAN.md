@@ -359,6 +359,24 @@ gets the same tokens + theme toggle.
   `Allow-Credentials` as configured; add the missing `/admin/*` aliases.
 - **Capabilities:** advertise `nlp`, `vibe`, `retrieval` methods.
 
+**Status (implemented):**
+- `jev/config.py` central flags; `URAI_AUTH_GET` defaults on in prod
+  (`URAI_ENV=prod`), `_PUBLIC_GET` keeps discovery public.
+- `_normalize_error` gives every 4xx/5xx the one contract; `_expired_payload`
+  stays a typed subtype.
+- `_stream` now pass-through streams `Backend.stream()` (real SSE from
+  `llama-server`; `MockBackend` streams in CI) with a chunked fallback when the
+  backend can't stream or `URAI_STREAM=0`.
+- Ops surface: `GET /metrics` (Prometheus text), `GET /admin/metrics` (JSON,
+  master-gated), `POST /admin/cache/clear`, `GET /admin/trace` (JSON) and
+  `GET /trace` (UI). `deploy/Caddyfile` serves `/admin/* /superadmin/* /trace
+  /metrics` only on the admin host behind Cloudflare Access.
+- Prompt cache + retrieval wired end to end (`/chat`, `/v1/chat/completions`,
+  `/generate`, `/v1/completions`, `/agent`); responses expose `urai.cached`.
+
+**Still open:** UI normaliser (`errText`) uses the new shape; CLI hardening
+(§8.4) is tracked separately.
+
 ### 8.4 CLI — fully done (closes G6)
 - Fix local `ask` (lightweight one-shot; not full agent JSON) and local
   `agent --session/--no-remember` pass-through.

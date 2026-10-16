@@ -259,7 +259,19 @@ _PUBLIC_GET = ("/health", "/v1/models", "/models", "/v1/capabilities",
 
 
 def _auth_get_enabled() -> bool:
-    return os.environ.get("URAI_AUTH_GET", "") in ("1", "true", "yes", "on")
+    try:
+        from . import config as _config
+        return _config.get().AUTH_GET
+    except Exception:
+        return os.environ.get("URAI_AUTH_GET", "") in ("1", "true", "yes", "on")
+
+
+def _stream_enabled() -> bool:
+    try:
+        from . import config as _config
+        return _config.get().STREAM
+    except Exception:
+        return True
 
 
 def _models():
@@ -314,6 +326,10 @@ def _capabilities() -> dict:
         "skills": skills,
         "methods": [
             {"id": "classify", "desc": "per-request difficulty routing (L0-L4)"},
+            {"id": "nlp", "desc": "request understanding: intent, sentiment, urgency, red flags"},
+            {"id": "vibe", "desc": "sentiment-conditioned style directive injected before generation"},
+            {"id": "retrieval", "desc": "memory + focus hybrid retrieval (relevance x recency)"},
+            {"id": "cache", "desc": "prompt cache with near-identical matching (TTL + LRU)"},
             {"id": "verify", "desc": "consistency sampling + verification on hard tasks"},
             {"id": "distill", "desc": "teacher->student distillation into verified data"},
             {"id": "self-improve", "desc": "failure-mining loop promotes chunks to few-shots"},
@@ -363,6 +379,126 @@ def _apply_vibe(msgs: list) -> tuple:
     if directive:
         msgs = [{"role": "system", "content": directive}] + msgs
     return msgs, meta
+
+
+def _normalize_error(obj, code):
+    """One error contract: {"error":{"message","type","code"}}. Rewrites the
+    legacy flat {"error":"..."} shape for any 4xx/5xx response (idempotent)."""
+    if code < 400 or not isinstance(obj, dict) or not isinstance(obj.get("error"), str):
+        return obj
+    obj = dict(obj)
+    msg = obj.pop("error")
+    if code == 403:
+        etype = "auth_error"
+    elif code >= 500:
+        etype = "server_error"
+    else:
+        etype = "invalid_request_error"
+    ecode = obj.pop("code", None) or {
+        400: "invalid_request", 401: "invalid_api_key",
+        403: "forbidden", 404: "not_found", 429: "rate_limited",
+    }.get(code, "server_error" if code >= 500 else "error")
+    obj["error"] = {"message": msg, "type": etype, "code": ecode}
+    return obj
+
+
+def _complete(backend, msgs, max_tokens=256, temperature=0.2) -> dict:
+    """backend.complete() behind the prompt cache (never raises on cache error)."""
+    from . import cache as _cache
+    try:
+        return _cache.cached_complete(backend, msgs, max_tokens, temperature)
+    except Exception:
+        return backend.complete(msgs, max_tokens=max_tokens, temperature=temperature)
+
+
+def _with_cache(meta: dict, res: dict) -> dict:
+    """Fold cache-hit info into the response `urai` metadata block."""
+    meta = dict(meta or {})
+    if isinstance(res, dict) and "cached" in res:
+        meta["cached"] = bool(res.get("cached"))
+        if res.get("cache_hit"):
+            meta["cache_hit"] = res["cache_hit"]
+    return meta
+
+
+_START_TS = time.time()
+
+
+def _metrics_snapshot() -> dict:
+    """Single source of truth for /admin/metrics + /metrics."""
+    from . import config as _config
+    try:
+        cfg = _config.get()
+        env = "prod" if cfg.is_prod() else "dev"
+        auth_get, stream = cfg.AUTH_GET, cfg.STREAM
+    except Exception:
+        env, auth_get, stream = "dev", _auth_get_enabled(), _stream_enabled()
+    try:
+        from . import cache as _cache
+        cache_stats = _cache.get_cache().stats()
+    except Exception:
+        cache_stats = {}
+    local = LlamaServerBackend()
+    with _lock:
+        stats = dict(_state["stats"])
+        free_used = int(sum(_state["free_used"].values()))
+        blocked = int(sum(1 for v in _state["blocked"].values() if float(v) > time.time()))
+        approved = int(sum(1 for v in _state["approved"].values()
+                           if isinstance(v, dict) and v.get("active")))
+        live = len(_state["live_log"])
+    return {
+        "uptime_seconds": round(time.time() - _START_TS, 1),
+        "env": env, "auth_get": bool(auth_get), "stream": bool(stream),
+        "local_llama": local.healthy(),
+        "active_model": _repo_status().get("active_model"),
+        "version": _repo_status().get("version"),
+        "requests": stats,
+        "tokens": {"free_used_total": free_used,
+                   "free_limit": FREE_LIMIT,
+                   "blocked_identities": blocked,
+                   "approved_identities": approved},
+        "log_entries": live,
+        "cache": cache_stats,
+    }
+
+
+def _prometheus_text(snap: dict) -> str:
+    c = snap.get("cache") or {}
+    r = snap.get("requests") or {}
+    t = snap.get("tokens") or {}
+    lines = [
+        "# HELP urai_uptime_seconds Process uptime.",
+        "# TYPE urai_uptime_seconds gauge",
+        f"urai_uptime_seconds {snap.get('uptime_seconds', 0)}",
+        "# HELP urai_local_llama_up Whether the local llama-server is reachable.",
+        "# TYPE urai_local_llama_up gauge",
+        f"urai_local_llama_up {1 if snap.get('local_llama') else 0}",
+        "# HELP urai_requests_total Total requests seen.",
+        "# TYPE urai_requests_total counter",
+        f"urai_requests_total {r.get('total_requests', 0)}",
+        "# HELP urai_blocked_hits_total Requests rejected by the free-token gate.",
+        "# TYPE urai_blocked_hits_total counter",
+        f"urai_blocked_hits_total {r.get('blocked_hits', 0)}",
+        "# HELP urai_master_hits_total Requests authenticated with the master key.",
+        "# TYPE urai_master_hits_total counter",
+        f"urai_master_hits_total {r.get('master_hits', 0)}",
+        "# HELP urai_free_tokens_used Free tokens consumed across identities.",
+        "# TYPE urai_free_tokens_used gauge",
+        f"urai_free_tokens_used {t.get('free_used_total', 0)}",
+        "# HELP urai_cache_entries Cached prompt responses held.",
+        "# TYPE urai_cache_entries gauge",
+        f"urai_cache_entries {c.get('size', 0)}",
+        "# HELP urai_cache_hits_total Prompt cache hits.",
+        "# TYPE urai_cache_hits_total counter",
+        f"urai_cache_hits_total {c.get('hits', 0)}",
+        "# HELP urai_cache_misses_total Prompt cache misses.",
+        "# TYPE urai_cache_misses_total counter",
+        f"urai_cache_misses_total {c.get('misses', 0)}",
+        "# HELP urai_cache_evictions_total Prompt cache evictions.",
+        "# TYPE urai_cache_evictions_total counter",
+        f"urai_cache_evictions_total {c.get('evictions', 0)}",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def _media_profiles() -> list:
@@ -452,9 +588,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", CORS_ORIGIN)
+        self.send_header("Vary", "Origin")
+        if CORS_ORIGIN and CORS_ORIGIN != "*":
+            self.send_header("Access-Control-Allow-Credentials", "true")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers",
-                         "Content-Type, Authorization, X-Device-Id")
+                         "Content-Type, Authorization, X-Device-Id, X-Admin-Key")
 
     def _sec_headers(self):
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -469,6 +608,7 @@ class Handler(BaseHTTPRequestHandler):
         return rid
 
     def _send(self, obj, code=200):
+        obj = _normalize_error(obj, code)
         body = json.dumps(obj).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
@@ -616,6 +756,36 @@ class Handler(BaseHTTPRequestHandler):
             return
         if p == "/status":
             return self._status_page()
+        if p == "/metrics":
+            snap = _metrics_snapshot()
+            body = _prometheus_text(snap).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4")
+            self.send_header("X-Request-Id", self._reqid())
+            self._cors()
+            self._sec_headers()
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if p == "/admin/metrics":
+            if str(q.get("key", "")) != MASTER_API_KEY and \
+                    self.headers.get("X-Admin-Key") != MASTER_API_KEY:
+                return self._send({"error": {"message": "forbidden",
+                                             "type": "auth_error",
+                                             "code": "forbidden"}}, 403)
+            return self._send(_metrics_snapshot())
+        if p == "/trace":
+            return self._trace_page()
+        if p == "/admin/trace":
+            if str(q.get("key", "")) != MASTER_API_KEY and \
+                    self.headers.get("X-Admin-Key") != MASTER_API_KEY:
+                return self._send({"error": {"message": "forbidden",
+                                             "type": "auth_error",
+                                             "code": "forbidden"}}, 403)
+            with _lock:
+                return self._send({"events": _state["live_log"][-200:],
+                                   "stats": _metrics_snapshot()})
         if p == "/v1/integrations":
             from .integrations import report as _ireport
             return self._send(_ireport())
@@ -790,6 +960,22 @@ class Handler(BaseHTTPRequestHandler):
                 _tok, _tok_id = None, ""
         authed = bool(is_master or _tok)
 
+        # ---- admin (master-gated) ----
+        if p == "/admin/cache/clear":
+            if not is_master:
+                return self._send({"error": {"message": "forbidden",
+                                             "type": "auth_error",
+                                             "code": "forbidden"}}, 403)
+            try:
+                from . import cache as _cache
+                removed = _cache.get_cache().clear()
+            except Exception as e:
+                return self._send({"error": {"message": str(e)[:200],
+                                             "type": "server_error",
+                                             "code": "cache_clear_failed"}}, 500)
+            _log("admin", ip, device, "cache clear")
+            return self._send({"ok": True, "cleared": removed})
+
         # ---- open auth / repo / superadmin routes (token-gated internally) ----
         if p == "/auth/unlock":
             if is_master:
@@ -908,21 +1094,31 @@ class Handler(BaseHTTPRequestHandler):
             msgs = _as_messages(body.get("messages", []))
             user_text = _text_of(msgs)
             msgs, _meta = _apply_vibe(msgs)
+            max_tokens = body.get("max_tokens", 256)
+            temperature = body.get("temperature", 0.2)
             # identity guard: always Urai / Tynio LTD
             try:
                 from .brand import tier_of_brand as _tier_of
                 r = route(user_text, tier=_tier_of(body.get("model", "urai")))
-                res = r["backend"].complete(
-                    msgs, body.get("max_tokens", 256),
-                    body.get("temperature", 0.2))
+            except Exception as e:
+                return self._send({"error": str(e)[:300]}, 502)
+            if body.get("stream"):
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                _log("chat", ip, device, user_text[:160] + " -> (stream)",
+                     {"master": bool(body.get("_urai_authed"))})
+                return self._stream(
+                    None, __import__("jev.brand", fromlist=["brand_id"]).brand_id(body.get("model", "urai")),
+                    _meta, backend=r["backend"], msgs=msgs,
+                    max_tokens=max_tokens, temperature=temperature)
+            try:
+                res = _complete(r["backend"], msgs, max_tokens, temperature)
                 content = res["content"]
+                _meta = _with_cache(_meta, res)
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
             _log("chat", ip, device, user_text[:160] + " -> " + content[:120],
                  {"master": bool(body.get("_urai_authed"))})
-            if body.get("stream"):
-                return self._stream(content, __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")), _meta)
             usage = res.get("usage") or {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0}
             return self._send({
                 "id": "chatcmpl-urai", "object": "chat.completion",
@@ -940,36 +1136,48 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/v1/chat/completions":
             msgs = _as_messages(body.get("messages", []))
             _meta = {}
+            model = body.get("model", "urai")
+            max_tokens = body.get("max_tokens", 256)
+            temperature = body.get("temperature", 0.2)
             if _has_image(msgs):
                 from . import vision as _vision
                 img, question = _split_image(msgs)
                 if img is None:
                     return self._send({"error": "no image found in messages"}, 400)
                 res = _vision.see(img, question or "Describe this image.",
-                                  body.get("max_tokens", 512),
-                                  body.get("temperature", 0.2))
+                                  body.get("max_tokens", 512), temperature)
                 if not res["ok"]:
                     return self._send({"error": res["error"]}, 502)
                 content = res["answer"]
                 _meta = _urai_meta(_text_of(msgs))
+                model = body.get("model", __import__("jev.brand", fromlist=["brand_id"]).brand_id(body.get("model", "urai")))
             else:
                 user_text = _text_of(msgs)
                 msgs, _meta = _apply_vibe(msgs)
                 try:
                     from .brand import tier_of_brand as _tier_of
                     r = route(user_text, tier=_tier_of(body.get("model", "urai")))
-                    res = r["backend"].complete(
-                        msgs, body.get("max_tokens", 256),
-                        body.get("temperature", 0.2))
-                    content = res["content"]
                 except Exception as e:
                     return self._send({"error": str(e)[:300]}, 502)
-            model = body.get("model", __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")))
+                model = __import__("jev.brand", fromlist=["brand_id"]).brand_id(
+                    body.get("model", r["backend"].name))
+                if body.get("stream"):
+                    _record_use(ip, device, bool(body.get("_urai_authed")))
+                    _log("chat", ip, device, user_text[:160] + " -> (stream)",
+                         {"master": bool(body.get("_urai_authed")), "model": model})
+                    return self._stream(None, model, _meta, backend=r["backend"],
+                                        msgs=msgs, max_tokens=max_tokens,
+                                        temperature=temperature)
+                try:
+                    res = _complete(r["backend"], msgs, max_tokens, temperature)
+                    content = res["content"]
+                    _meta = _with_cache(_meta, res)
+                    model = body.get("model", __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")))
+                except Exception as e:
+                    return self._send({"error": str(e)[:300]}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
             _log("chat", ip, device, _text_of(msgs)[:160] + " -> " + str(content)[:120],
                  {"master": bool(body.get("_urai_authed")), "model": model})
-            if body.get("stream"):
-                return self._stream(content, model, _meta)
             return self._send({
                 "id": "chatcmpl-urai", "object": "chat.completion",
                 "created": int(time.time()), "model": model,
@@ -1075,30 +1283,42 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/generate":
             prompt = body.get("prompt", "")
             msgs, _meta = _apply_vibe([{"role": "user", "content": prompt}])
+            max_tokens = body.get("max_tokens", 256)
+            temperature = body.get("temperature", 0.2)
             r = route(prompt, complexity=(_meta.get("nlp") or {}).get("complexity"))
+            if body.get("stream"):
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                return self._stream(None, body.get("model", "urai"), _meta,
+                                    backend=r["backend"], msgs=msgs,
+                                    max_tokens=max_tokens, temperature=temperature)
             try:
-                res = r["backend"].complete(msgs, body.get("max_tokens", 256))
+                res = _complete(r["backend"], msgs, max_tokens, temperature)
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
             return self._send({"text": res["content"], "backend": res["backend"],
                                "usage": {"total_tokens": 0, "cost": 0},
-                               "urai": _meta})
+                               "urai": _with_cache(_meta, res)})
 
         if p == "/v1/completions":
             prompt = body.get("prompt", "")
             msgs, _meta = _apply_vibe([{"role": "user", "content": prompt}])
+            max_tokens = body.get("max_tokens", 256)
+            temperature = body.get("temperature", 0.2)
             r = route(prompt, complexity=(_meta.get("nlp") or {}).get("complexity"))
+            model = body.get("model", "urai")
+            if body.get("stream"):
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                return self._stream(None, model, _meta, backend=r["backend"],
+                                    msgs=msgs, max_tokens=max_tokens,
+                                    temperature=temperature)
             try:
-                res = r["backend"].complete(
-                    msgs, body.get("max_tokens", 256),
-                    body.get("temperature", 0.2))
+                res = _complete(r["backend"], msgs, max_tokens, temperature)
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
             model = body.get("model", __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")))
+            _meta = _with_cache(_meta, res)
             _record_use(ip, device, bool(body.get("_urai_authed")))
-            if body.get("stream"):
-                return self._stream(res["content"], model, _meta)
             return self._send({
                 "id": "cmpl-urai", "object": "text_completion",
                 "created": int(time.time()), "model": model,
@@ -1309,7 +1529,21 @@ class Handler(BaseHTTPRequestHandler):
 
         return self._send({"error": "not found"}, 404)
 
-    def _stream(self, content, model, meta=None):
+    def _sse_chunk(self, text, model, rid, meta, finish=None):
+        piece = json.dumps({
+            "id": "chatcmpl-urai", "object": "chat.completion.chunk",
+            "created": int(time.time()), "model": model,
+            "request_id": rid, "urai": meta or {},
+            "choices": [{"index": 0,
+                         "delta": ({"content": text} if text else {}),
+                         "finish_reason": finish}]})
+        self.wfile.write(f"data: {piece}\n\n".encode())
+        self.wfile.flush()
+
+    def _stream(self, content=None, model="urai", meta=None, backend=None,
+                msgs=None, max_tokens=256, temperature=0.2):
+        """SSE stream. Real token passthrough when the backend can stream and
+        URAI_STREAM is on; otherwise chunk a (possibly pre-generated) answer."""
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
@@ -1317,26 +1551,28 @@ class Handler(BaseHTTPRequestHandler):
         self._cors()
         self._sec_headers()
         self.end_headers()
-        content = content or ""
-        # token-level SSE: split into small pieces so clients render progressively
-        tokens = re.findall(r"\s*\S+|\s+", content) or [content]
         rid = self._reqid()
-        for tok in tokens:
-            piece = json.dumps({
-                "id": "chatcmpl-urai", "object": "chat.completion.chunk",
-                "created": int(time.time()), "model": model,
-                "request_id": rid, "urai": meta or {},
-                "choices": [{"index": 0,
-                             "delta": {"content": tok},
-                             "finish_reason": None}]})
-            self.wfile.write(f"data: {piece}\n\n".encode())
-            self.wfile.flush()
-        final = json.dumps({
-            "id": "chatcmpl-urai", "object": "chat.completion.chunk",
-            "created": int(time.time()), "model": model,
-            "request_id": rid, "urai": meta or {},
-            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
-        self.wfile.write(f"data: {final}\n\n".encode())
+        streamed = False
+        stream_fn = getattr(backend, "stream", None) if backend is not None else None
+        if (_stream_enabled() and msgs is not None and callable(stream_fn)):
+            try:
+                for piece in stream_fn(msgs, max_tokens=max_tokens,
+                                       temperature=temperature):
+                    if piece:
+                        streamed = True
+                        self._sse_chunk(piece, model, rid, meta)
+            except Exception:
+                # partial output already sent; only fall back if nothing went out
+                pass
+        if not streamed:
+            if not content and backend is not None and msgs is not None:
+                try:
+                    content = _complete(backend, msgs, max_tokens, temperature)["content"]
+                except Exception:
+                    content = ""
+            for tok in re.findall(r"\s*\S+|\s+", content or "") or ([content] if content else []):
+                self._sse_chunk(tok, model, rid, meta)
+        self._sse_chunk("", model, rid, meta, finish="stop")
         self.wfile.write(b"data: [DONE]\n\n")
         self.wfile.flush()
 
@@ -1378,6 +1614,52 @@ padding-right:max(clamp(16px,4vw,24px),env(safe-area-inset-right))}}}}</style>
 <a href="/welcome">landing</a> · <a href="/app">open app</a> ·
 <a href="/v1/docs">docs</a></p>
 <div class="tablewrap"><table>{rows}</table></div></div></body></html>"""
+        return self._send_raw(html.encode(), "text/html")
+
+    def _trace_page(self):
+        html = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Urai - trace</title>
+<meta name="theme-color" content="#0060fc">
+<link rel="icon" type="image/png" sizes="32x32" href="/frontend/brand/favicon-32.png">
+<style>body{margin:0;background:#171717;color:#ececec;font-family:system-ui,sans-serif}
+.wrap{max-width:960px;margin:0 auto;padding:clamp(14px,4vw,24px)}
+h1{font-size:1.3rem}h1 span{color:#4d94ff}
+input,button{background:#1f1f1f;color:#ececec;border:1px solid #3a3a3a;border-radius:8px;padding:7px 9px}
+.bars{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:12px 0}
+.card{background:#1f1f1f;border:1px solid #333;border-radius:10px;padding:10px}
+.card b{display:block;font-size:.72rem;color:#8a8a8a;text-transform:uppercase}
+.card span{font-size:1.3rem;color:#4d94ff}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+td,th{border:1px solid #3a3a3a;padding:6px 8px;font-size:.8rem;text-align:left}
+.muted{color:#8a8a8a}</style></head><body><div class="wrap">
+<h1><span>Urai</span> trace &amp; metrics</h1>
+<p class="muted">master key required · <a href="/status" style="color:#4d94ff">status</a></p>
+<p><input id="k" type="password" placeholder="master key" autocomplete="off">
+<button onclick="go()">load</button></p>
+<div class="bars" id="bars"></div>
+<table><thead><tr><th>time</th><th>kind</th><th>ip</th><th>device</th><th>preview</th></tr></thead>
+<tbody id="rows"></tbody></table>
+<script>
+const K=()=>document.getElementById('k').value||localStorage.getItem('uraik')||'';
+document.getElementById('k').addEventListener('change',e=>localStorage.setItem('uraik',e.target.value));
+async function go(){
+ const key=K(); if(key)localStorage.setItem('uraik',key);
+ const r=await fetch('/admin/trace?key='+encodeURIComponent(key));
+ if(!r.ok){document.getElementById('bars').innerHTML='<div class="card"><b>error</b><span>403</span></div>';return;}
+ const d=await r.json(); const s=d.stats||{};
+ const c=s.cache||{}; const t=s.tokens||{}; const q=s.requests||{};
+ const cards=[['uptime',(s.uptime_seconds||0)+'s'],['requests',q.total_requests||0],
+  ['cache size',c.size||0],['cache hits',c.hits||0],['cache miss',c.misses||0],
+  ['free used',t.free_used_total||0],['blocked',t.blocked_identities||0],
+  ['llama',s.local_llama?'up':'down']];
+ document.getElementById('bars').innerHTML=cards.map(x=>`<div class="card"><b>${x[0]}</b><span>${x[1]}</span></div>`).join('');
+ document.getElementById('rows').innerHTML=(d.events||[]).slice().reverse().map(e=>{
+  const tm=e.t?new Date(e.t*1000).toLocaleTimeString():'';
+  return `<tr><td>${tm}</td><td>${e.kind||''}</td><td>${e.ip||''}</td><td>${(e.device||'').slice(0,10)}</td><td>${(e.preview||'').replace(/[<>]/g,'')}</td></tr>`;}).join('');
+}
+setInterval(go,5000); if(localStorage.getItem('uraik'))go();
+</script></div></body></html>"""
         return self._send_raw(html.encode(), "text/html")
 
     def _send_raw(self, data: bytes, ctype: str):
