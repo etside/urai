@@ -13,6 +13,7 @@ Heuristics now, learned classifier later (routing outcomes are logged).
 """
 
 import json
+import os
 import re
 import time
 
@@ -47,6 +48,9 @@ def classify(prompt: str) -> dict:
 
 def pick_backend(level: int, local: bool = True):
     """Returns (backend, needs_verification, allow_fallback)."""
+    if os.environ.get("URAI_FORCE_MOCK", "") in ("1", "true", "yes", "on"):
+        from .backends import MockBackend
+        return MockBackend(), level >= 2, False
     if level <= 2:
         ll = LlamaServerBackend()
         if ll.healthy():
