@@ -265,7 +265,7 @@ def main(argv=None):
             try:
                 print(json.dumps(call("POST", "/agent", {"task": args.text,
                                  "plan": args.plan, "session_id": args.session,
-                                 "remember": not args.no_remember}),
+                                 "remember": not args.no_remember}, remote=True),
                                  indent=2)[:6000])
             except Exception as e:
                 sys.exit(f"remote agent failed ({e}); check: urai whoami")
@@ -494,7 +494,7 @@ def main(argv=None):
             try:
                 print(json.dumps(call("POST", "/agent/swarm",
                                       {"tasks": args.tasks,
-                                       "max_workers": args.workers}), indent=2)[:8000])
+                                       "max_workers": args.workers}, remote=True), indent=2)[:8000])
             except Exception as e:
                 sys.exit(f"remote swarm failed ({e}); check: urai whoami")
             return
@@ -527,7 +527,7 @@ def main(argv=None):
         if args.remote or os.environ.get("URAI_REMOTE"):
             try:
                 print(json.dumps(call("POST", "/browser/run",
-                                      {"goal": args.goal, "steps": steps}), indent=2)[:6000])
+                                      {"goal": args.goal, "steps": steps}, remote=True), indent=2)[:6000])
             except Exception as e:
                 sys.exit(f"remote browse failed ({e}); check: urai whoami")
             return
