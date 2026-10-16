@@ -104,7 +104,11 @@ def main():
             check("cli surface (offline-skip)", True)
             break
         _, out = run_cli(*args)
-        check(f"cli {' '.join(args)}", (needle in out) if needle else True, out[:100])
+        ok = True if needle is None else (needle in out)
+        if list(args) == ["embed", "hello"]:
+            # embed server up (dims vector) and down (message) both pass
+            ok = ("embedding server down" in out) or ('"dims"' in out)
+        check(f"cli {' '.join(args)}", ok, out[:100])
 
     # no secrets in tracked files
     import subprocess as sp
