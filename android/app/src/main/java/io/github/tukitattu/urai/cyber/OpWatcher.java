@@ -21,7 +21,7 @@ public final class OpWatcher {
     public static final String OP_FINE = AppOpsManager.OPSTR_FINE_LOCATION;
     public static final String OP_COARSE = AppOpsManager.OPSTR_COARSE_LOCATION;
     public static final String OP_SENSORS = AppOpsManager.OPSTR_BODY_SENSORS;
-    public static final String OP_ACTIVITY = AppOpsManager.OPSTR_ACTIVITY_RECOGNITION;
+    public static final String OP_ACTIVITY = "android:activity_recognition";
     public static final String OP_SMS = AppOpsManager.OPSTR_READ_SMS;
     public static final String OP_CONTACTS = AppOpsManager.OPSTR_READ_CONTACTS;
 
