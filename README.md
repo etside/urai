@@ -1,25 +1,18 @@
-# Urai v1-lite
+# Urai — agent harness + local AI runtime
 
-Our own high-performance local AI model + intelligence runtime.
-Mission: the best model we can realistically **own, run, distill, evaluate and
-continuously improve** — NOT a giant foundation model from scratch.
+Urai is an OpenCode/OpenClaw-class **agent harness** (verify-first agent loop,
+parallel swarm, jailed tools, browser, skills, memory, scheduler, sessions,
+plan-mode editing) served with an OpenAI-compatible API — plus the program to
+grow its own weights: distill → eval-gate → LoRA. See `docs/HARNESS.md` and
+`docs/API.md`.
 
-- `urai chat` streams the local student · `urai agent` runs plan/tool/verify ·
-  `urai api` serves OpenAI-compatible endpoints · `urai gpu` goes CUDA-aware on
-  GPU boxes · `urai teacher` checks the external teacher backend.
-
-## Status: runtime live, first distilled-data pipeline proven
-
-- Active model: **Qwen2.5-Coder-0.5B Q4_K_M** (`coder05-fast`, 23.2 tok/s
-  prompt, ~6.35 tok/s gen, ~569 MB RAM)
-- Runner-up: Qwen2.5-0.5B Q4_K_M (`qwen05-fast`, 28.6/6.9 tok/s) — lost the
-  code smoke test (wrong shape, vacuous tests, score 0.0)
-- Primary candidate: Qwen2.5-Coder-1.5B Q4_K_M (`coder15-primary`) — bench
-  never completed on the 3 GB dev box (killed by swap pressure); needs a
-  bigger machine
-- Distill v0.2: 228 generated tasks → **41 kept** (96 below threshold,
-  91 dupes) across code-repair (20), code-generation (8), api-engineering (5),
-  security (5), reasoning (3)
+- Live: `https://urai.daddyai.online` (TLS) · master key `856777` = unlimited,
+  guests = 5 free responses per device.
+- Active model: **Qwen3-4B Q4_K_M** (primary) · 1.7B teacher · embed + vision.
+- Distill set: **245 verified rows** (dual-teacher CPU grind, exec+judge gated).
+- GPU: one-hour H100 / Kaggle T4 / Modal A100 paths armed
+  (`docs/GPU_COMBINED_STRATEGY.md`); DO account GPU limit is 0 — ticket filed
+  per `docs/GPU_LIMIT_REQUEST.md`.
 
 ## Quickstart
 
