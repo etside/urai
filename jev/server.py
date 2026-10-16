@@ -892,6 +892,9 @@ class Handler(BaseHTTPRequestHandler):
                                    "history": _sess.history(sid)})
             if action == "clear":
                 return self._send(_sess.clear(sid))
+            if action == "list":
+                return self._send({"ok": True,
+                                   "sessions": _sess.list_sessions()})
             return self._send({"error": "unknown action"}, 400)
 
         if p == "/agent/jobs":
@@ -945,6 +948,28 @@ class Handler(BaseHTTPRequestHandler):
             if action == "clear":
                 return self._send(_focus.clear())
             return self._send({"error": "unknown action"}, 400)
+
+        if p == "/agent/apply":
+            if not is_master:
+                return self._send({"error": "forbidden - master key required"}, 403)
+            from .agent import run_tool_call as _rtc
+            results = []
+            for spec in body.get("proposals", []) or []:
+                if not isinstance(spec, dict) or "tool" not in spec:
+                    results.append({"ok": False, "error": "bad proposal"})
+                    continue
+                if spec.get("tool") not in ("write_file", "edit_file"):
+                    results.append({"ok": False,
+                                    "error": "only write_file/edit_file apply"})
+                    continue
+                try:
+                    results.append(_rtc(spec))
+                except Exception as e:
+                    results.append({"ok": False, "error": str(e)[:200]})
+            _log("apply", ip, device, f"{len(results)} proposals",
+                 {"master": True})
+            return self._send({"ok": all(r.get("ok") for r in results),
+                               "results": results})
 
         if p == "/agent/swarm":
             from .swarm import run_swarm

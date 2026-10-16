@@ -46,6 +46,30 @@ def clear(sid: str) -> dict:
     return {"ok": True, "session_id": sid}
 
 
+def list_sessions() -> list:
+    out = []
+    try:
+        for fp in sorted(SESS_DIR.glob("*.jsonl"),
+                         key=lambda f: f.stat().st_mtime, reverse=True)[:30]:
+            try:
+                lines = fp.read_text().splitlines()
+                first = ""
+                for line in lines:
+                    import json as _j
+                    d = _j.loads(line)
+                    if d.get("role") == "user":
+                        first = d.get("content", "")[:80]
+                        break
+                out.append({"id": fp.stem, "turns": len(lines),
+                            "preview": first,
+                            "updated": int(fp.stat().st_mtime)})
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return out
+
+
 def history(sid: str, limit: int = 40) -> list:
     try:
         rows = []
