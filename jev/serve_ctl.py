@@ -37,9 +37,11 @@ def is_up(port=8080):
         return False
 
 
-def start(model_path, ctx=2048, threads=None, port=8080, ngl=None,
+def start(model_path, ctx=None, threads=None, port=8080, ngl=None,
           mmproj=None, spec=None):
     from .gpu import offload_policy
+    if ctx is None:
+        ctx = int(os.environ.get("URAI_CTX", "8192"))
     if ngl is None:
         ngl = offload_policy()["ngl"]
     threads = threads or max(1, (os.cpu_count() or 4) - 1)

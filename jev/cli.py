@@ -192,12 +192,12 @@ def main(argv=None):
     p = sub.add_parser("model")
     p.add_argument("action", choices=["list", "download", "use", "bench"])
     p.add_argument("id", nargs="?")
-    p.add_argument("--ctx", type=int, default=2048)
+    p.add_argument("--ctx", type=int, default=int(os.environ.get("URAI_CTX", "8192")))
 
     p = sub.add_parser("serve")
     p.add_argument("action", choices=["start", "stop", "status"])
     p.add_argument("--model", default=None)
-    p.add_argument("--ctx", type=int, default=2048)
+    p.add_argument("--ctx", type=int, default=int(os.environ.get("URAI_CTX", "8192")))
     p.add_argument("--port", type=int, default=8080)
     p.add_argument("--spec", default=None,
                    help="speculative decoding, e.g. ngram-mod (free) — see docs/TRAINING.md#speed")

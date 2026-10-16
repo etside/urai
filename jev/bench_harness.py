@@ -60,11 +60,13 @@ def main():
     except Exception as e:
         ok, m = False, str(e)[:100]
     check("mcp-loop", ok)
-    # T6 brand map covers internals, no raw qwen in brands
+    # T6 brand map: exactly two public models, internals folded, no raw qwen
     ids = [b["id"] for b in brand_list()]
-    check("brands", set(ids) == {"urai", "urai-fast", "urai-ultra", "urai-cyber", "laya", "cyberurai-v1"}
+    check("brands", set(ids) == {"urai", "cyberurai"}
           and brand_id("qwen3-4B-Q4_K_M") == "urai"
-          and tier_of_brand("laya") == "urai-ultra", ids)
+          and brand_id("laya") == "urai"
+          and tier_of_brand("cyberurai") == "cyberurai"
+          and tier_of_brand("urai-fast") == "urai-fast", ids)
     # T7 registry sanity: active chat model file exists
     from jev import models_registry as R
     reg = R.load()

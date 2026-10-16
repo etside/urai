@@ -436,7 +436,7 @@ body{
 #modal-overlay.open{display:flex}
 #modal{
   background:var(--bg-side);border:1px solid var(--border);
-  border-radius:var(--radius);width:420px;max-height:70vh;
+  border-radius:var(--radius);width:460px;max-width:92vw;max-height:82vh;
   display:flex;flex-direction:column;overflow:hidden;
 }
 .modal-header{
@@ -469,6 +469,17 @@ body{
 }
 .model-name{font-size:.875rem;font-weight:500;flex:1}
 .model-desc{font-size:.75rem;color:var(--text-mute)}
+.model-option{flex-wrap:wrap}
+.model-modes{display:flex;gap:4px;flex-wrap:wrap;width:100%;margin-left:17px}
+.mode-chip{background:var(--bg-hover);border:1px solid var(--border);border-radius:10px;
+  padding:1px 8px;font-size:.66rem;color:var(--text-dim)}
+.cap-list{display:flex;flex-direction:column;gap:4px;padding:2px 10px 6px}
+.cap-item{font-size:.78rem;color:var(--text-dim);line-height:1.35}
+.cap-item b{color:var(--text);font-weight:600}
+.chip-wrap{display:flex;flex-wrap:wrap;gap:5px;padding:2px 10px 6px}
+.cap-chip{background:var(--bg-hover);border:1px solid var(--border);border-radius:10px;
+  padding:2px 9px;font-size:.72rem;color:var(--text);cursor:default}
+.cap-chip:hover{border-color:var(--accent);color:var(--accent)}
 
 /* ── Vision tab ─────────────────────────────────────────────────────────── */
 #img-preview{
@@ -479,14 +490,35 @@ body{
 #file-input{display:none}
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
+/* Tablet / small laptop: tighten the sidebar and topbar */
+@media(max-width:1024px){
+  #sidebar{width:220px}
+  #topbar{gap:6px;padding:0 10px}
+  #model-select{max-width:150px}
+  #main{min-width:0}
+}
 @media(max-width:640px){
-  #harness-panel{width:100vw}
+  #harness-panel{width:100vw;max-width:100vw}
   #input-area{padding:10px 10px 12px}
   .suggestions{max-width:100%}
   #sidebar{position:fixed;height:100dvh;z-index:50;width:260px;transform:translateX(-100%);transition:transform .2s}
   #sidebar.mobile-open{transform:none}
   #sidebar.collapsed{transform:translateX(-100%)}
   .msg-wrap{padding:6px 14px}
+  #topbar{padding:0 8px;gap:4px;flex-wrap:nowrap}
+  #model-select{max-width:110px;font-size:.78rem}
+  #status-pill{display:none}
+  #topbar .topbar-right{gap:2px}
+  .icon-btn{padding:6px}
+  #welcome h1{font-size:1.5rem}
+  #input-footer{font-size:.66rem}
+  #token-modal{width:92vw}
+  #super-panel{max-height:70vh}
+}
+@media(max-width:400px){
+  #topbar .topbar-right #plan-btn,
+  #topbar .topbar-right #stream-btn{display:none}
+  #model-select{max-width:96px}
 }
 
 
@@ -799,6 +831,16 @@ let abortCtrl   = null;
 let attachedImg = null; // base64 data-URL
 let allModels   = [];
 let recognition = null;
+let caps        = null;
+
+// Normalise any error shape (string | {message} | {error} | ...) to text,
+// so the UI never shows "Error: [object Object]".
+function errText(err, fallback) {
+  if (err == null || err === '') return fallback || 'Request failed';
+  if (typeof err === 'string') return err;
+  if (typeof err === 'object') return err.message || err.error || err.detail || err.code || JSON.stringify(err);
+  return String(err);
+}
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 (async () => {
@@ -813,21 +855,23 @@ let recognition = null;
   setInterval(refreshTokenMeter, 30000);
 })();
 
-// ── Models ─────────────────────────────────────────────────────────────────
+// ── Models + capabilities ───────────────────────────────────────────────────
 async function loadModels() {
   try {
-    const r = await fetch('/v1/models');
-    const d = await r.json();
-    allModels = d.data || [];
+    const r = await fetch('/v1/capabilities');
+    caps = await r.json();
+    allModels = (caps.models || []).map(m => ({ ...m, local: m.available !== false }));
   } catch {
-    allModels = [
-      { id:'auto',        owned_by:'Urai',     local:true  },
-      { id:'urai',        owned_by:'Urai',     local:true  },
-      { id:'urai-fast',   owned_by:'Urai',     local:true  },
-      { id:'urai-ultra',  owned_by:'Urai',     local:true  },
-      { id:'urai-cyber',  owned_by:'Urai',     local:true  },
-      { id:'laya',        owned_by:'Urai',     local:true  },
-    ];
+    try {
+      const r = await fetch('/v1/models');
+      const d = await r.json();
+      allModels = (d.data || []).map(m => ({ ...m, local: m.available !== false }));
+    } catch {
+      allModels = [
+        { id:'urai',      owned_by:'Urai', description:'Unified assistant',       modes:[{id:'fast'},{id:'balanced'},{id:'ultra'}], local:true },
+        { id:'cyberurai', owned_by:'Urai', description:'Cybersecurity specialist', modes:[{id:'audit'},{id:'threat'},{id:'guard'}], local:true },
+      ];
+    }
   }
   populateModelSelect();
 }
@@ -835,18 +879,9 @@ async function loadModels() {
 function populateModelSelect() {
   const sel = document.getElementById('model-select');
   sel.innerHTML = '';
-  // Always show "auto" first
-  const auto = document.createElement('option');
-  auto.value = 'auto'; auto.textContent = '✦ auto (local-first)';
-  sel.appendChild(auto);
-  allModels.forEach(m => {
-    if (m.id === 'auto') return;
-    const o = document.createElement('option');
-    o.value = m.id;
-    const prefix = m.local ? '◉ ' : '○ ';
-    o.textContent = prefix + m.id;
-    sel.appendChild(o);
-  });
+  const mk = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; return o; };
+  sel.appendChild(mk('auto', '✦ auto (local-first)'));
+  allModels.forEach(m => sel.appendChild(mk(m.id, (m.local ? '◉ ' : '○ ') + m.id)));
   sel.addEventListener('change', () => {
     document.getElementById('active-model-label').textContent = sel.value;
     closeModal();
@@ -861,30 +896,51 @@ function closeModal(e) {
   if (!e || e.target === document.getElementById('modal-overlay') || e.currentTarget === document.getElementById('modal-close'))
     document.getElementById('modal-overlay').classList.remove('open');
 }
+function modeChips(m) {
+  const ms = m.modes || [];
+  if (!ms.length) return '';
+  return '<span class="model-modes">' +
+    ms.map(x => `<span class="mode-chip">${escHtml(String(x.id || x))}</span>`).join('') +
+    '</span>';
+}
+// One unified assistant (urai) + CyberUrai, then features / skills / methods /
+// plugins — rendered instead of a long list of internal models.
 function buildModelModal() {
   const body = document.getElementById('modal-body');
   const cur  = document.getElementById('model-select').value;
-  const local = allModels.filter(m => m.local !== false && m.id !== 'auto');
-  const cloud = allModels.filter(m => !m.local);
 
-  let html = '';
-  const row = (m, selected) => `
-    <div class="model-option ${selected?'selected':''}" onclick="selectModel('${m.id}')">
-      <span class="${m.local||m.id==='auto'?'model-local-dot':'model-cloud-dot'}"></span>
-      <span class="model-name">${m.id}</span>
-      <span class="model-desc">${m.owned_by||''}</span>
+  let html = '<div class="model-group-label">Models</div>';
+  allModels.forEach(m => {
+    html += `
+    <div class="model-option ${m.id === cur ? 'selected' : ''}" onclick="selectModel('${m.id}')">
+      <span class="${m.local ? 'model-local-dot' : 'model-cloud-dot'}"></span>
+      <span class="model-name">${escHtml(m.id)}</span>
+      <span class="model-desc">${escHtml(m.description || m.owned_by || '')}</span>
+      ${modeChips(m)}
     </div>`;
+  });
 
-  html += `<div class="model-group-label">✦ Default</div>`;
-  html += row({id:'auto',owned_by:'Urai local-first',local:true}, cur==='auto');
-
-  if (local.length) {
-    html += `<div class="model-group-label">◉ Local (free)</div>`;
-    local.forEach(m => { html += row(m, m.id===cur) });
-  }
-  if (cloud.length) {
-    html += `<div class="model-group-label">○ Cloud</div>`;
-    cloud.forEach(m => { html += row(m, m.id===cur) });
+  if (caps) {
+    if ((caps.features || []).length) {
+      html += '<div class="model-group-label">Features</div><div class="cap-list">' +
+        caps.features.map(f => `<div class="cap-item">• ${escHtml(String(f))}</div>`).join('') + '</div>';
+    }
+    if ((caps.skills || []).length) {
+      html += '<div class="model-group-label">Skills</div><div class="chip-wrap">' +
+        caps.skills.map(s => `<span class="cap-chip" title="${escHtml(s.description || '')}">${escHtml(s.name)}</span>`).join('') + '</div>';
+    }
+    if ((caps.methods || []).length) {
+      html += '<div class="model-group-label">Methods</div><div class="cap-list">' +
+        caps.methods.map(m => `<div class="cap-item"><b>${escHtml(m.id)}</b> — ${escHtml(m.desc)}</div>`).join('') + '</div>';
+    }
+    if ((caps.plugins || []).length) {
+      html += '<div class="model-group-label">Plugins</div>' +
+        caps.plugins.map(p => `<div class="model-option">
+          <span class="${p.enabled ? 'model-local-dot' : 'model-cloud-dot'}"></span>
+          <span class="model-name">${escHtml(p.name)}</span>
+          <span class="model-desc">${escHtml(p.description || '')}</span>
+          <span class="badge ${p.enabled ? 'ok' : ''}">${p.enabled ? 'on' : 'off'}</span></div>`).join('');
+    }
   }
   body.innerHTML = html;
 }
@@ -1051,7 +1107,7 @@ async function send() {
         body: JSON.stringify({ model, messages: apiMsgs, stream: false }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error || res.statusText);
+      if (!res.ok) throw new Error(errText(d.error, res.statusText));
       reply = d.choices?.[0]?.message?.content || '';
       meta = {
         model:   d.model,
@@ -1086,7 +1142,7 @@ async function streamRequest(msgs, model, thinkId, signal) {
   });
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
-    throw new Error(e.error || res.statusText);
+    throw new Error(errText(e.error, res.statusText));
   }
 
   removeMsg(thinkId);
