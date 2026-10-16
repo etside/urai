@@ -15,6 +15,11 @@ import glob
 import json
 import os
 
+import subprocess as _sp, sys as _sys
+for _pkg in ["unsloth", "trl", "peft", "accelerate", "bitsandbytes", "datasets", "transformers"]:
+    _sp.run([_sys.executable, "-m", "pip", "install", "-q", _pkg],
+            capture_output=True)
+print("deps installed", flush=True)
 DATA = sorted(glob.glob("/kaggle/input/**/*.jsonl", recursive=True))
 DATA = DATA[0] if DATA else "distill-now.jsonl"
 OUT = "/kaggle/working/urai-adapter"
