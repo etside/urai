@@ -1,26 +1,32 @@
-"""Urai QLoRA on Modal (A100-40GB, ~$2.10/hr, ~$1.50 per 300-step run).
+"""Urai unified-student QLoRA on Modal (the default GPU path).
 
-Usage (CI dispatch, secrets MODAL_TOKEN_ID / MODAL_TOKEN_SECRET):
-    modal run modal/modal_train.py --tag distill-now --max-steps 300
+T4 by default (~$1/run, ~$1.50 per 300 steps); set URAI_MODAL_GPU=A100|L40S
+for more headroom. No local compute: the dataset is baked from
+data/verified/ at image build and only ever runs in the container.
+
+Usage (CI dispatch; secrets MODAL_TOKEN_ID / MODAL_TOKEN_SECRET):
+    URAI_TRAIN_TAG=unified modal run modal/modal_train.py --tag unified --max-steps 300
     modal volume get urai-adapters <tag>-modal ./adapters/<tag>-modal
 
-Dataset is baked into the image at build time from data/verified/<tag>.jsonl,
-so every dispatch trains on the latest committed rows. Mirrors
+tag == "unified" merges + dedups every verified row (the single student set);
+any other tag trains on data/verified/<tag>.jsonl. Mirrors
 scripts/train/sft_unsloth.py (Unsloth QLoRA r=16, 4-bit, adamw_8bit).
 """
+import hashlib
 import json
 import os
+from pathlib import Path
 
 import modal
 
-TAG = os.environ.get("URAI_TRAIN_TAG", "distill-now")
-DATA_PATH = f"data/verified/{TAG}.jsonl"
+TAG = os.environ.get("URAI_TRAIN_TAG", "unified")
+GPU = os.environ.get("URAI_MODAL_GPU", "T4")
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install("unsloth", "trl", "peft", "accelerate",
                  "bitsandbytes", "datasets", "transformers")
-    .add_local_file(DATA_PATH, "/data/train.jsonl")
+    .add_local_dir("data/verified", "/data/verified")
 )
 
 app = modal.App("urai-qlora")
@@ -30,28 +36,50 @@ ALPACA = ("Below is an instruction. Write a response.\n\n"
           "### Instruction:\n{instruction}\n\n### Response:\n{output}")
 
 
-def load_rows(path):
-    rows = []
-    for line in open(path):
-        line = line.strip()
-        if not line:
+def _prompt_of(r):
+    task = r.get("task", r.get("prompt", ""))
+    if isinstance(task, dict):
+        return task.get("prompt", "")
+    return str(task or "")
+
+
+def load_rows(tag):
+    """tag == 'unified' merges + dedups all verified rows; else a single file."""
+    if tag == "unified":
+        files = sorted(Path("/data/verified").rglob("*.jsonl"))
+    else:
+        files = [Path(f"/data/verified/{tag}.jsonl")]
+    seen, rows = set(), []
+    for f in files:
+        if not f.is_file() or f.name == "unified.jsonl":
             continue
-        r = json.loads(line)
-        task = r.get("task", r.get("prompt", ""))
-        prompt = task.get("prompt", "") if isinstance(task, dict) else str(task or "")
-        completion = r.get("completion", "") or ""
-        if prompt and completion:
+        for line in f.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            prompt = _prompt_of(r).strip()
+            completion = r.get("completion", "") or ""
+            if not prompt or not completion:
+                continue
+            h = hashlib.sha1(prompt.encode()).hexdigest()
+            if h in seen:
+                continue
+            seen.add(h)
             rows.append({"instruction": prompt[:1500],
                          "output": completion[:3000]})
     return rows
 
 
-@app.function(image=image, gpu="T4", timeout=7200,
+@app.function(image=image, gpu=GPU, timeout=7200,
               volumes={"/out": out_vol})
 def train(tag: str = TAG, max_steps: int = 300,
           base: str = "unsloth/Qwen3-4B-bnb-4bit"):
-    rows = load_rows("/data/train.jsonl")
-    print(f"training rows: {len(rows)}")
+    rows = load_rows(tag)
+    print(f"training rows: {len(rows)} (tag={tag}, gpu={GPU})")
     if len(rows) < 5:
         raise SystemExit("need >= 5 rows")
 

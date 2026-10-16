@@ -1,23 +1,95 @@
-name: Urai GPU Run (DO ephemeral, cost-guarded)
+name: Urai GPU Run (auto: Modal default, DO fallback)
+
+# Default GPU path is Modal (T4, ephemeral, no local compute). This workflow
+# probes the DO account for self-service GPU sizes and only uses the
+# DigitalOcean H100-phase path when such sizes actually exist. Contract-only
+# DO accounts (gpu_sizes_via_api == 0) route to Modal automatically.
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Dataset tag in data/verified/<tag>.jsonl"
+        description: "Dataset tag (unified = merge all verified rows)"
         required: false
-        default: "distill-now"
+        default: "unified"
       max_steps:
-        description: "Max training steps (300 fits ~1h on H100)"
+        description: "Max training steps (300 fits ~1h)"
         required: false
         default: "300"
-      phases:
-        description: "Parallel H100 phases 1-2 (auto-capped by headroom)"
+      backend:
+        description: "auto | modal | do"
         required: false
-        default: "2"
+        default: "auto"
+      gpu:
+        description: "Modal GPU: T4 | A100 | L40S"
+        required: false
+        default: "T4"
 permissions:
   contents: write
 jobs:
-  gpu-train:
+  route:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.pick.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pick backend (DO probe, Modal default)
+        id: pick
+        env:
+          DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
+          WANT: ${{ inputs.backend }}
+        run: |
+          want="$WANT"
+          if [ "$want" = "modal" ] || [ "$want" = "do" ]; then
+            echo "backend=$want" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          n=$(python3 - <<'PY'
+          import json, os, urllib.request
+          tok = os.environ.get("DO_API_TOKEN", "")
+          sizes = []
+          if tok:
+              try:
+                  req = urllib.request.Request(
+                      "https://api.digitalocean.com/v2/sizes",
+                      headers={"Authorization": "Bearer " + tok})
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      sizes = json.load(r).get("sizes", [])
+              except Exception:
+                  sizes = []
+          gpu = [s for s in sizes if any(
+              k in s["slug"] for k in
+              ("gpu", "h100", "h200", "l40", "mi300", "rtx", "b300", "ada"))]
+          print(len(gpu))
+          PY
+          )
+          if [ "${n:-0}" -gt 0 ]; then
+            echo "DO self-service GPUs: $n -> do"; echo "backend=do" >> "$GITHUB_OUTPUT"
+          else
+            echo "DO GPUs: 0 (contract-only) -> modal"; echo "backend=modal" >> "$GITHUB_OUTPUT"
+          fi
+
+  modal-train:
+    needs: route
+    if: needs.route.outputs.backend == 'modal'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Train unified student on Modal
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          URAI_TRAIN_TAG: ${{ inputs.tag }}
+          MAX_TRAIN_STEPS: ${{ inputs.max_steps }}
+          URAI_MODAL_GPU: ${{ inputs.gpu }}
+        run: bash scripts/train/modal_train.sh
+
+  do-train:
+    needs: route
+    if: needs.route.outputs.backend == 'do'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -28,5 +100,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           URAI_TRAIN_TAG: ${{ inputs.tag }}
           MAX_TRAIN_STEPS: ${{ inputs.max_steps }}
-          URAI_PHASES: ${{ inputs.phases }}
         run: bash scripts/train/gpu_train.sh create

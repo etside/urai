@@ -1,32 +1,67 @@
-name: Urai Train - LoRA Stage 2 (GPU runner required)
+name: Urai Train (unified student — Modal default)
 
-# Independence Stage 2: LoRA fine-tune on the verified distill set.
-# FAILS FAST without CUDA — it will never fake-train on CPU.
-# Needs a GPU runner: set runs-on to your GPU label when commissioned.
-# Until then this workflow documents the contract; dispatching on the
-# default runner exits at the preflight check by design. Routes:
-#  A) free Kaggle T4 notebook (see docs/INDEPENDENCE.md) — recommended;
-#  B) --allow-cpu capped demo (slow, demonstration-grade);
-#  C) set runs-on to your GPU label for the full run.
-
+# The canonical training entry point. Trains the single unified Urai student
+# on the merged verified set via Modal (remote GPU, ephemeral). Never
+# fake-trains on CPU and never uses local compute.
+#
+#   unified (default)  -> merge + dedup every data/verified/**/*.jsonl row
+#   <tag>              -> data/verified/<tag>.jsonl
+#
+# Routes: Modal (default) or the DO H100 path via "Urai GPU Run" (auto).
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Dataset tag in data/verified/<tag>.jsonl"
+        description: "Dataset tag (unified = merge all verified rows)"
         required: false
-        default: "distill-now"
-      base:
-        description: "Base model id"
+        default: "unified"
+      max_steps:
+        description: "Max training steps"
         required: false
-        default: "Qwen/Qwen3-4B"
+        default: "300"
+      gpu:
+        description: "Modal GPU: T4 | A100 | L40S"
+        required: false
+        default: "T4"
 
 jobs:
   preflight:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: GPU preflight (expected to refuse until a GPU runner exists)
+      - name: Verify Modal creds + dataset
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
-          python3 scripts/train/lora_urai.py --data data/verified/${{ inputs.tag }}.jsonl --tag ${{ inputs.tag }} --base "${{ inputs.base }}" || \
-            echo "::warning::Stage-2 refused (no GPU here). Routes: Kaggle T4 free tier (recommended), --allow-cpu demo, or GPU runner. See docs/INDEPENDENCE.md."
+          if [ -z "$MODAL_TOKEN_ID" ] || [ -z "$MODAL_TOKEN_SECRET" ]; then
+            echo "::error::MODAL_TOKEN_ID / MODAL_TOKEN_SECRET missing — set repo secrets."; exit 1
+          fi
+          if [ "${{ inputs.tag }}" = "unified" ]; then
+            n=$(python3 scripts/train/merge_verified.py | tail -1)
+            echo "merged verified set: $n"
+          else
+            ls -la "data/verified/${{ inputs.tag }}.jsonl" || \
+              { echo "::error::missing data/verified/${{ inputs.tag }}.jsonl"; exit 1; }
+          fi
+
+  train:
+    needs: preflight
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Train unified student on Modal
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          URAI_TRAIN_TAG: ${{ inputs.tag }}
+          MAX_TRAIN_STEPS: ${{ inputs.max_steps }}
+          URAI_MODAL_GPU: ${{ inputs.gpu }}
+        run: bash scripts/train/modal_train.sh

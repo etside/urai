@@ -1,15 +1,19 @@
-name: Urai Modal Train (T4, ~$1/run)
+name: Urai Modal Train (unified student, T4)
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Dataset tag in data/verified/<tag>.jsonl"
+        description: "Dataset tag (unified = merge all verified rows)"
         required: false
-        default: "distill-now"
+        default: "unified"
       max_steps:
         description: "Max training steps"
         required: false
         default: "300"
+      gpu:
+        description: "Modal GPU: T4 | A100 | L40S"
+        required: false
+        default: "T4"
 permissions:
   contents: write
 jobs:
@@ -21,21 +25,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Modal CLI
-        run: pip install -q modal
-      - name: Train on Modal T4
-        env:
-          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
-          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-          URAI_TRAIN_TAG: ${{ inputs.tag }}
-        run: modal run modal/modal_train.py --tag "$URAI_TRAIN_TAG" --max-steps ${{ inputs.max_steps }}
-      - name: Fetch adapter + publish to urai-deps release
+      - name: Train on Modal (default GPU path)
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          modal volume get urai-adapters "${{ inputs.tag }}-modal" "./adapters/${{ inputs.tag }}-modal"
-          tar -czf "/tmp/adapters-${{ inputs.tag }}-modal.tgz" "adapters/${{ inputs.tag }}-modal"
-          gh release view urai-deps --repo etside/urai >/dev/null 2>&1 || gh release create urai-deps --repo etside/urai --title "Urai vendored deps" --notes "Binaries + adapters." --prerelease
-          gh release upload urai-deps "/tmp/adapters-${{ inputs.tag }}-modal.tgz" --repo etside/urai --clobber
+          URAI_TRAIN_TAG: ${{ inputs.tag }}
+          MAX_TRAIN_STEPS: ${{ inputs.max_steps }}
+          URAI_MODAL_GPU: ${{ inputs.gpu }}
+        run: bash scripts/train/modal_train.sh
