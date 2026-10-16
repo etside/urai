@@ -75,6 +75,10 @@ TIERS = {
              "skills_extra": [], "level_cap": 4},
     "urai-ultra": {"consistency": 3, "max_tokens": 512, "verify": True,
                    "skills_extra": [], "level_cap": 4},
+    # unified CyberUrai brand (urn: legacy urai-cyber folded here)
+    "cyberurai": {"consistency": 3, "max_tokens": 512, "verify": True,
+                  "skills_extra": ["cyber-security", "threat-analysis"],
+                  "level_cap": 4},
     "urai-cyber": {"consistency": 3, "max_tokens": 512, "verify": True,
                    "skills_extra": ["cyber-security", "threat-analysis"],
                    "level_cap": 4},

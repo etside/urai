@@ -253,28 +253,67 @@ def _needs_key(path: str) -> bool:
 
 
 def _models():
+    # Public surface only: two brands (urai, cyberurai). Internal backend ids
+    # (qwen*, coder*, laya, jev-local-student, teacher fallback) stay in
+    # metadata/traces and are never listed as selectable models.
     local = LlamaServerBackend()
     up = local.healthy()
     from .brand import brand_list
-    ms = brand_list(up)
-    ms.append({"id": "jev-local-student", "owned_by": "Urai", "available": up,
-               "legacy": True})
+    return brand_list(up)
+
+
+def _capabilities() -> dict:
+    """One unified surface: models + their modes, then features / skills /
+    methods / plugins. The UI renders this instead of a long model list."""
+    from .brand import BRANDS, brand_list
+    up = LlamaServerBackend().healthy()
+    models = []
+    for b in brand_list(up):
+        modes = BRANDS.get(b["id"], {}).get("modes", [])
+        models.append({**b, "modes": modes})
+    skills = []
     try:
-        from . import models_registry as _reg
-        reg = _reg.load()
-        for mid, m in reg.get("models", {}).items():
-            if m.get("kind") != "chat" or mid == "laya":
-                continue
-            mp = ROOT / m["path"]
-            ms.append({"id": mid, "owned_by": "urai-local",
-                       "available": bool(up and mp.exists()),
-                       "active": mid == reg.get("active"),
-                       "params": m.get("params", ""), "role": m.get("role", "")})
+        from . import skills as _skills
+        skills = [{"name": s["name"], "description": s["description"]}
+                  for s in _skills.all_skills()]
     except Exception:
         pass
-    ms.append({"id": "jev-teacher-fallback", "owned_by": "external",
-               "available": False})
-    return ms
+    plugins = []
+    try:
+        from . import plugins as _plugins
+        plugins = [{"name": p.get("name"), "version": p.get("version", ""),
+                    "description": p.get("description", ""),
+                    "enabled": bool(p.get("enabled")),
+                    "hooks": p.get("hooks", [])}
+                   for p in _plugins.all_plugins()]
+    except Exception:
+        pass
+    return {
+        "identity": "Urai, developed by Tynio LTD",
+        "models": models,
+        "features": [
+            "local-first zero-cost chat (cloud fallback)",
+            "large context window (configurable, q8_0 KV cache)",
+            "tool-use + agent + parallel swarm",
+            "vision (images) + image generation + video animatic",
+            "OpenAI-compatible API + MCP + IDE integration",
+            "human-like browser with approval safety",
+            "memory, focus, schedules and few-shot self-learning",
+        ],
+        "skills": skills,
+        "methods": [
+            {"id": "classify", "desc": "per-request difficulty routing (L0-L4)"},
+            {"id": "verify", "desc": "consistency sampling + verification on hard tasks"},
+            {"id": "distill", "desc": "teacher->student distillation into verified data"},
+            {"id": "self-improve", "desc": "failure-mining loop promotes chunks to few-shots"},
+            {"id": "tools", "desc": "repo/tool packs with jail + plan-approval guards"},
+        ],
+        "plugins": plugins,
+        "context_window": {
+            "default": int(os.environ.get("URAI_CTX", "8192")),
+            "note": "raise with URAI_CTX / --ctx; q8_0 KV keeps RAM low",
+        },
+    }
 
 
 def _as_messages(raw) -> list:
@@ -513,6 +552,8 @@ class Handler(BaseHTTPRequestHandler):
             if not info.get("ok"):
                 return self._send(info, 404)
             return self._send(info)
+        if p == "/v1/capabilities":
+            return self._send(_capabilities())
         if p == "/v1/info":
             local = LlamaServerBackend()
             self._send({
