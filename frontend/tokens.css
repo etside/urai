@@ -3,15 +3,22 @@
    One source of truth for every client surface: webapp, APK WebView, CLI docs.
    Light theme lives in :root; dark theme under [data-theme="dark"].
 
+   Brand palette is sampled from the official Urai logo
+   (frontend/brand/urai-logo.png): electric-blue → mint isometric wordmark.
+     primary  blue  #0060fc   (logo dominant)
+     deep navy      #001890   (logo shadow)
+     bright cyan    #00e4f0
+     mint / teal    #00d890
+
    Contrast notes (WCAG AA, 4.5:1 for normal text — verified):
      light  text #16181d / bg #f7f7f8  = 16.6:1
      light  text-dim #3f434d / bg     =  9.3:1   (on surface-1 #fff = 9.9:1)
      light  text-mute #5c606c / bg    =  5.9:1   (on surface-3 = 5.1:1)
-     light  accent #0b7d62 / #ffffff  =  5.1:1
+     light  accent #0060fc / #ffffff  =  5.2:1
      dark   text #eceef2 / bg #0e0f12 = 16.5:1
      dark   text-dim #a7adba / bg     =  8.5:1   (on surface-2 = 7.2:1)
      dark   text-mute #8b92a1 / bg    =  6.1:1   (on surface-3 = 4.7:1)
-     dark   accent #10a37f / bg       =  6.0:1
+     dark   accent #4d94ff / bg       =  6.3:1   (brand blue lightened for AA)
    ========================================================================== */
 
 :root {
@@ -34,25 +41,25 @@
   --text-mute:     #5c606c;
   --text-invert:   #ffffff;
 
-  /* ── Accents ─────────────────────────────────────────────────────────── */
-  --accent:        #0b7d62;   /* emerald, darkened for AA on light */
-  --accent-2:      #4257d0;   /* indigo  */
-  --accent-3:      #7c5cf0;   /* violet  */
-  --accent-raw:    #10a37f;   /* brand emerald, for gradients/fills only  */
-  --accent-soft:   rgba(11, 125, 98, 0.10);
-  --accent-contrast: #ffffff; /* text on solid accent                    */
+  /* ── Accents (Urai logo: electric blue → mint) ───────────────────────── */
+  --accent:        #0060fc;   /* logo primary blue, AA on light (5.2:1)   */
+  --accent-2:      #00a878;   /* mint/teal, darkened for AA on light      */
+  --accent-3:      #0aa2e0;   /* bright cyan-blue                         */
+  --accent-raw:    #0060fc;   /* brand blue, for gradients/fills only     */
+  --accent-soft:   rgba(0, 96, 252, 0.10);
+  --accent-contrast: #ffffff; /* text on solid accent                     */
 
   --danger:        #c02a3c;
   --danger-soft:   rgba(192, 42, 60, 0.10);
   --warn:          #9a6400;
   --warn-soft:     rgba(154, 100, 0, 0.12);
-  --ok:            #0b7d62;
-  --ok-soft:       rgba(11, 125, 98, 0.12);
+  --ok:            #0a8f63;
+  --ok-soft:       rgba(10, 143, 99, 0.12);
 
-  /* ── Signature gradient (emerald → indigo → violet) ─────────────────── */
-  --grad-signature: linear-gradient(120deg, #10a37f 0%, #5c7cfa 52%, #a78bfa 100%);
+  /* ── Signature gradient (logo blue → cyan → mint) ───────────────────── */
+  --grad-signature: linear-gradient(120deg, #0060fc 0%, #12b0f0 52%, #00d890 100%);
   --grad-signature-loop: linear-gradient(90deg,
-      #10a37f, #5c7cfa, #a78bfa, #10a37f);
+      #0060fc, #12b0f0, #00d890, #0060fc);
   --grad-text: var(--grad-signature);
 
   /* ── Radii ───────────────────────────────────────────────────────────── */
@@ -164,12 +171,12 @@
   --text-mute:     #8b92a1;
   --text-invert:   #0e0f12;
 
-  --accent:        #10a37f;
-  --accent-2:      #5c7cfa;
-  --accent-3:      #a78bfa;
-  --accent-raw:    #10a37f;
-  --accent-soft:   rgba(16, 163, 127, 0.14);
-  --accent-contrast: #06231b;
+  --accent:        #4d94ff;   /* logo blue, lightened for AA on dark      */
+  --accent-2:      #2fd6a5;   /* mint                                      */
+  --accent-3:      #52d9f5;   /* bright cyan                               */
+  --accent-raw:    #0060fc;   /* exact brand blue, fills/gradients only    */
+  --accent-soft:   rgba(77, 148, 255, 0.16);
+  --accent-contrast: #04122b;
 
   --danger:        #f26b7a;
   --danger-soft:   rgba(242, 107, 122, 0.14);

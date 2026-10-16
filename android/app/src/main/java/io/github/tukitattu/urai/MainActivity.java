@@ -266,7 +266,7 @@ public class MainActivity extends Activity {
                 + "<body style='font-family:system-ui,sans-serif;background:#212121;color:#ececec;"
                 + "margin:0;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center'>"
                 + "<div style='padding:24px;max-width:460px'>"
-                + "<h2 style='color:#10a37f;margin:0 0 8px'>Urai can&rsquo;t reach the server</h2>"
+                + "<h2 style='color:#0060fc;margin:0 0 8px'>Urai can&rsquo;t reach the server</h2>"
                 + "<p style='color:#8e8ea0;font-size:14px;word-break:break-all'>Tried <b>"
                 + TextUtils.htmlEncode(String.valueOf(ep)) + "</b></p>"
                 + "<p style='color:#8e8ea0;font-size:13px'>"
@@ -274,7 +274,7 @@ public class MainActivity extends Activity {
                 + "<p style='color:#ececec;font-size:14px;margin-top:16px'>Open the <b>&#8942; menu &rarr; Settings</b> "
                 + "and set your Urai endpoint (for example <b>http://192.168.x.x:8777/</b> on your LAN).</p>"
                 + "<button onclick='location.reload()' style='margin-top:16px;padding:10px 18px;border:0;"
-                + "border-radius:8px;background:#10a37f;color:#fff;font-size:15px'>Retry</button>"
+                + "border-radius:8px;background:#0060fc;color:#fff;font-size:15px'>Retry</button>"
                 + "</div></body>";
         web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
     }
