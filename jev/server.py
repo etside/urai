@@ -456,6 +456,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send({"object": "list",
                         "data": [{"object": "model", **m} for m in _models()]})
             return
+        if p == "/v1/integrations":
+            from .integrations import report as _ireport
+            return self._send(_ireport())
         if p == "/v1/token/status":
             ip = _client_ip(self)
             device = _device_id({}, self.headers, q)

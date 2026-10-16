@@ -6,6 +6,7 @@ Auth: `Authorization: Bearer 856777` (master, unlimited, cost 0) or guest
 Header `X-Device-Id: <id>` tracks guest usage.
 
 ## Health & discovery
+-  → key-need evidence per capability (integrated-as-Urai proof)
 - `GET /health` → `{status, local_llama, identity, time}`
 - `GET /v1/models` → registry models + active
 - `GET /v1/info` → strengths, endpoints, measured throughput
