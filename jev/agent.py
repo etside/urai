@@ -29,6 +29,8 @@ SYSTEM = ("You are Urai, developed by Tynio LTD, a senior engineer runtime. Plan
           "```tool\n"
           '{"tool": "<name>", "args": {...}}\n'
           "```\n"
+          "Tiers: urai-fast (quick), urai (balanced), urai-ultra (quality), "
+          "urai-cyber (security). Conductor splits hard tasks automatically. "
           "Tools: read_file {path}, write_file {path, content}, "
           "edit_file {path, old, new, replace_all?}, run {argv:[...]}, analyze {target}, "
           "mcp_servers {server?}, mcp {server, tool, args}, "
@@ -100,10 +102,15 @@ def extract_tool_calls(answer: str) -> list:
 
 def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
                 consistency: int = 1, plan: bool = False,
-                history: list = None) -> dict:
+                history: list = None, tier: str = "urai") -> dict:
     t0 = time.time()
     trace = []
-    r = route(task)
+    from .router import apply_tier as _apply_tier
+    _tier = _apply_tier(tier)
+    if tier and tier != "urai":
+        consistency = max(int(consistency or 1), int(_tier["consistency"]))
+        trace.append({"step": "tier", "tier": tier})
+    r = route(task, tier=tier)
     trace.append({"step": "route", "level": r["level"], "reason": r["reason"],
                   "backend": r["backend"].name})
 
@@ -245,7 +252,13 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
             trace.append({"step": "consistency-skip",
                           "error": str(e)[:120]})
 
-    return {"ok": True, "answer": answer, "proposals": proposals, "level": r["level"],
+    try:
+        from .router import record_outcome as _rec
+        _rec(r["level"], getattr(r["backend"], "name", "?"), bool(answer))
+    except Exception:
+        pass
+    return {"ok": True, "answer": answer, "proposals": proposals, "tier": r.get("tier", "urai"),
+            "level": r["level"],
             "backend": r["backend"].name, "fixes": fixes,
             "failure_kind": failure_kind, "tool_calls": tool_calls,
             "elapsed_s": round(time.time() - t0, 2), "trace": trace}

@@ -873,7 +873,8 @@ class Handler(BaseHTTPRequestHandler):
                                body.get("budget_tokens", 2048),
                                body.get("consistency", 1),
                                body.get("plan", False),
-                               history=hist)
+                               history=hist,
+                               tier=body.get("tier", "urai"))
             _record_use(ip, device, bool(body.get("_urai_authed")))
             _log("agent", ip, device, str(body.get("task", ""))[:160])
             if body.get("remember", True):
@@ -937,6 +938,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send({"ok": True, "memories": _mem.list_all()})
             return self._send({"error": "unknown action"}, 400)
 
+        if p == "/agent/routing":
+            from .router import routing_scores as _rs, TIERS as _tiers
+            from .pool import load as _pool_load, save as _pool_save
+            action = body.get("action", "scores")
+            if action == "pool":
+                return self._send({"ok": True, "pool": _pool_load()})
+            if action == "pool_set":
+                return self._send({"ok": True, "pool": _pool_save(
+                    body.get("allow", []), body.get("deny", []))})
+            return self._send({"ok": True, "tiers": sorted(_tiers),
+                               "scores": _rs()})
+
         if p == "/agent/focus":
             from . import focus as _focus
             action = body.get("action", "current")
@@ -975,7 +988,14 @@ class Handler(BaseHTTPRequestHandler):
             from .swarm import run_swarm
             try:
                 tasks = body.get("tasks", [])
-                result = run_swarm(tasks, body.get("max_workers", 3))
+                if body.get("mode", "parallel") == "conductor":
+                    from .conductor import run_conductor
+                    result = run_conductor(" ".join(
+                        t if isinstance(t, str) else t.get("task", "") for t in tasks),
+                        body.get("files", {}), body.get("budget_tokens", 2048),
+                        body.get("max_workers", 3))
+                else:
+                    result = run_swarm(tasks, body.get("max_workers", 3))
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
