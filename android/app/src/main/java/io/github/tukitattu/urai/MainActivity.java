@@ -132,7 +132,7 @@ public class MainActivity extends Activity {
     @Override
     public boolean onOptionsItemSelected(MenuItem it) {
         if (it.getItemId() == 1) startActivity(new Intent(this, SettingsActivity.class));
-        else if (it.getItemId() == 3) startActivity(new Intent(this, cyber.CyberActivity.class));
+        else if (it.getItemId() == 3) startActivity(new Intent(this, CyberActivity.class));
         else web.reload();
         return true;
     }
