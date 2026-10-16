@@ -1,4 +1,4 @@
-name: Urai Modal Train (A100, metered, ~$1.50/run)
+name: Urai Modal Train (T4, ~$1/run)
 on:
   workflow_dispatch:
     inputs:
@@ -15,7 +15,7 @@ permissions:
 jobs:
   modal-train:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,7 +23,7 @@ jobs:
           python-version: "3.12"
       - name: Install Modal CLI
         run: pip install -q modal
-      - name: Train on Modal A100-40GB
+      - name: Train on Modal T4
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}

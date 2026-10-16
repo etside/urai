@@ -46,7 +46,7 @@ def load_rows(path):
     return rows
 
 
-@app.function(image=image, gpu="A100-40GB", timeout=3600,
+@app.function(image=image, gpu="T4", timeout=7200,
               volumes={"/out": out_vol})
 def train(tag: str = TAG, max_steps: int = 300,
           base: str = "unsloth/Qwen3-4B-bnb-4bit"):
