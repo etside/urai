@@ -17,3 +17,6 @@ __pycache__/
 opencode-migration-backup-*/
 *.safetensors
 data/token_state.json
+data/api_tokens.json
+data/sessions/
+data/sched_runs/

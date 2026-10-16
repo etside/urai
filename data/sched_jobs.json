@@ -1,0 +1,10 @@
+[
+  {
+    "id": "61ae19cf",
+    "task": "SELF-AUDIT 01 health: check API health, teacher ports, site TLS, CI status, disk, backups. Reply PASS/FAIL per item with evidence.",
+    "every_s": 604800,
+    "enabled": true,
+    "last_run": 1792122831,
+    "last_status": "ok"
+  }
+]
