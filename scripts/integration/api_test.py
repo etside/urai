@@ -158,6 +158,42 @@ def main():
     check("f) GET /v1/benchmarks with key -> 200", code1 == 200,
           f"code={code1} body={body1[:160]!r}")
 
+    # (g) one error contract on a flat 404 ---------------------------------
+    code, _, body = req("POST", "/v1/no-such-route", {"x": 1}, key=KEY)
+    e = json.loads(body or b"{}").get("error", {})
+    check("g) flat error normalized to {message,type,code:not_found}",
+          code == 404 and isinstance(e, dict) and e.get("code") == "not_found"
+          and isinstance(e.get("message"), str) and isinstance(e.get("type"), str),
+          f"code={code} body={body[:200]!r}")
+
+    # (h) admin metrics is master-gated + returns cache/request counters ---
+    master = os.environ.get("URAI_MASTER_KEY", "856777")
+    code0, _, _ = req("GET", "/admin/metrics")
+    check("h) GET /admin/metrics without key -> 403", code0 == 403, f"code={code0}")
+    code1, _, body1 = req("GET", "/admin/metrics?key=" + master)
+    doc = json.loads(body1 or b"{}")
+    check("h) GET /admin/metrics with key -> 200 + cache + requests",
+          code1 == 200 and "cache" in doc and "requests" in doc
+          and "uptime_seconds" in doc, f"code={code1} body={body1[:200]!r}")
+
+    # (i) Prometheus text exposition ---------------------------------------
+    code, _, body = req("GET", "/metrics")
+    text = (body or b"").decode("utf-8", "replace")
+    check("i) GET /metrics -> Prometheus text",
+          code == 200 and "urai_uptime_seconds" in text
+          and "urai_cache_hits_total" in text, f"code={code} body={text[:160]!r}")
+
+    # (j) admin cache clear (master-gated) ---------------------------------
+    code, _, body = req("POST", "/admin/cache/clear", {"master_key": master})
+    doc = json.loads(body or b"{}")
+    check("j) POST /admin/cache/clear -> ok",
+          code == 200 and doc.get("ok") is True, f"code={code} body={body[:160]!r}")
+
+    # (k) /trace UI page renders -------------------------------------------
+    code, _, body = req("GET", "/trace")
+    check("k) GET /trace -> html", code == 200 and b"<html" in body.lower(),
+          f"code={code}")
+
     print(f"\n{len(FAIL)} failure(s)" if FAIL else "\nall API checks passed")
     return 1 if FAIL else 0
 

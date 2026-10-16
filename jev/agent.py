@@ -172,18 +172,42 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
                          + skills_block(task)})
         trace.append({"step": "skills",
                       "loaded": [s["name"] for s in loaded]})
-    # Active memory + focus (Wonder-style): recall relevant memories and the
+    # Active memory + focus (Wonder-style): hybrid semantic recall over the
+    # memory/focus index (retrieval.query combines relevance + recency) and the
     # current focus anchor into every run. Never fails the run.
     try:
-        from .memory import recall as _recall
-        _mems = _recall(task, top=3)
-        if _mems:
-            messages.append({"role": "system",
-                             "content": "Active memory (use if relevant):\n" + "\n".join(
-                                 f"- [{m['kind']}] {m['text']}" for m in _mems)})
-            trace.append({"step": "memory", "recalled": len(_mems)})
-    except Exception as e:
-        trace.append({"step": "memory-skip", "error": str(e)[:120]})
+        from . import config as _config
+        _cfg = _config.get()
+    except Exception:
+        _cfg = None
+    _mem_enabled = _cfg.MEMORY_ENABLED if _cfg is not None else True
+    if _mem_enabled:
+        try:
+            from . import retrieval as _retrieval
+            _mems = _retrieval.query(task, top_k=(_cfg.RETRIEVAL_TOP_K
+                                                  if _cfg is not None else 5))
+            if _mems:
+                messages.append({"role": "system",
+                                 "content": "Retrieved memory (use if relevant):\n"
+                                 + "\n".join(
+                                     f"- [{m['kind']}/{m['source']}] {m['text']}"
+                                     for m in _mems)})
+                trace.append({"step": "retrieval", "recalled": len(_mems),
+                              "top_score": _mems[0]["score"],
+                              "top_relevance": _mems[0]["relevance"],
+                              "top_recency": _mems[0]["recency"]})
+        except Exception as e:
+            try:
+                from .memory import recall as _recall
+                _mems = _recall(task, top=3)
+                if _mems:
+                    messages.append({"role": "system",
+                                     "content": "Active memory (use if relevant):\n"
+                                     + "\n".join(f"- [{m['kind']}] {m['text']}"
+                                                 for m in _mems)})
+                    trace.append({"step": "memory", "recalled": len(_mems)})
+            except Exception as e2:
+                trace.append({"step": "retrieval-skip", "error": str(e2)[:120]})
     try:
         from .focus import context_block as _focus_block
         _fb = _focus_block()
@@ -212,7 +236,8 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
                       "note": "writes recorded, not applied"})
     while True:
         try:
-            res = r["backend"].complete(messages, max_tokens=512)
+            from . import cache as _cache
+            res = _cache.cached_complete(r["backend"], messages, max_tokens=512)
             answer = res["content"]
         except Exception as e:
             if r["fallback"]:
@@ -221,7 +246,9 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
                 answer = fb.complete(messages)["content"]
                 break
             return {"ok": False, "error": str(e)[:300], "trace": trace}
-        trace.append({"step": "generate", "chars": len(answer), "attempt": fixes})
+        trace.append({"step": "generate", "chars": len(answer),
+                      "attempt": fixes, "cached": bool(res.get("cached")),
+                      "cache_hit": res.get("cache_hit")})
 
         # ReAct tool pass: execute at most one requested tool per turn,
         # feed the observation back, and let the model continue.
@@ -270,9 +297,11 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
     if consistency and int(consistency) > 1 and r["verify"] and answer:
         try:
             best, best_score = answer, verify(answer)["score"]
+            from . import cache as _cache2
             for _ in range(min(int(consistency) - 1, 4)):
-                cand = r["backend"].complete(messages, max_tokens=512,
-                                             temperature=0.7)["content"]
+                cand = _cache2.cached_complete(r["backend"], messages,
+                                               max_tokens=512,
+                                               temperature=0.7)["content"]
                 tried += 1
                 sc = verify(cand)["score"]
                 if sc > best_score:

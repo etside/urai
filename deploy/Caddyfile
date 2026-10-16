@@ -30,8 +30,31 @@ ai.example.com {
 	# 	zone chat    { key {remote_host} events 60 window 1m }
 	# }
 
+	# internal surfaces are NEVER served on the public host — they live behind
+	# the admin hostname + Cloudflare Access (Zero Trust). The app also
+	# master-gates them; this is belt and braces.
+	@internal path /admin/* /superadmin/* /trace /metrics
+	respond @internal 404
+
 	reverse_proxy 127.0.0.1:8777 {
-		# never expose internal admin surfaces without Cloudflare Access
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
+
+# Admin host: reachable only through Cloudflare Tunnel + a Cloudflare Access
+# application (SSO + device posture). Even so, the app requires the master key.
+admin.urai.daddyai.online {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		-Server
+	}
+	tls {
+		protocols tls1.3
+	}
+	reverse_proxy 127.0.0.1:8777 {
 		header_up X-Forwarded-Proto {scheme}
 	}
 }
