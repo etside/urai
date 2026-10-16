@@ -670,7 +670,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ---- token-gated AI routes ----
         gated = ("/chat", "/v1/chat/completions", "/v1/completions", "/generate",
-                 "/agent", "/tools", "/evaluate", "/see", "/imagine",
+                 "/agent", "/agent/sessions", "/agent/jobs", "/tools", "/evaluate", "/see", "/imagine",
                  "/v1/images/generations", "/v1/embeddings",
                  "/v1/videos/generations")
         needs_gate = (p == "/chat" or p.startswith("/v1/") or p in gated[2:]
@@ -865,14 +865,84 @@ class Handler(BaseHTTPRequestHandler):
                           "total_tokens": 0, "cost": 0}})
 
         if p == "/agent":
+            from . import sessions as _sess
+            sid = body.get("session_id", "")
+            hist = _sess.history(sid) if sid else []
             result = run_agent(body.get("task", ""),
                                body.get("files", {}),
                                body.get("budget_tokens", 2048),
-                               body.get("consistency", 1))
+                               body.get("consistency", 1),
+                               body.get("plan", False),
+                               history=hist)
             _record_use(ip, device, bool(body.get("_urai_authed")))
             _log("agent", ip, device, str(body.get("task", ""))[:160])
+            if body.get("remember", True):
+                sid = _sess.append(sid, "user", str(body.get("task", ""))[:8000])
+                _sess.append(sid, "assistant", str(result.get("answer", ""))[:8000])
+                result["session_id"] = sid
             result["usage"] = {"total_tokens": 0, "cost": 0}
             return self._send(result)
+
+        if p == "/agent/sessions":
+            from . import sessions as _sess
+            action = body.get("action", "history")
+            sid = body.get("session_id", "")
+            if action == "history":
+                return self._send({"ok": True, "session_id": sid,
+                                   "history": _sess.history(sid)})
+            return self._send({"error": "unknown action"}, 400)
+
+        if p == "/agent/jobs":
+            from . import sched as _sched
+            action = body.get("action", "list")
+            if action == "list":
+                return self._send({"ok": True, "jobs": _sched.list_jobs()})
+            if action == "add":
+                return self._send({"ok": True,
+                                   "job": _sched.add_job(body.get("task", ""),
+                                                         body.get("every_s", 3600))})
+            if action == "toggle":
+                return self._send(_sched.set_enabled(body.get("id", ""),
+                                                     body.get("enabled", True)))
+            if action == "delete":
+                return self._send(_sched.delete_job(body.get("id", "")))
+            if action == "run":
+                jobs = [j for j in _sched.list_jobs() if j["id"] == body.get("id", "")]
+                if not jobs:
+                    return self._send({"error": "unknown job"}, 404)
+                return self._send({"ok": True, "run": _sched.run_job(jobs[0])})
+            if action == "runs":
+                return self._send({"ok": True,
+                                   "runs": _sched.job_runs(body.get("id", ""))})
+            return self._send({"error": "unknown action"}, 400)
+
+        if p == "/agent/memory":
+            from . import memory as _mem
+            action = body.get("action", "recall")
+            if action == "remember":
+                return self._send(_mem.remember(body.get("text", ""),
+                                                body.get("kind", "fact")))
+            if action == "recall":
+                return self._send({"ok": True,
+                                   "memories": _mem.recall(body.get("query", ""),
+                                                           int(body.get("top", 5)))})
+            if action == "forget":
+                return self._send(_mem.forget(body.get("id", "")))
+            if action == "list":
+                return self._send({"ok": True, "memories": _mem.list_all()})
+            return self._send({"error": "unknown action"}, 400)
+
+        if p == "/agent/focus":
+            from . import focus as _focus
+            action = body.get("action", "current")
+            if action == "set":
+                return self._send(_focus.set_focus(body.get("label", ""),
+                                                  body.get("detail", "")))
+            if action == "current":
+                return self._send({"ok": True, "focus": _focus.current()})
+            if action == "clear":
+                return self._send(_focus.clear())
+            return self._send({"error": "unknown action"}, 400)
 
         if p == "/agent/swarm":
             from .swarm import run_swarm
@@ -947,6 +1017,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(port=PORT, host="127.0.0.1"):
+    try:
+        from .sched import start as _sched_start
+        _sched_start()
+    except Exception:
+        pass
     srv = ThreadingHTTPServer((host, port), Handler)
     from . import VERSION
     print(f"Urai {VERSION} API+web on http://{host}:{port}  "

@@ -34,12 +34,20 @@ class MockBackend(Backend):
 
 
 def _post_json(url, payload, key=None, timeout=900):
+    import urllib.error as _ue
     headers = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = "Bearer " + key
     req = urllib.request.Request(url, json.dumps(payload).encode(), headers)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.load(resp)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.load(resp)
+    except _ue.HTTPError as e:
+        try:
+            detail = e.read().decode()[:300]
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"HTTP {e.code}: {detail}")
 
 
 class LlamaServerBackend(Backend):

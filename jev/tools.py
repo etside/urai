@@ -194,3 +194,67 @@ def analyze(target: str = "", max_bytes: int = 1000000) -> dict:
     return _a.analyze(target, max_bytes)
 
 TOOLS["analyze"] = analyze
+
+
+WRITE_MAX_BYTES = 200_000
+
+
+def write_file(path: str, content: str = "") -> dict:
+    """Create/overwrite a workspace-jailed file (cap 200KB). Logged by agent trace."""
+    try:
+        dest = _jail(path)
+        data = (content or "")[:WRITE_MAX_BYTES]
+        os.makedirs(os.path.dirname(dest) or WORKSPACE, exist_ok=True)
+        with open(dest, "w") as f:
+            f.write(data)
+        return {"ok": True, "path": os.path.relpath(dest, WORKSPACE),
+                "bytes": len(data)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def edit_file(path: str, old: str = "", new: str = "", replace_all: bool = False) -> dict:
+    """Exact-match edit on a workspace-jailed file. Unique match required
+    unless replace_all=true. Returns occurrence count."""
+    try:
+        dest = _jail(path)
+        with open(dest) as f:
+            text = f.read()
+        n = text.count(old) if old else 0
+        if not old or n == 0:
+            return {"ok": False, "error": "oldString not found"}
+        if n > 1 and not replace_all:
+            return {"ok": False,
+                    "error": f"oldString matches {n} locations; be specific or use replace_all"}
+        text = text.replace(old, new or "")
+        with open(dest, "w") as f:
+            f.write(text[:WRITE_MAX_BYTES])
+        return {"ok": True, "path": os.path.relpath(dest, WORKSPACE),
+                "replaced": n if replace_all else 1}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+TOOLS["write_file"] = write_file
+TOOLS["edit_file"] = edit_file
+
+
+def mcp_servers(server: str = "") -> dict:
+    try:
+        from . import mcp_client as _mc
+    except ImportError:
+        import mcp_client as _mc  # noqa
+    return _mc.list_server_tools(server)
+
+
+def mcp(server: str = "", tool: str = "", args=None) -> dict:
+    """Call an external MCP server tool (configured in mcp_clients.json)."""
+    try:
+        from . import mcp_client as _mc
+    except ImportError:
+        import mcp_client as _mc  # noqa
+    return _mc.call_server_tool(server, tool, args)
+
+
+TOOLS["mcp_servers"] = mcp_servers
+TOOLS["mcp"] = mcp

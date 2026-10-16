@@ -181,6 +181,11 @@ def main(argv=None):
     p.add_argument("--remote", action="store_true",
         help="use VPS API instead of local model (needs: urai login)")
     p = sub.add_parser("agent"); p.add_argument("text")
+    p.add_argument("--plan", action="store_true",
+                   help="propose file writes, do not apply")
+    p.add_argument("--session", default="",
+                   help="persist turns under this session id")
+    p.add_argument("--no-remember", action="store_true")
     p.add_argument("--remote", action="store_true",
         help="use VPS /agent instead of local run (needs: urai login)")
 
@@ -258,13 +263,16 @@ def main(argv=None):
     if args.cmd == "agent":
         if args.remote or os.environ.get("URAI_REMOTE"):
             try:
-                print(json.dumps(call("POST", "/agent", {"task": args.text}),
+                print(json.dumps(call("POST", "/agent", {"task": args.text,
+                                 "plan": args.plan, "session_id": args.session,
+                                 "remember": not args.no_remember}),
                                  indent=2)[:6000])
             except Exception as e:
                 sys.exit(f"remote agent failed ({e}); check: urai whoami")
             return
         from .agent import run_agent
-        print(json.dumps(run_agent(args.text), indent=2)[:6000])
+        print(json.dumps(run_agent(args.text, plan=args.plan,
+                                   history=[]), indent=2)[:6000])
         return
 
     if args.cmd == "login":
