@@ -1683,18 +1683,22 @@ function initMotion(){
       }
       requestAnimationFrame(frame);
     }
-    // 3D tilt on suggestion cards (pointer-driven rotateX/rotateY)
-    document.querySelectorAll('.sug-btn').forEach(el => {
-      el.addEventListener('pointermove', e => {
-        const r = el.getBoundingClientRect();
-        const px = (e.clientX - r.left) / r.width - .5;
-        const py = (e.clientY - r.top) / r.height - .5;
-        el.style.setProperty('--ry', (px * 14).toFixed(2) + 'deg');
-        el.style.setProperty('--rx', (-py * 14).toFixed(2) + 'deg');
-      });
-      el.addEventListener('pointerleave', () => {
+    // 3D tilt on suggestion cards (delegated: survives new-chat re-renders)
+    document.addEventListener('pointermove', e => {
+      const el = e.target.closest ? e.target.closest('.sug-btn') : null;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width - .5;
+      const py = (e.clientY - r.top) / r.height - .5;
+      el.style.setProperty('--ry', (px * 14).toFixed(2) + 'deg');
+      el.style.setProperty('--rx', (-py * 14).toFixed(2) + 'deg');
+    });
+    document.addEventListener('pointerout', e => {
+      const el = e.target.closest ? e.target.closest('.sug-btn') : null;
+      if (el && !(e.relatedTarget && e.relatedTarget.closest &&
+                  e.relatedTarget.closest('.sug-btn') === el)){
         el.style.setProperty('--rx', '0deg'); el.style.setProperty('--ry', '0deg');
-      });
+      }
     });
   }catch(e){ /* motion is decorative — never break chat */ }
 }
