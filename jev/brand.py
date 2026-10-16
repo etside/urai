@@ -18,6 +18,9 @@ BRANDS = {
                    "internal": []},
     "laya": {"tier": "urai-ultra", "desc": "Laya — Urai-owned student (landing soon)",
              "internal": ["laya"], "student": True},
+    "cyberurai-v1": {"tier": "urai-cyber",
+                     "desc": "CyberUrai-v1 — cybersecurity specialist + Android guard",
+                     "internal": []},
 }
 
 
@@ -33,7 +36,7 @@ def brand_id(internal: str) -> str:
 
 def tier_of_brand(model: str) -> str:
     m = (model or "").lower()
-    if m in BRANDS and m != "laya":
+    if m in BRANDS:
         return BRANDS[m]["tier"]
     if m == "laya":
         return "urai-ultra"

@@ -62,7 +62,7 @@ def main():
     check("mcp-loop", ok)
     # T6 brand map covers internals, no raw qwen in brands
     ids = [b["id"] for b in brand_list()]
-    check("brands", set(ids) == {"urai", "urai-fast", "urai-ultra", "urai-cyber", "laya"}
+    check("brands", set(ids) == {"urai", "urai-fast", "urai-ultra", "urai-cyber", "laya", "cyberurai-v1"}
           and brand_id("qwen3-4B-Q4_K_M") == "urai"
           and tier_of_brand("laya") == "urai-ultra", ids)
     # T7 registry sanity: active chat model file exists
