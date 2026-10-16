@@ -1,4 +1,4 @@
-name: Urai GPU Run (auto: Modal default, DO fallback)
+name: Urai GPU Run (auto — Modal default, DO fallback)
 
 # Default GPU path is Modal (T4, ephemeral, no local compute). This workflow
 # probes the DO account for self-service GPU sizes and only uses the
