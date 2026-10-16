@@ -17,3 +17,5 @@ __pycache__/
 opencode-migration-backup-*/
 *.safetensors
 data/token_state.json
+# generated unified training set (rebuild with scripts/train/merge_verified.py)
+data/verified/unified.jsonl
