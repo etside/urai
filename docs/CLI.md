@@ -17,10 +17,10 @@ against the VPS (`https://urai.daddyai.online`). Remote needs `urai login`.
 ## Chat & agents
 
 ```bash
-urai chat [--remote]                          # REPL (local streams tokens)
+urai chat [--remote] [-v]                     # REPL (local streams tokens)
 urai ask "question" [--remote] [--model urai|cyberurai] [--max-tokens N]
 urai agent "task" [--plan] [--session NAME] [--no-remember] \
-      [--remote] [--model urai|cyberurai]
+      [--remote] [--model urai|cyberurai] [-v]
 urai swarm "t1" "t2" [--workers 3] [--mode parallel|conductor] \
       [--remote] [--model urai|cyberurai]
 urai apply PROPOSALS.json [--remote]           # land --plan proposals
@@ -38,6 +38,10 @@ urai apply PROPOSALS.json [--remote]           # land --plan proposals
   prints one line per proposal.
 - `urai swarm --mode conductor` runs the Thinker→Workers→Verifier orchestration
   (`/agent/swarm` with `{"mode":"conductor"}`).
+- `chat`/`agent` accept `-v`/`--verbose` to print a compact `urai` analysis
+  summary from the server response (`[nlp] …` and `[vibe] …` lines). Pass it
+  twice (`-vv`) to also dump the full `vibe.directive` style contract. When the
+  server omits the `urai` block (older server) it prints `[nlp] unavailable`.
 
 ## Models & serving
 

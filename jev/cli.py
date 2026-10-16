@@ -244,12 +244,64 @@ def _print_video_result(res, as_json=False, provider="auto", remote=False):
     return True
 
 
+def _dim(s):
+    if sys.stdout.isatty():
+        return "\033[2m" + s + "\033[0m"
+    return s
+
+
+def _urai_lines(meta):
+    """Compact [nlp]/[vibe] summary lines from a response `urai` block."""
+    nlp = (meta or {}).get("nlp") or {}
+    vibe = (meta or {}).get("vibe") or {}
+    if nlp:
+        sent = nlp.get("sentiment") or {}
+        rf = nlp.get("redflags") or []
+        nlp_line = ("[nlp] lang=%s sentiment=%s(%.2f) emotion=%s intent=%s "
+                    "urgency=%.2f cx=%.2f redflags=%s") % (
+            nlp.get("language", "?"), sent.get("label", "neutral"),
+            float(sent.get("score", 0.0)), nlp.get("emotion", "?"),
+            nlp.get("intent", "?"), float(nlp.get("urgency", 0.0)),
+            float(nlp.get("complexity", 0.0)),
+            ",".join(str(x) for x in rf) if rf else "none")
+    else:
+        nlp_line = "[nlp] unavailable"
+    if vibe:
+        w = float(vibe.get("warmth", 0.0))
+        tone = "warm" if w > 0.6 else "neutral" if w > 0.35 else "cool"
+        directive = vibe.get("directive") or ""
+        vibe_line = ("[vibe] structure=%s formatting=%s tone=%s lang=%s "
+                     "de-escalate=%s directive=%d lines") % (
+            vibe.get("structure", "?"), vibe.get("formatting", "?"), tone,
+            vibe.get("language", "?"),
+            "yes" if vibe.get("de-escalate") else "no",
+            len(directive.splitlines()) if directive else 0)
+    else:
+        vibe_line = "[vibe] unavailable"
+    return [nlp_line, vibe_line]
+
+
+def _print_urai(meta, verbose=1):
+    """Print the [nlp]/[vibe] summary; full directive only on -vv."""
+    for line in _urai_lines(meta):
+        print(line)
+    directive = (((meta or {}).get("vibe") or {}).get("directive") or "")
+    if verbose and verbose >= 2 and directive:
+        for dl in directive.splitlines():
+            print(_dim("    " + dl))
+
+
+def remote_chat_turn(messages, max_tokens=512, model="urai"):
+    """One remote chat turn; returns the full JSON response (incl. `urai`)."""
+    return call("POST", "/v1/chat/completions",
+                {"messages": messages, "max_tokens": max_tokens, "stream": False,
+                 "model": model},
+                timeout=300, remote=True)
+
+
 def remote_chat_once(messages, max_tokens=512, model="urai"):
     """One remote chat turn (non-streaming) against the VPS API."""
-    d = call("POST", "/v1/chat/completions",
-             {"messages": messages, "max_tokens": max_tokens, "stream": False,
-              "model": model},
-             timeout=300, remote=True)
+    d = remote_chat_turn(messages, max_tokens, model)
     if isinstance(d, dict) and d.get("choices"):
         return d["choices"][0]["message"]["content"]
     return json.dumps(d)[:4000]
@@ -300,6 +352,7 @@ def _observe(ident, plan):
 
 
 def cmd_chat(args):
+    verbose = int(getattr(args, "verbose", 0) or 0)
     remote = bool(getattr(args, "remote", False) or os.environ.get("URAI_REMOTE"))
     if remote:
         print("urai chat — remote VPS (master key 856777, empty line quits)")
@@ -315,9 +368,16 @@ def cmd_chat(args):
             history.append({"role": "user", "content": q})
             print("urai> ", end="", flush=True)
             try:
-                text = remote_chat_once(history[-8:])
+                turn = remote_chat_turn(history[-8:])
+                if isinstance(turn, dict) and turn.get("choices"):
+                    text = turn["choices"][0]["message"]["content"]
+                else:
+                    text = json.dumps(turn)[:4000]
                 print(text)
                 history.append({"role": "assistant", "content": text})
+                if verbose:
+                    _print_urai(turn.get("urai") if isinstance(turn, dict) else None,
+                                verbose)
             except Exception as e:
                 print(f"\n[error: {e} — check: urai whoami]")
         return
@@ -336,6 +396,8 @@ def cmd_chat(args):
         try:
             text = stream_chat(history[-8:])
             history.append({"role": "assistant", "content": text})
+            if verbose:
+                _print_urai(None, verbose)
         except Exception as e:
             print(f"[error: {e} — is the model server up? run: urai serve start]")
 
@@ -375,6 +437,8 @@ def main(argv=None):
 
     p = sub.add_parser("chat"); p.add_argument("--remote", action="store_true",
         help="use VPS API instead of local model (needs: urai login)")
+    p.add_argument("-v", "--verbose", action="count", default=0,
+        help="print the [nlp]/[vibe] analysis summary (twice: full directive)")
 
     p = sub.add_parser("ask"); p.add_argument("text")
     p.add_argument("--remote", action="store_true",
@@ -393,6 +457,8 @@ def main(argv=None):
         help="use VPS /agent instead of local run (needs: urai login)")
     p.add_argument("--model", "--brand", dest="model", choices=list(BRANDS),
                    default="urai", help="brand/tier sent to the model")
+    p.add_argument("-v", "--verbose", action="count", default=0,
+        help="print the [nlp]/[vibe] analysis summary (twice: full directive)")
 
     p = sub.add_parser("apply")
     p.add_argument("file", help="JSON file of --plan proposals, or - for stdin")
@@ -537,15 +603,18 @@ def main(argv=None):
 
     if args.cmd == "agent":
         brand = _brand(args)
+        verbose = int(getattr(args, "verbose", 0) or 0)
         if args.remote or os.environ.get("URAI_REMOTE"):
             try:
-                print(json.dumps(call("POST", "/agent", {"task": args.text,
-                                 "plan": args.plan, "session_id": args.session,
-                                 "remember": not args.no_remember,
-                                 "tier": brand, "model": brand}, remote=True),
-                                 indent=2)[:6000])
+                d = call("POST", "/agent", {"task": args.text,
+                         "plan": args.plan, "session_id": args.session,
+                         "remember": not args.no_remember,
+                         "tier": brand, "model": brand}, remote=True)
             except Exception as e:
                 sys.exit(f"remote agent failed ({e}); check: urai whoami")
+            print(json.dumps(d, indent=2)[:6000])
+            if verbose:
+                _print_urai(d.get("urai") if isinstance(d, dict) else None, verbose)
             return
         from . import sessions as _sess
         from .agent import run_agent
@@ -561,6 +630,8 @@ def main(argv=None):
             _sess.append(sid, "assistant", str(result.get("answer", "")))
             result["session_id"] = sid
         print(json.dumps(result, indent=2)[:6000])
+        if verbose:
+            _print_urai(result.get("urai"), verbose)
         _observe(ident, plan)
         return
 

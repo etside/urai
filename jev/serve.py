@@ -16,6 +16,7 @@ POST /serve/start         — start llama-server for active model
 POST /serve/stop          — stop llama-server
 GET  /serve/status        — is llama-server running?
 POST /embed               — get embeddings (proxies to :8081)
+POST /nlp                 — {"text"} -> {nlp, vibe} request understanding
 """
 from __future__ import annotations
 
@@ -32,10 +33,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from jev import imagine as _imagine
 from jev import models_registry as reg
 from jev import serve_ctl as ctl
-from jev.gpu import detect_gpu
-from jev.imagine import run_imagine
+from jev.gpu import detect
 
 PORT = int(os.environ.get("SIDECAR_PORT", "8778"))
 
@@ -83,7 +84,7 @@ class Handler(BaseHTTPRequestHandler):
                 "repo_root": str(ROOT),
             })
         elif p == "/gpu":
-            self.send_json(detect_gpu())
+            self.send_json(detect())
         elif p == "/model/list":
             registry = reg.load()
             self.send_json({
@@ -130,31 +131,52 @@ class Handler(BaseHTTPRequestHandler):
             threading.Thread(target=_dl, daemon=True).start()
             self.send_json({"ok": True, "message": f"downloading {model_id}"})
 
+        elif p == "/nlp":
+            # Request understanding + style plan (Phase 2). Pure, deterministic.
+            text = body.get("text", "")
+            meta = {}
+            try:
+                from jev import nlp as _nlp
+                from jev import vibe as _vibe
+                analysis = _nlp.analyze(text)
+                v = _vibe.plan(analysis, {}) if _vibe.enabled() else {}
+                if v:
+                    v["directive"] = _vibe.directive(v)
+                meta = {"nlp": analysis, "vibe": v}
+            except Exception as e:
+                self.send_json({"error": str(e)}, 500); return
+            self.send_json(meta)
+
         elif p == "/imagine":
             prompt   = body.get("prompt", "")
-            neg      = body.get("negative_prompt", "")
-            steps    = int(body.get("steps") or 2)
+            steps    = int(body.get("steps") or 0) or None
             width    = int(body.get("width") or 512)
             height   = int(body.get("height") or 512)
-            out_path = body.get("output_path") or f"/tmp/urai_imagine_{int(time.time())}.png"
+            out_path = body.get("output_path")
+            meta = {}
+            try:
+                from jev import nlp as _nlp
+                analysis = _nlp.analyze(prompt)
+                meta = {"nlp": analysis}
+                if steps is None and analysis.get("urgency", 0) > 0.5:
+                    steps = 1
+            except Exception:
+                pass
             try:
                 t0 = time.time()
-                run_imagine(
-                    prompt=prompt,
-                    negative_prompt=neg,
-                    steps=steps,
-                    width=width,
-                    height=height,
-                    output_path=out_path,
-                )
+                res = _imagine.generate(prompt, out_path, steps, width, height)
+                if not res.get("ok"):
+                    self.send_json({"error": res.get("error", "imagine failed"),
+                                    **meta}, 500); return
                 ms = int((time.time() - t0) * 1000)
                 data_url = ""
                 try:
-                    with open(out_path, "rb") as f:
+                    with open(res["path"], "rb") as f:
                         data_url = "data:image/png;base64," + base64.b64encode(f.read()).decode()
                 except Exception:
                     pass
-                self.send_json({"path": out_path, "data_url": data_url, "duration_ms": ms})
+                self.send_json({"path": res["path"], "data_url": data_url,
+                                "duration_ms": ms, **meta})
             except Exception as e:
                 self.send_json({"error": str(e)}, 500)
 

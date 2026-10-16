@@ -35,6 +35,13 @@ def _structure(nlp, prof):
     return "balanced"
 
 
+def _formatting(struct: str, intent: str) -> str:
+    if intent in ("generate_image", "generate_video"):
+        return "minimal"
+    return {"concise": "prose", "balanced": "prose",
+            "structured": "sections", "collapsible": "bullets"}.get(struct, "prose")
+
+
 def plan(nlp: dict, profile: dict = None) -> dict:
     """Build the style contract from NLP signals blended with sticky profile."""
     nlp = nlp or {}
@@ -83,6 +90,7 @@ def plan(nlp: dict, profile: dict = None) -> dict:
     return {
         **{f: round(p[f], 3) for f in _FIELDS},
         "structure": struct,
+        "formatting": _formatting(struct, intent),
         "language": language,
         "de-escalate": bool(de_escalate),
         "source": {"sentiment": label, "emotion": emo, "intent": intent,
@@ -102,8 +110,12 @@ def directive(v: dict) -> str:
               "structured": "well-structured with short headings where useful",
               "collapsible": "thorough, group details so they can be expanded"}.get(
                   v["structure"], "medium")
+    fmt = {"prose": "plain prose paragraphs",
+           "sections": "compact sections with short headings",
+           "bullets": "bulleted, expandable detail",
+           "minimal": "just the essentials, no preamble"}.get(v.get("formatting"), "plain prose")
     bits = [f"Match the user's tone: {tone}, {form} register, {depth} depth."]
-    bits.append(f"Keep it {length}.")
+    bits.append(f"Keep it {length}; format as {fmt}.")
     if v["humor"] > 0.6:
         bits.append("A light touch of humour is welcome; keep it professional.")
     elif v["humor"] < 0.1:

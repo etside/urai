@@ -79,6 +79,9 @@ jobs:
       - name: Compile every jev module
         run: python3 -m py_compile jev/*.py
 
+      - name: Unit tests (nlp / vibe / pipeline)
+        run: python3 -m unittest discover -s tests -t . -v
+
       - name: nlp CLI detects negative sentiment
         run: |
           out=$(python3 -m jev.nlp "this is broken and I'm frustrated, fix asap")

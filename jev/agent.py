@@ -110,7 +110,37 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
     if tier and tier != "urai":
         consistency = max(int(consistency or 1), int(_tier["consistency"]))
         trace.append({"step": "tier", "tier": tier})
-    r = route(task, tier=tier)
+
+    # ── NLP + vibe (Phase 2): understand the request and fix a style contract
+    # BEFORE generation. Deterministic; never fails the run.
+    nlp_out, vibe_out = {}, {}
+    try:
+        from . import nlp as _nlp
+        nlp_out = _nlp.analyze(task, history=history)
+        trace.append({"step": "nlp", "language": nlp_out.get("language"),
+                      "intent": nlp_out.get("intent"),
+                      "sentiment": (nlp_out.get("sentiment") or {}).get("label"),
+                      "emotion": nlp_out.get("emotion"),
+                      "complexity": nlp_out.get("complexity"),
+                      "redflags": nlp_out.get("redflags")})
+    except Exception as e:
+        trace.append({"step": "nlp-skip", "error": str(e)[:120]})
+    try:
+        from . import vibe as _vibe
+        if _vibe.enabled():
+            vibe_out = _vibe.plan(nlp_out)
+            if vibe_out:
+                vibe_out["nlp"] = nlp_out
+                vibe_out["directive"] = _vibe.directive(vibe_out)
+                trace.append({"step": "vibe",
+                              "structure": vibe_out.get("structure"),
+                              "formatting": vibe_out.get("formatting"),
+                              "language": vibe_out.get("language"),
+                              "de-escalate": vibe_out.get("de-escalate")})
+    except Exception as e:
+        trace.append({"step": "vibe-skip", "error": str(e)[:120]})
+
+    r = route(task, tier=tier, complexity=nlp_out.get("complexity"))
     trace.append({"step": "route", "level": r["level"], "reason": r["reason"],
                   "backend": r["backend"].name})
 
@@ -119,6 +149,8 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
     trace.append({"step": "context", "est_tokens": ctx["est_tokens"],
                   "dropped_history": ctx["dropped_history"]})
     messages = [{"role": "system", "content": SYSTEM}] + to_messages(ctx)
+    if vibe_out.get("directive"):
+        messages.append({"role": "system", "content": vibe_out["directive"]})
     # Repo conventions: AGENTS.md auto-load (OpenCode-style).
     try:
         from .tools import WORKSPACE as _WS
@@ -261,4 +293,5 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
             "level": r["level"],
             "backend": r["backend"].name, "fixes": fixes,
             "failure_kind": failure_kind, "tool_calls": tool_calls,
-            "elapsed_s": round(time.time() - t0, 2), "trace": trace}
+            "elapsed_s": round(time.time() - t0, 2), "trace": trace,
+            "urai": {"nlp": nlp_out, "vibe": vibe_out}}

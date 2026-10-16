@@ -715,8 +715,8 @@ function metaFromResult(res) {
     local: res.raw && res.raw.local,
     cached: res.raw && res.raw.cached,
     backend: u.backend || (res.raw && res.raw.urai_metadata && res.raw.urai_metadata.backend),
-    nlp: res.nlp || null,
-    vibe: res.vibe || null
+    nlp: res.nlp || u.nlp || null,
+    vibe: res.vibe || u.vibe || null
   };
 }
 
@@ -776,6 +776,37 @@ function vibeLabel(v) {
   return parts.join(' · ');
 }
 
+function toneDot(label) {
+  if (label === 'positive') return 'var(--ok)';
+  if (label === 'negative') return 'var(--danger)';
+  return 'var(--text-mute)';
+}
+
+function toneChip(meta) {
+  if (!meta.nlp && !meta.vibe) return '';
+  var nlp = meta.nlp || {};
+  var vibe = meta.vibe || {};
+  var src = vibe.source || {};
+  var parts = [];
+  var emotion = nlp.emotion || src.emotion;
+  var intent = nlp.intent || src.intent;
+  if (emotion && emotion !== 'neutral') parts.push(emotion);
+  if (intent && intent !== 'ask') parts.push(intent);
+  if (vibe.structure) {
+    var map = { concise: 'concise', balanced: 'balanced', structured: 'structured', collapsible: 'detailed' };
+    parts.push(map[vibe.structure] || vibe.structure);
+  }
+  if (!parts.length) {
+    var fallback = vibeLabel(vibe);
+    if (!fallback) return '';
+    return '<span class="chip chip-tone" data-tip="response tone">' + escHtml(fallback) + '</span>';
+  }
+  var sent = (nlp.sentiment && nlp.sentiment.label) || src.sentiment || 'neutral';
+  return '<span class="chip chip-tone" data-tip="tone analysis">' +
+    '<span class="chip-dot" style="color:' + toneDot(sent) + '" aria-hidden="true"></span>' +
+    escHtml(parts.join(' · ')) + '</span>';
+}
+
 function buildMetaHtml(meta) {
   var h = '';
   if (meta.model) h += '<span class="chip">' + escHtml(meta.model) + '</span>';
@@ -783,10 +814,7 @@ function buildMetaHtml(meta) {
   if (meta.cached) h += '<span class="chip chip-accent">cached</span>';
   if (meta.tokens) h += '<span>' + meta.tokens + ' tokens</span>';
   if (meta.backend && !meta.local) h += '<span>' + escHtml(meta.backend) + '</span>';
-  if (meta.vibe) {
-    var l = vibeLabel(meta.vibe);
-    if (l) h += '<span class="chip chip-tone" data-tip="response tone">' + escHtml(l) + '</span>';
-  }
+  h += toneChip(meta);
   return h;
 }
 
