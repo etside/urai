@@ -252,6 +252,16 @@ def _needs_key(path: str) -> bool:
                               or path in _guarded[1:])
 
 
+# Discovery routes that stay public even when URAI_AUTH_GET hardens other GETs.
+_PUBLIC_GET = ("/health", "/v1/models", "/models", "/v1/capabilities",
+               "/v1/info", "/status", "/v1/docs", "/v1/token/status",
+               "/v1/media/profiles", "/v1/integrations")
+
+
+def _auth_get_enabled() -> bool:
+    return os.environ.get("URAI_AUTH_GET", "") in ("1", "true", "yes", "on")
+
+
 def _models():
     # Public surface only: two brands (urai, cyberurai). Internal backend ids
     # (qwen*, coder*, laya, jev-local-student, teacher fallback) stay in
@@ -316,6 +326,27 @@ def _capabilities() -> dict:
             "note": "raise with URAI_CTX / --ctx; q8_0 KV keeps RAM low",
         },
     }
+
+
+def _urai_meta(text: str) -> dict:
+    """NLP analysis + vibe style plan for a chat turn (urai.nlp / urai.vibe)."""
+    text = (text or "").strip()
+    if not text:
+        return {}
+    meta = {}
+    analysis = {}
+    try:
+        from . import nlp as _nlp
+        analysis = _nlp.analyze(text)
+        meta["nlp"] = analysis
+    except Exception:
+        pass
+    try:
+        from . import vibe as _vibe
+        meta["vibe"] = _vibe.plan(analysis) if analysis else _vibe.plan_for(text)
+    except Exception:
+        pass
+    return meta
 
 
 def _media_profiles() -> list:
@@ -414,11 +445,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
 
+    def _reqid(self) -> str:
+        rid = getattr(self, "_urai_rid", None)
+        if not rid:
+            rid = os.urandom(8).hex()
+            self._urai_rid = rid
+        return rid
+
     def _send(self, obj, code=200):
         body = json.dumps(obj).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Request-Id", self._reqid())
         self._cors()
         self._sec_headers()
         self.end_headers()
@@ -495,6 +534,7 @@ class Handler(BaseHTTPRequestHandler):
                          mimetypes.guess_type(str(f))[0] or
                          "application/octet-stream")
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("X-Request-Id", self._reqid())
         self._cors()
         self.end_headers()
         self.wfile.write(data)
@@ -520,6 +560,7 @@ class Handler(BaseHTTPRequestHandler):
                          "application/octet-stream")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "public, max-age=3600")
+        self.send_header("X-Request-Id", self._reqid())
         self._cors()
         self.end_headers()
         self.wfile.write(data)
@@ -529,6 +570,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p = self._path()
         q = self._query()
+        if _auth_get_enabled() and _needs_key(p) and p not in _PUBLIC_GET \
+                and not p.startswith("/docs/") and not p.startswith("/frontend/"):
+            if not self._auth_ok():
+                return self._deny()
         if p == "/health":
             local = LlamaServerBackend()
             self._send({"status": "ok", "local_llama": local.healthy(),
@@ -839,7 +884,7 @@ class Handler(BaseHTTPRequestHandler):
             _log("chat", ip, device, _text_of(msgs)[:160] + " -> " + content[:120],
                  {"master": bool(body.get("_urai_authed"))})
             if body.get("stream"):
-                return self._stream(content, __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")))
+                return self._stream(content, __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")), _urai_meta(_text_of(msgs)))
             usage = res.get("usage") or {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0}
             return self._send({
                 "id": "chatcmpl-urai", "object": "chat.completion",
@@ -850,7 +895,8 @@ class Handler(BaseHTTPRequestHandler):
                 "usage": usage,
                 "urai": {"level": r["level"], "backend": r["backend"].name,
                          "tokens_remaining": body.get("_urai_remaining", 0),
-                         "auth": body.get("_urai_reason", "free")},
+                         "auth": body.get("_urai_reason", "free"),
+                         **_urai_meta(_text_of(msgs))},
                 "jev": {"level": r["level"], "backend": r["backend"].name}})
 
         if p == "/v1/chat/completions":
@@ -881,7 +927,7 @@ class Handler(BaseHTTPRequestHandler):
             _log("chat", ip, device, _text_of(msgs)[:160] + " -> " + str(content)[:120],
                  {"master": bool(body.get("_urai_authed")), "model": model})
             if body.get("stream"):
-                return self._stream(content, model)
+                return self._stream(content, model, _urai_meta(_text_of(msgs)))
             return self._send({
                 "id": "chatcmpl-urai", "object": "chat.completion",
                 "created": int(time.time()), "model": model,
@@ -891,7 +937,8 @@ class Handler(BaseHTTPRequestHandler):
                 "usage": res.get("usage") or {"prompt_tokens": 0, "completion_tokens": 0,
                           "total_tokens": 0, "cost": 0},
                 "urai": {"tokens_remaining": body.get("_urai_remaining", 0),
-                         "auth": body.get("_urai_reason", "free")}})
+                         "auth": body.get("_urai_reason", "free"),
+                         **_urai_meta(_text_of(msgs))}})
 
         if p in ("/imagine", "/v1/images/generations"):
             from . import imagine as _imagine
@@ -1210,21 +1257,36 @@ class Handler(BaseHTTPRequestHandler):
 
         return self._send({"error": "not found"}, 404)
 
-    def _stream(self, content, model):
+    def _stream(self, content, model, meta=None):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Request-Id", self._reqid())
         self._cors()
+        self._sec_headers()
         self.end_headers()
-        for i in range(0, len(content), 64):
+        content = content or ""
+        # token-level SSE: split into small pieces so clients render progressively
+        tokens = re.findall(r"\s*\S+|\s+", content) or [content]
+        rid = self._reqid()
+        for tok in tokens:
             piece = json.dumps({
                 "id": "chatcmpl-urai", "object": "chat.completion.chunk",
-                "model": model,
+                "created": int(time.time()), "model": model,
+                "request_id": rid, "urai": meta or {},
                 "choices": [{"index": 0,
-                             "delta": {"content": content[i:i + 64]},
+                             "delta": {"content": tok},
                              "finish_reason": None}]})
             self.wfile.write(f"data: {piece}\n\n".encode())
+            self.wfile.flush()
+        final = json.dumps({
+            "id": "chatcmpl-urai", "object": "chat.completion.chunk",
+            "created": int(time.time()), "model": model,
+            "request_id": rid, "urai": meta or {},
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
+        self.wfile.write(f"data: {final}\n\n".encode())
         self.wfile.write(b"data: [DONE]\n\n")
+        self.wfile.flush()
 
 
     def _status_page(self):
@@ -1264,6 +1326,7 @@ padding-right:max(clamp(16px,4vw,24px),env(safe-area-inset-right))}}}}</style>
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("X-Request-Id", self._reqid())
         self._cors()
         self.end_headers()
         self.wfile.write(data)
