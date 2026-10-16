@@ -40,7 +40,7 @@ def run_cli(*args):
 def main():
     offline = "--offline" in sys.argv  # device-safe: no network, no subprocesses
     import jev
-    check("version", jev.VERSION == "v1-lite", getattr(jev, "VERSION", None))
+    check("version", jev.VERSION == "v2", getattr(jev, "VERSION", None))
 
     from jev import models_registry as reg
     r = reg.load()
@@ -93,7 +93,7 @@ def main():
         check(f"hosting file {f}", (ROOT / f).is_file())
 
     for args, needle in [
-        (["--help"], "imagine"), (["version"], "urai v1-lite"),
+        (["--help"], "imagine"), (["version"], "urai v2"),
         (["teacher", "status"], "base"), (["model", "list"], "qwen25vl-3b"),
         (["model", "list"], "embed-small"),
         (["see", "/nonexistent.png"], None),

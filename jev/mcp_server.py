@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-SERVER_INFO = {"name": "urai", "version": "v1-lite"}
+SERVER_INFO = {"name": "urai", "version": "v2"}
 
 
 def _t(name, desc, props, required=()):

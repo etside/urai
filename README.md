@@ -203,6 +203,6 @@ slot into `model/registry.json` via `urai model download`.
 This repo was reconstructed from the `ownai-distill-jev` build session after
 the original `x3` work disk became unavailable. Source, docs, scripts, seed
 data and registry are byte-faithful to the session's final state
-(`urai v1-lite`, active `coder05-fast`). Regenerable artifacts (GGUF weights,
+(`urai v2`, active `qwen3-4b`). Regenerable artifacts (GGUF weights,
 `third_party/llama.cpp` build, `teacher_out`/`verified` sets, bench logs)
 are intentionally excluded — reproduce them with the commands above.
