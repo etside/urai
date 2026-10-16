@@ -125,8 +125,19 @@ def routing_scores() -> dict:
         return {}
 
 
-def route(prompt: str, tier: str = "urai") -> dict:
+def route(prompt: str, tier: str = "urai", complexity=None) -> dict:
     cls = classify(prompt)
+    # nlp.complexity is an additive hint: it may raise the level (never lower),
+    # so a task the lexicon flags as complex still reaches a verifying tier.
+    if complexity is not None:
+        try:
+            cx = float(complexity)
+            if cx >= 0.7 and cls["level"] < 3:
+                cls = {"level": 3, "reason": "nlp.complexity-high"}
+            elif cx >= 0.45 and cls["level"] < 2:
+                cls = {"level": 2, "reason": "nlp.complexity"}
+        except (TypeError, ValueError):
+            pass
     t = apply_tier(tier)
     level = min(cls["level"], t["level_cap"])
     backend, verify, fallback = pick_backend(level)

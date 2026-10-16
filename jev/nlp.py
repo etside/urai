@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 """NLP request understanding — the first stage of every request.
 
-`analyze(text, history=None)` is deterministic and stdlib-only so it runs on a
-CPU VPS and in CI with no model or GPU. It extracts:
+`analyze(text, history=None, *, use_model=None)` is deterministic and
+stdlib-only so it runs on a CPU VPS and in CI with no model or GPU. It extracts:
 
     language, sentiment{label,score,confidence}, emotion, intensity, urgency,
     intent, entities[], topics[], complexity, redflags[]
 
-Optional model upgrade: if the embeddings endpoint is available the caller can
-blend embedding-based topic proximity (see jev/retrieval.py), but the contract
-below never depends on it. No network calls here.
+Optional model upgrade: set URAI_NLP_MODEL=1 (or pass use_model=True) and, when
+the local embedding server is reachable, `analyze` blends embedding-based
+sentiment/urgency anchors into the lexicon result. The contract itself never
+depends on it, so the default path stays deterministic and network-free and CI
+runs without a model or GPU.
 """
 
+import os
 import re
-import unicodedata
 
 # ------------------------------------------------------------------ language
 _SCRIPTS = [
@@ -252,13 +254,63 @@ def redflags(text: str) -> list:
     return [name for name, pat in _REDFLAG.items() if re.search(pat, low, re.I)]
 
 
-def analyze(text: str, history=None) -> dict:
-    """Full request understanding. Deterministic, network-free, never raises."""
+# ------------------------------------------------------- optional model upgrade
+_ANCHOR_POS = ("this is great, thank you", "excellent work, I love it")
+_ANCHOR_NEG = ("this is broken and I am frustrated", "terrible, it keeps failing")
+_ANCHOR_URGENT = ("this is urgent, do it right now", "asap, immediately")
+
+
+def _cosine(a, b) -> float:
+    import math
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a)) or 1.0
+    nb = math.sqrt(sum(y * y for y in b)) or 1.0
+    return dot / (na * nb)
+
+
+def model_signals(text: str) -> dict:
+    """Optional embedding-assisted signals via the local embed server.
+
+    Returns {} whenever the endpoint is unavailable or anything fails, so the
+    caller can always fall back to the deterministic lexicon result.
+    """
+    try:
+        from .backends import EmbeddingBackend
+        eb = EmbeddingBackend()
+        if not eb.healthy():
+            return {}
+        anchors = list(_ANCHOR_POS) + list(_ANCHOR_NEG) + list(_ANCHOR_URGENT)
+        vecs = eb.embed([text or ""] + anchors)
+        tv, av = vecs[0], vecs[1:]
+        n_pos = len(_ANCHOR_POS)
+        n_neg = len(_ANCHOR_NEG)
+        pos = max(_cosine(tv, av[i]) for i in range(n_pos))
+        neg = max(_cosine(tv, av[n_pos + i]) for i in range(n_neg))
+        urg = max(_cosine(tv, av[n_pos + n_neg + i])
+                  for i in range(len(_ANCHOR_URGENT)))
+        return {"sentiment": round(pos - neg, 3), "urgency": round(urg, 3)}
+    except Exception:
+        return {}
+
+
+def _model_enabled(use_model) -> bool:
+    if use_model is not None:
+        return str(use_model).lower() not in ("0", "off", "false", "no", "none")
+    return os.environ.get("URAI_NLP_MODEL", "0").lower() in (
+        "1", "on", "true", "yes", "auto")
+
+
+def analyze(text: str, history=None, *, use_model=None) -> dict:
+    """Full request understanding. Deterministic, never raises.
+
+    Network-free by default. Pass use_model=True (or URAI_NLP_MODEL=1) to blend
+    embedding-assisted signals when the local embed server is reachable.
+    """
     try:
         t = text or ""
         sent = sentiment(t)
         ents = entities(t)
-        return {
+        out = {
             "language": detect_language(t),
             "sentiment": sent,
             "emotion": emotion(t, sent),
@@ -272,6 +324,20 @@ def analyze(text: str, history=None) -> dict:
             "chars": len(t),
             "words": len(t.split()),
         }
+        if _model_enabled(use_model):
+            sig = model_signals(t)
+            if sig:
+                out["model"] = sig
+                if abs(sig.get("sentiment", 0.0)) > 0.25:
+                    blended = round(0.6 * out["sentiment"]["score"]
+                                    + 0.4 * sig["sentiment"], 3)
+                    out["sentiment"]["score"] = blended
+                    out["sentiment"]["label"] = ("positive" if blended > 0.12
+                                                 else "negative" if blended < -0.12
+                                                 else "neutral")
+                if sig.get("urgency", 0.0) > out["urgency"]:
+                    out["urgency"] = sig["urgency"]
+        return out
     except Exception:
         return {"language": "en", "sentiment": {"label": "neutral", "score": 0.0,
                 "confidence": 0.0}, "emotion": "neutral", "intensity": 0.0,

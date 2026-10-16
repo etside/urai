@@ -343,10 +343,26 @@ def _urai_meta(text: str) -> dict:
         pass
     try:
         from . import vibe as _vibe
-        meta["vibe"] = _vibe.plan(analysis) if analysis else _vibe.plan_for(text)
+        v = _vibe.plan(analysis) if analysis else _vibe.plan_for(text)
+        if v:
+            v["directive"] = _vibe.directive(v)
+        meta["vibe"] = v
     except Exception:
         pass
     return meta
+
+
+def _apply_vibe(msgs: list) -> tuple:
+    """Run NLP + vibe on the last user turn, prepend the style directive, and
+    return (msgs, meta). Every chat turn passes through this BEFORE the LLM.
+    Deterministic and never raises; no-op when there is no text."""
+    if not isinstance(msgs, list):
+        return msgs, {}
+    meta = _urai_meta(_text_of(msgs))
+    directive = (meta.get("vibe") or {}).get("directive")
+    if directive:
+        msgs = [{"role": "system", "content": directive}] + msgs
+    return msgs, meta
 
 
 def _media_profiles() -> list:
@@ -890,10 +906,12 @@ class Handler(BaseHTTPRequestHandler):
         # ---- handlers ----
         if p == "/chat":
             msgs = _as_messages(body.get("messages", []))
+            user_text = _text_of(msgs)
+            msgs, _meta = _apply_vibe(msgs)
             # identity guard: always Urai / Tynio LTD
             try:
                 from .brand import tier_of_brand as _tier_of
-                r = route(_text_of(msgs), tier=_tier_of(body.get("model", "urai")))
+                r = route(user_text, tier=_tier_of(body.get("model", "urai")))
                 res = r["backend"].complete(
                     msgs, body.get("max_tokens", 256),
                     body.get("temperature", 0.2))
@@ -901,10 +919,10 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
-            _log("chat", ip, device, _text_of(msgs)[:160] + " -> " + content[:120],
+            _log("chat", ip, device, user_text[:160] + " -> " + content[:120],
                  {"master": bool(body.get("_urai_authed"))})
             if body.get("stream"):
-                return self._stream(content, __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")), _urai_meta(_text_of(msgs)))
+                return self._stream(content, __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")), _meta)
             usage = res.get("usage") or {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0}
             return self._send({
                 "id": "chatcmpl-urai", "object": "chat.completion",
@@ -916,11 +934,12 @@ class Handler(BaseHTTPRequestHandler):
                 "urai": {"level": r["level"], "backend": r["backend"].name,
                          "tokens_remaining": body.get("_urai_remaining", 0),
                          "auth": body.get("_urai_reason", "free"),
-                         **_urai_meta(_text_of(msgs))},
+                         **_meta},
                 "jev": {"level": r["level"], "backend": r["backend"].name}})
 
         if p == "/v1/chat/completions":
             msgs = _as_messages(body.get("messages", []))
+            _meta = {}
             if _has_image(msgs):
                 from . import vision as _vision
                 img, question = _split_image(msgs)
@@ -932,10 +951,13 @@ class Handler(BaseHTTPRequestHandler):
                 if not res["ok"]:
                     return self._send({"error": res["error"]}, 502)
                 content = res["answer"]
+                _meta = _urai_meta(_text_of(msgs))
             else:
+                user_text = _text_of(msgs)
+                msgs, _meta = _apply_vibe(msgs)
                 try:
                     from .brand import tier_of_brand as _tier_of
-                    r = route(_text_of(msgs), tier=_tier_of(body.get("model", "urai")))
+                    r = route(user_text, tier=_tier_of(body.get("model", "urai")))
                     res = r["backend"].complete(
                         msgs, body.get("max_tokens", 256),
                         body.get("temperature", 0.2))
@@ -947,7 +969,7 @@ class Handler(BaseHTTPRequestHandler):
             _log("chat", ip, device, _text_of(msgs)[:160] + " -> " + str(content)[:120],
                  {"master": bool(body.get("_urai_authed")), "model": model})
             if body.get("stream"):
-                return self._stream(content, model, _urai_meta(_text_of(msgs)))
+                return self._stream(content, model, _meta)
             return self._send({
                 "id": "chatcmpl-urai", "object": "chat.completion",
                 "created": int(time.time()), "model": model,
@@ -958,14 +980,20 @@ class Handler(BaseHTTPRequestHandler):
                           "total_tokens": 0, "cost": 0},
                 "urai": {"tokens_remaining": body.get("_urai_remaining", 0),
                          "auth": body.get("_urai_reason", "free"),
-                         **_urai_meta(_text_of(msgs))}})
+                         **_meta}})
 
         if p in ("/imagine", "/v1/images/generations"):
             from . import imagine as _imagine
+            prompt = body.get("prompt", "")
+            _meta = _urai_meta(prompt)
+            steps = body.get("steps")
+            # urgency -> fewer steps for faster feedback (never override caller)
+            if steps is None and (_meta.get("nlp") or {}).get("urgency", 0) > 0.5:
+                steps = 1
             res = _imagine.generate(
-                body.get("prompt", ""),
+                prompt,
                 body.get("out") or body.get("file"),
-                body.get("steps"), body.get("width"), body.get("height"),
+                steps, body.get("width"), body.get("height"),
                 body.get("seed", 7))
             if not res["ok"]:
                 return self._send({"error": res["error"]}, 502)
@@ -976,6 +1004,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 data = [{"url": "file://" + res["path"]}]
             return self._send({"created": int(time.time()), "data": data,
+                               "urai": _meta,
                                **{k: v for k, v in res.items()
                                    if k not in ("path",)}})
 
@@ -1044,20 +1073,22 @@ class Handler(BaseHTTPRequestHandler):
                 "usage": {"prompt_tokens": 0, "total_tokens": 0, "cost": 0}})
 
         if p == "/generate":
-            msgs = [{"role": "user", "content": body.get("prompt", "")}]
-            r = route(body.get("prompt", ""))
+            prompt = body.get("prompt", "")
+            msgs, _meta = _apply_vibe([{"role": "user", "content": prompt}])
+            r = route(prompt, complexity=(_meta.get("nlp") or {}).get("complexity"))
             try:
                 res = r["backend"].complete(msgs, body.get("max_tokens", 256))
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
             return self._send({"text": res["content"], "backend": res["backend"],
-                               "usage": {"total_tokens": 0, "cost": 0}})
+                               "usage": {"total_tokens": 0, "cost": 0},
+                               "urai": _meta})
 
         if p == "/v1/completions":
             prompt = body.get("prompt", "")
-            msgs = [{"role": "user", "content": prompt}]
-            r = route(prompt)
+            msgs, _meta = _apply_vibe([{"role": "user", "content": prompt}])
+            r = route(prompt, complexity=(_meta.get("nlp") or {}).get("complexity"))
             try:
                 res = r["backend"].complete(
                     msgs, body.get("max_tokens", 256),
@@ -1067,14 +1098,15 @@ class Handler(BaseHTTPRequestHandler):
             model = body.get("model", __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")))
             _record_use(ip, device, bool(body.get("_urai_authed")))
             if body.get("stream"):
-                return self._stream(res["content"], model)
+                return self._stream(res["content"], model, _meta)
             return self._send({
                 "id": "cmpl-urai", "object": "text_completion",
                 "created": int(time.time()), "model": model,
                 "choices": [{"index": 0, "text": res["content"],
                              "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 0, "completion_tokens": 0,
-                          "total_tokens": 0, "cost": 0}})
+                          "total_tokens": 0, "cost": 0},
+                "urai": _meta})
 
         if p == "/agent":
             from . import sessions as _sess
