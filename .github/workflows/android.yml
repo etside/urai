@@ -9,8 +9,11 @@ name: Urai Android
 on:
   workflow_dispatch:
   push:
+    # Any branch (path-filtered) or version tag. `**` is required alongside
+    # `tags` — with only `tags`+`paths` GitHub treats the push as tag-only and
+    # branch pushes never build.
     branches:
-      - main
+      - "**"
     tags:
       - "v*"
     paths:
