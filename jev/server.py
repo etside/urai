@@ -1202,7 +1202,7 @@ class Handler(BaseHTTPRequestHandler):
                 prompt,
                 body.get("out") or body.get("file"),
                 steps, body.get("width"), body.get("height"),
-                body.get("seed", 7))
+                body.get("seed", 7), body.get("provider"))
             if not res["ok"]:
                 return self._send({"error": res["error"]}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
