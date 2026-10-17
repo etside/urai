@@ -50,16 +50,17 @@ urai model list                              # registry + availability + bench
 urai model download <id>                     # fetch GGUF from HF into model/base
 urai model use <id>                          # set active model (restarts server)
 urai model bench [--id ID]                   # llama-bench row for a model
-urai serve start|stop|status|restart [--model ID] [--ctx N] [--port P] [--spec ngram-mod]
+urai serve start|stop|status|restart [--model ID] [--ctx N] [--port P] [--spec ngram-mod] [--all]
 urai gpu                                     # detect GPU + offload policy
 urai version
 urai teacher status|test                     # external teacher backend check
 ```
 
-`serve stop` stops the chat/vision server **and** the embedding server.
-`serve restart` stops both, then starts the selected (or active) model,
-auto-passing `--mmproj` for vision models and taking the embedding path for
-`kind=embedding`.
+`serve stop` stops the chat/vision server **and** the embedding server
+(`--all` makes the intent explicit and is accepted for both `stop` and
+`restart`). `serve restart` stops both, then starts the selected (or active)
+model, auto-passing `--mmproj` for vision models and taking the embedding path
+for `kind=embedding`.
 
 ## Vision, media & embeddings
 
@@ -73,13 +74,22 @@ urai image "prompt" [-o out.png] [--steps N] [--seed N] [--remote]  # alias of i
 urai embed "text" ... [--remote]                           # /v1/embeddings
 urai video "prompt" [-o out.mp4] [--duration 4] [--remote]
 urai evaluate "task" --expect a,b [--remote]               # /evaluate
+urai studio                                    # media profiles / providers
+urai studio image|video "prompt" [--out F] [--remote]      # dispatch to imagine/video
+urai studio see IMAGE [--remote]                # dispatch to see
 ```
+
+`studio` is the CLI counterpart of the webapp's **Studio** view: `status`
+lists the media profiles/providers the API advertises (`/v1/media/profiles`),
+and `image`/`video`/`see` route to the same code paths as `imagine`/`video`/
+`see` (local by default, `--remote` for the VPS).
 
 ## Skills, plugins, profile, mood
 
 ```bash
 urai skill list                        # list capability packs
 urai skill show NAME                   # print the pack's SKILL.md
+urai skill add NAME [--desc TEXT]      # scaffold skills/NAME/SKILL.md
 urai skill enable|disable NAME         # toggle data/skills_state.json
 urai plugin list|enable|disable|serve NAME
 urai profile [--ident ID] [--set key=value]   # sticky user preferences
