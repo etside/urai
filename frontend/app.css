@@ -219,6 +219,46 @@ body {
 .chat-item:hover { background: var(--surface-2); color: var(--text); transform: translateX(2px); }
 .chat-item.is-active { background: var(--surface-3); color: var(--text); border-color: var(--border); }
 .chat-item .chat-title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.chat-item.is-pinned .chat-ic { filter: saturate(1.4); }
+.chat-search {
+  width: 100%;
+  margin: 0 0 var(--sp-2);
+  padding: 6px var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.chat-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.chat-group-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-mute);
+  padding: var(--sp-2) var(--sp-2) 2px;
+}
+.chat-item-actions { display: none; align-items: center; gap: 1px; margin-left: auto; }
+.chat-item:hover .chat-item-actions { display: inline-flex; }
+.chat-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px; height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs, 4px);
+  background: transparent;
+  color: var(--text-mute);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.chat-act:hover { background: var(--surface-3); color: var(--text); }
+.chat-act[data-act="delete"]:hover { background: var(--danger-soft); color: var(--danger); }
+.app-shell.is-collapsed .chat-search,
+.app-shell.is-collapsed .chat-group-label { display: none; }
 
 /* ── Main column ────────────────────────────────────────────────────────── */
 .main {

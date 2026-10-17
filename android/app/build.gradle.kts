@@ -33,8 +33,10 @@ android {
         applicationId = "io.github.tukitattu.urai"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // CI passes the release tag through as URAI_VERSION_NAME / _CODE; a
+        // plain local build keeps the 1.0 / 1 defaults.
+        versionCode = (System.getenv("URAI_VERSION_CODE") ?: "1").toInt()
+        versionName = System.getenv("URAI_VERSION_NAME") ?: "1.0"
     }
 
     signingConfigs {

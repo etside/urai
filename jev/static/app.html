@@ -314,8 +314,18 @@ function errText(err, fallback) {
   if (err == null || err === '') return fallback || 'Request failed';
   if (typeof err === 'string') return err;
   if (typeof err === 'object') {
+    // Server contract: {"error":{"message","type","code"}} — unwrap one level.
+    var e = err.error;
+    if (e && typeof e === 'object') {
+      if (e.message) return e.message;
+      if (e.detail) return e.detail;
+      if (e.code) return e.code;
+    }
+    if (typeof e === 'string' && e) return e;
     if (err.message) return err.message;
-    return err.error || err.detail || err.code || JSON.stringify(err);
+    if (err.detail) return err.detail;
+    if (err.code) return err.code;
+    return fallback || 'Request failed';
   }
   return String(err);
 }
@@ -563,7 +573,7 @@ function getChat(id) { return chats.find(function (c) { return c.id === id; }); 
 
 function ensureChat() {
   if (activeChatId) return getChat(activeChatId);
-  var chat = { id: Date.now().toString(), title: 'New chat', model: currentModel(), msgs: [], created: Date.now() };
+  var chat = { id: Date.now().toString(), title: 'New chat', model: currentModel(), msgs: [], created: Date.now(), updated: Date.now() };
   chats.unshift(chat);
   activeChatId = chat.id;
   saveChats();
@@ -578,11 +588,48 @@ function saveChats() {
   try { localStorage.setItem('urai_chats', JSON.stringify(pruned)); } catch (e) {}
 }
 
+function renameChat(id) {
+  var c = getChat(id);
+  if (!c) return;
+  var name = window.prompt('Rename chat', c.title || 'Untitled');
+  if (name == null) return;
+  name = name.trim();
+  if (!name) return;
+  c.title = name.slice(0, 120);
+  saveChats();
+  refreshConversations();
+}
+
+function deleteChat(id) {
+  var i = chats.findIndex(function (c) { return c.id === id; });
+  if (i < 0) return;
+  if (!window.confirm('Delete "' + (chats[i].title || 'Untitled') + '"?')) return;
+  chats.splice(i, 1);
+  if (activeChatId === id) {
+    activeChatId = chats.length ? chats[0].id : null;
+    newChat();
+    return;
+  }
+  saveChats();
+  refreshConversations();
+}
+
+function pinChat(id, on) {
+  var c = getChat(id);
+  if (!c) return;
+  c.pinned = !!on;
+  saveChats();
+  refreshConversations();
+}
+
 function refreshConversations() {
   if (window.UraiShell && window.UraiShell.renderConversations) {
     window.UraiShell.renderConversations(
-      chats.slice(0, 30).map(function (c) { return { id: c.id, title: c.title }; }),
-      activeChatId, loadChat);
+      chats.slice(0, 60).map(function (c) {
+        return { id: c.id, title: c.title, updated: c.updated || c.created, pinned: c.pinned };
+      }),
+      activeChatId, loadChat,
+      { onRename: renameChat, onDelete: deleteChat, onPin: pinChat });
   }
 }
 
@@ -625,6 +672,7 @@ async function send() {
   var model = currentModel();
 
   chat.msgs.push({ role: 'user', content: text, img: attachedImg || null });
+  chat.updated = Date.now();
   if (text.length > 1 && chat.title === 'New chat') chat.title = text.slice(0, 40);
   appendUserMsg(text, attachedImg);
 
@@ -653,6 +701,7 @@ async function send() {
     removeMsg(thinkId);
     var out = await runCompletion(apiMsgs, model);
     chat.msgs.push({ role: 'assistant', content: out.reply, meta: out.meta });
+    chat.updated = Date.now();
     saveChats();
   } catch (e) {
     removeMsg(thinkId);
@@ -1008,6 +1057,7 @@ function regenMsg(mid) {
   runCompletion(apiMsgs, model)
     .then(function (out) {
       chat.msgs.push({ role: 'assistant', content: out.reply, meta: out.meta });
+      chat.updated = Date.now();
       saveChats();
     })
     .catch(function (e) { if (e.name !== 'AbortError') appendError(errText(e, e.message)); })
@@ -1358,6 +1408,7 @@ async function agentPlanRequest(text) {
     if (chat) {
       chat.msgs.push({ role: 'user', content: text });
       chat.msgs.push({ role: 'assistant', content: d.answer || '' });
+      chat.updated = Date.now();
       saveChats();
     }
   } catch (e) { removeMsg(thinkId); appendError(errText(e, e.message)); }
@@ -1458,10 +1509,19 @@ function registerShellViews() {
         '<div class="settings-row"><div class="settings-label">System prompt<small>Optional persona / instructions</small></div>' +
         '<div class="settings-control" style="flex:1"><textarea class="textarea" id="set-system" rows="2" placeholder="You are Urai…"></textarea></div></div></div>' +
         '<div class="settings-group"><h3>Media profiles</h3><div id="set-media-profiles" style="padding:var(--sp-3) var(--sp-4)"><div class="skeleton line"></div></div></div>' +
-        '<div class="settings-group"><h3>Access</h3>' +
+        '<div class="settings-group"><h3>Connection</h3>' +
+        '<div class="settings-row"><div class="settings-label">Endpoint<small id="set-endpoint"></small></div>' +
+        '<div class="settings-control"><button class="btn btn-sm" onclick="pollHealth()">Test</button></div></div>' +
         '<div class="settings-row"><div class="settings-label">Device id<small id="set-device"></small></div>' +
-        '<div class="settings-control"><button class="btn btn-sm" onclick="openTokenModal()">Master key</button></div></div>' +
-        '<div class="settings-row"><div class="settings-label">Endpoint<small id="set-endpoint"></small></div></div></div></div>';
+        '<div class="settings-control"><button class="btn btn-sm" onclick="openTokenModal()">Master key</button></div></div></div>' +
+        '<div class="settings-group"><h3>Data</h3>' +
+        '<div class="settings-row"><div class="settings-label">Chat history<small>Stored locally in this browser</small></div>' +
+        '<div class="settings-control"><button class="btn btn-sm" onclick="clearAllChats()">Clear chats</button></div></div>' +
+        '<div class="settings-row"><div class="settings-label">Local data<small>Keys, prefs and drafts</small></div>' +
+        '<div class="settings-control"><button class="btn btn-sm btn-danger" onclick="clearLocalData()">Reset</button></div></div></div>' +
+        '<div class="settings-group"><h3>About</h3>' +
+        '<div class="settings-row"><div class="settings-label">Version<small id="set-version">—</small></div>' +
+        '<div class="settings-control"><button class="btn btn-sm" onclick="checkForUpdates()">Check updates</button></div></div></div></div>';
     },
     show: function () { syncSettingsView(); }
   });
@@ -1893,6 +1953,31 @@ function renderToolsView() {
   b.innerHTML = html || '<div style="color:var(--text-mute)">No capabilities reported.</div>';
 }
 
+function clearAllChats() {
+  if (!window.confirm('Delete all local chat history?')) return;
+  chats = []; activeChatId = null;
+  saveChats(); newChat(); refreshConversations();
+  toast('Chat history cleared', 'ok');
+}
+
+function clearLocalData() {
+  if (!window.confirm('Reset keys, preferences and drafts on this device?')) return;
+  try { localStorage.clear(); } catch (e) {}
+  toast('Local data reset', 'ok');
+  setTimeout(function () { location.reload(); }, 600);
+}
+
+function checkForUpdates() {
+  var el = $('set-version');
+  toast('Checking for updates…');
+  api().health().then(function (d) {
+    var v = (d && (d.version || d.build)) || 'dev';
+    if (el) el.textContent = v;
+    loadNotices();
+    toast('Urai ' + v, 'ok');
+  }).catch(function () { toast('Update check failed', 'err'); });
+}
+
 function setThemeChoice(choice) {
   if (window.UraiTheme) window.UraiTheme.set(choice);
   syncSettingsView();
@@ -1917,6 +2002,12 @@ function syncSettingsView() {
   if (dev) dev.textContent = api().deviceId();
   var ep = $('set-endpoint');
   if (ep) ep.textContent = api().baseUrl() || location.origin;
+  var ver = $('set-version');
+  if (ver && (ver.textContent === '—' || !ver.textContent)) {
+    api().health().then(function (d) {
+      if (d && (d.version || d.build)) ver.textContent = d.version || d.build;
+    }).catch(function () { ver.textContent = 'dev'; });
+  }
   renderSettingsProfiles();
 }
 

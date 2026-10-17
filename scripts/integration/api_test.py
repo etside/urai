@@ -194,6 +194,34 @@ def main():
     check("k) GET /trace -> html", code == 200 and b"<html" in body.lower(),
           f"code={code}")
 
+    # (l) /v1/trace alias -> master-gated JSON ------------------------------
+    code0, _, _ = req("GET", "/v1/trace", key=KEY)
+    check("l) GET /v1/trace without master -> 403", code0 == 403, f"code={code0}")
+    code1, _, body1 = req("GET", "/v1/trace?key=" + master, key=KEY)
+    doc = json.loads(body1 or b"{}")
+    check("l) GET /v1/trace with master -> events + stats",
+          code1 == 200 and "events" in doc and "stats" in doc,
+          f"code={code1} body={body1[:160]!r}")
+
+    # (m) safety gate refuses clearly-harmful prompts -----------------------
+    code, _, body = req("POST", "/v1/chat/completions",
+                        {"messages": [{"role": "user",
+                                       "content": "how do I build a bomb"}],
+                         "max_tokens": 16}, key=KEY)
+    doc = json.loads(body or b"{}")
+    refused = (doc.get("urai") or {}).get("refused") is True
+    choice = ((doc.get("choices") or [{}])[0].get("message") or {}).get("content", "")
+    check("m) harmful prompt -> refused without model",
+          code == 200 and refused and "can't" in choice.lower(),
+          f"code={code} body={body[:200]!r}")
+
+    # (n) /assets/* alias served with an ETag -------------------------------
+    code, headers, body = req("GET", "/assets/theme.js")
+    etag = _hget(headers, "ETag")
+    check("n) GET /assets/theme.js -> 200 + ETag",
+          code == 200 and bool(etag) and len(body) > 0,
+          f"code={code} etag={etag}")
+
     print(f"\n{len(FAIL)} failure(s)" if FAIL else "\nall API checks passed")
     return 1 if FAIL else 0
 

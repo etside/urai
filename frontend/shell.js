@@ -216,29 +216,129 @@
   }
 
   /* ── Conversation list ────────────────────────────────────────────────── */
-  function renderConversations(items, activeId, onSelect) {
+  var chatQuery = '';
+
+  function ensureSearch() {
+    var list = els.chatList;
+    if (!list || !list.parentNode) return null;
+    var box = global.document.getElementById('chat-search');
+    if (!box) {
+      box = global.document.createElement('input');
+      box.id = 'chat-search';
+      box.className = 'chat-search';
+      box.type = 'search';
+      box.placeholder = 'Search chats…';
+      box.setAttribute('aria-label', 'Search chats');
+      box.addEventListener('input', function () {
+        chatQuery = box.value.trim().toLowerCase();
+        renderConversations(lastItems, lastActive, lastSelect, lastActions);
+      });
+      list.parentNode.insertBefore(box, list);
+    }
+    return box;
+  }
+
+  function dayKey(ts) {
+    var d = new Date(ts || 0);
+    if (!ts) return 'all';
+    var now = new Date();
+    var start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    var t = d.getTime();
+    if (t >= start) return 'Today';
+    if (t >= start - 864e5) return 'Yesterday';
+    if (t >= start - 7 * 864e5) return 'Previous 7 days';
+    return 'Earlier';
+  }
+
+  function chatItemEl(c, activeId, onSelect, actions, pinned) {
+    var el = global.document.createElement('div');
+    el.className = 'chat-item' + (c.id === activeId ? ' is-active' : '') +
+      (pinned ? ' is-pinned' : '');
+    el.setAttribute('data-id', c.id);
+    el.innerHTML =
+      '<span class="chat-ic" aria-hidden="true">💬</span>' +
+      '<span class="chat-title"></span>' +
+      '<span class="chat-item-actions">' +
+      '<button class="chat-act" data-act="pin" title="Pin" aria-label="Pin">' +
+      '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.8V4h6v6.8l2 3.2H7z"/></svg></button>' +
+      '<button class="chat-act" data-act="rename" title="Rename" aria-label="Rename">' +
+      '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>' +
+      '<button class="chat-act" data-act="delete" title="Delete" aria-label="Delete">' +
+      '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>' +
+      '</span>';
+    el.querySelector('.chat-title').textContent = c.title || 'Untitled';
+    el.addEventListener('click', function (ev) {
+      if (ev.target.closest && ev.target.closest('.chat-act')) return;
+      if (typeof onSelect === 'function') onSelect(c.id);
+      closeMobile();
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('.chat-act'), function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var act = btn.getAttribute('data-act');
+        var a = actions || {};
+        if (act === 'pin' && a.onPin) a.onPin(c.id, !pinned);
+        else if (act === 'rename' && a.onRename) a.onRename(c.id, c.title || '');
+        else if (act === 'delete' && a.onDelete) a.onDelete(c.id);
+      });
+    });
+    // Inline rename: double-click the title.
+    el.addEventListener('dblclick', function (ev) {
+      if (ev.target.closest && ev.target.closest('.chat-act')) return;
+      if (actions && actions.onRename) actions.onRename(c.id, c.title || '');
+    });
+    return el;
+  }
+
+  var lastItems = [], lastActive = null, lastSelect = null, lastActions = null;
+
+  function renderConversations(items, activeId, onSelect, actions) {
     var list = els.chatList;
     if (!list) return;
-    items = items || [];
-    if (!items.length) {
-      list.innerHTML =
-        '<div class="side-label" style="padding-left:8px">No chats yet</div>';
+    lastItems = items || [];
+    lastActive = activeId;
+    lastSelect = onSelect;
+    lastActions = actions || null;
+    ensureSearch();
+
+    var filtered = lastItems.filter(function (c) {
+      return !chatQuery || (c.title || '').toLowerCase().indexOf(chatQuery) >= 0;
+    });
+    if (!filtered.length) {
+      list.innerHTML = '<div class="side-label" style="padding-left:8px">' +
+        (lastItems.length ? 'No matching chats' : 'No chats yet') + '</div>';
       return;
     }
     list.innerHTML = '';
-    items.forEach(function (c) {
-      var el = global.document.createElement('div');
-      el.className = 'chat-item' + (c.id === activeId ? ' is-active' : '');
-      el.setAttribute('data-id', c.id);
-      el.innerHTML =
-        '<span aria-hidden="true">💬</span>' +
-        '<span class="chat-title"></span>';
-      el.querySelector('.chat-title').textContent = c.title || 'Untitled';
-      el.addEventListener('click', function () {
-        if (typeof onSelect === 'function') onSelect(c.id);
-        closeMobile();
+
+    var pinned = filtered.filter(function (c) { return c.pinned; });
+    var rest = filtered.filter(function (c) { return !c.pinned; });
+    var groups = [];
+    if (pinned.length) groups.push(['Pinned', pinned]);
+    // Group by recency only when the host provides timestamps.
+    var hasTs = rest.some(function (c) { return c.updated || c.created; });
+    if (!hasTs) {
+      groups.push([null, rest]);
+    } else {
+      var order = ['Today', 'Yesterday', 'Previous 7 days', 'Earlier'];
+      var byKey = {};
+      rest.forEach(function (c) {
+        var k = dayKey(c.updated || c.created);
+        (byKey[k] = byKey[k] || []).push(c);
       });
-      list.appendChild(el);
+      order.forEach(function (k) { if (byKey[k] && byKey[k].length) groups.push([k, byKey[k]]); });
+    }
+
+    groups.forEach(function (g) {
+      if (g[0]) {
+        var lbl = global.document.createElement('div');
+        lbl.className = 'chat-group-label';
+        lbl.textContent = g[0];
+        list.appendChild(lbl);
+      }
+      g[1].forEach(function (c) {
+        list.appendChild(chatItemEl(c, activeId, onSelect, actions, !!c.pinned));
+      });
     });
   }
 

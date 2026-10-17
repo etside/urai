@@ -46,32 +46,46 @@ jobs:
             echo "SIGNED=false" >> "$GITHUB_ENV"
           fi
 
-      - name: Build APK (release if signed, else debug)
+      - name: Resolve version name/code
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "URAI_VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "URAI_VERSION_NAME=1.0.0-dev" >> "$GITHUB_ENV"
+          fi
+          echo "URAI_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      - name: Build APK + AAB (release if signed, else debug)
         env:
           URAI_KEYSTORE_PASSWORD: ${{ secrets.URAI_KEYSTORE_PASSWORD }}
           URAI_KEY_ALIAS: ${{ secrets.URAI_KEY_ALIAS }}
           URAI_KEY_PASSWORD: ${{ secrets.URAI_KEY_PASSWORD }}
         run: |
           if [ "$SIGNED" = "true" ] && [ -n "$URAI_KEYSTORE_FILE" ] && [ -f "$URAI_KEYSTORE_FILE" ]; then
-            gradle :app:assembleRelease --no-daemon
+            gradle :app:assembleRelease :app:bundleRelease --no-daemon
             echo "APK_PATH=app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_ENV"
+            echo "AAB_PATH=app/build/outputs/bundle/release/app-release.aab" >> "$GITHUB_ENV"
           else
-            gradle :app:assembleDebug --no-daemon
+            gradle :app:assembleDebug :app:bundleDebug --no-daemon
             echo "APK_PATH=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_ENV"
+            echo "AAB_PATH=app/build/outputs/bundle/debug/app-debug.aab" >> "$GITHUB_ENV"
           fi
 
-      - name: Publish APK to urai-deps release
+      - name: Publish APK + AAB to urai-deps release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ls "$APK_PATH"
-          gh release view urai-deps --repo etside/urai >/dev/null 2>&1 || gh release create urai-deps --repo etside/urai --title "Urai vendored deps" --notes "Binaries + adapters + APK." --prerelease
+          ls "$APK_PATH" "$AAB_PATH"
+          gh release view urai-deps --repo etside/urai >/dev/null 2>&1 || gh release create urai-deps --repo etside/urai --title "Urai vendored deps" --notes "Binaries + adapters + APK/AAB." --prerelease
           cp "$APK_PATH" /tmp/urai-app.apk
-          gh release upload urai-deps /tmp/urai-app.apk --repo etside/urai --clobber
+          cp "$AAB_PATH" /tmp/urai-app.aab
+          gh release upload urai-deps /tmp/urai-app.apk /tmp/urai-app.aab --repo etside/urai --clobber
       - name: Attach to Release (tags only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
             android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/bundle/release/*.aab
             android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/bundle/debug/*.aab
