@@ -48,6 +48,30 @@ def all_skills() -> list:
     return out
 
 
+def _slug(name: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", str(name or "").strip().lower()).strip("-")
+    return s
+
+
+def add_skill(name: str, description: str = "", body: str = "") -> dict:
+    """Scaffold a new skill at skills/<slug>/SKILL.md. Raises ValueError on a
+    bad or already-existing name."""
+    slug = _slug(name)
+    if not slug:
+        raise ValueError("invalid skill name; use letters, digits, dashes")
+    path = SKILL_DIR / slug / "SKILL.md"
+    if path.exists():
+        raise ValueError(f"skill already exists: {slug}")
+    desc = description.strip() or f"{slug} capability pack"
+    text = (f"---\nname: {slug}\ndescription: {desc}\n---\n\n"
+            + (body.strip() or
+               f"# {slug}\n\nDescribe when to use this skill and the exact "
+               "steps Urai should follow.\n"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return {"name": slug, "description": desc, "path": str(path)}
+
+
 def _stem(w: str) -> str:
     for suf in ("ing", "ed", "es", "s"):
         if len(w) - len(suf) >= 3 and w.endswith(suf):

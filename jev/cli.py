@@ -402,6 +402,37 @@ def cmd_chat(args):
             print(f"[error: {e} — is the model server up? run: urai serve start]")
 
 
+def _cmd_apply(args, path):
+    """Land `--plan` proposals via POST /agent/apply. Shared by `urai apply`
+    and `urai agent apply`."""
+    try:
+        raw = sys.stdin.read() if path == "-" else open(path).read()
+        doc = json.loads(raw)
+    except Exception as e:
+        sys.exit(f"could not read proposals ({e})")
+    if isinstance(doc, dict):
+        proposals = doc.get("proposals") or doc.get("plan") or []
+    else:
+        proposals = doc
+    if not isinstance(proposals, list):
+        sys.exit('expected a JSON array of proposals or {"proposals": [...]}')
+    key = _master_key() or "856777"
+    try:
+        d = call("POST", "/agent/apply",
+                 {"proposals": proposals, "master_key": key},
+                 remote=getattr(args, "remote", False))
+    except Exception as e:
+        sys.exit(f"apply failed ({e}); is the API up? run: urai api")
+    results = d.get("results", []) if isinstance(d, dict) else []
+    for i, r in enumerate(results):
+        ok = bool(r.get("ok"))
+        tool = r.get("tool") or (r.get("proposal") or {}).get("tool", "?")
+        print(f"[{i}] {'applied' if ok else 'FAILED'}: {tool}"
+              + ("" if ok else f" — {r.get('error', '')}"))
+    applied = sum(1 for r in results if r.get("ok"))
+    print(f"summary: {applied}/{len(results)} applied")
+
+
 def _skills_state_path():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(root, "data", "skills_state.json")
@@ -448,6 +479,8 @@ def main(argv=None):
                    default="urai", help="brand/tier sent to the model")
 
     p = sub.add_parser("agent"); p.add_argument("text")
+    p.add_argument("apply_file", nargs="?", default=None,
+                   help="with 'apply': JSON proposals file (or - for stdin)")
     p.add_argument("--plan", action="store_true",
                    help="propose file writes, do not apply")
     p.add_argument("--session", default="",
@@ -475,6 +508,8 @@ def main(argv=None):
     p.add_argument("--model", default=None)
     p.add_argument("--ctx", type=int, default=int(os.environ.get("URAI_CTX", "8192")))
     p.add_argument("--port", type=int, default=8080)
+    p.add_argument("--all", action="store_true",
+                   help="stop/restart every server (chat + embed)")
     p.add_argument("--spec", default=None,
                    help="speculative decoding, e.g. ngram-mod (free) — see docs/TRAINING.md#speed")
 
@@ -512,8 +547,19 @@ def main(argv=None):
         help="embed on VPS /v1/embeddings (needs: urai login)")
 
     p = sub.add_parser("skill"); p.add_argument("action", nargs="?", default="list",
-                                                choices=["list", "show", "enable", "disable"])
+                                                choices=["list", "show", "add", "enable", "disable"])
     p.add_argument("name", nargs="?", default=None)
+    p.add_argument("--desc", default="", help="one-line description for `skill add`")
+
+    p = sub.add_parser("studio")
+    p.add_argument("action", nargs="?", default="status",
+                   choices=["status", "image", "video", "see"],
+                   help="media surface: list profiles (status) or generate/analyse")
+    p.add_argument("prompt", nargs="?", default=None,
+                   help="prompt (image/video) or image path (see)")
+    p.add_argument("-o", "--out", default=None)
+    p.add_argument("--remote", action="store_true",
+        help="use the VPS media endpoints (needs: urai login)")
 
     p = sub.add_parser("video"); p.add_argument("prompt")
     p.add_argument("-o", "--out", default=None)
@@ -602,6 +648,8 @@ def main(argv=None):
         return
 
     if args.cmd == "agent":
+        if args.text == "apply":
+            return _cmd_apply(args, getattr(args, "apply_file", None) or "-")
         brand = _brand(args)
         verbose = int(getattr(args, "verbose", 0) or 0)
         if args.remote or os.environ.get("URAI_REMOTE"):
@@ -636,33 +684,7 @@ def main(argv=None):
         return
 
     if args.cmd == "apply":
-        try:
-            raw = sys.stdin.read() if args.file == "-" else open(args.file).read()
-            doc = json.loads(raw)
-        except Exception as e:
-            sys.exit(f"could not read proposals ({e})")
-        if isinstance(doc, dict):
-            proposals = doc.get("proposals") or doc.get("plan") or []
-        else:
-            proposals = doc
-        if not isinstance(proposals, list):
-            sys.exit('expected a JSON array of proposals or {"proposals": [...]}')
-        key = _master_key() or os.environ.get("URAI_MASTER_KEY") or "856777"
-        try:
-            d = call("POST", "/agent/apply",
-                     {"proposals": proposals, "master_key": key},
-                     remote=args.remote)
-        except Exception as e:
-            sys.exit(f"apply failed ({e}); is the API up? run: urai api")
-        results = d.get("results", []) if isinstance(d, dict) else []
-        for i, r in enumerate(results):
-            ok = bool(r.get("ok"))
-            tool = r.get("tool") or (r.get("proposal") or {}).get("tool", "?")
-            print(f"[{i}] {'applied' if ok else 'FAILED'}: {tool}"
-                  + ("" if ok else f" — {r.get('error', '')}"))
-        applied = sum(1 for r in results if r.get("ok"))
-        print(f"summary: {applied}/{len(results)} applied")
-        return
+        return _cmd_apply(args, args.file)
 
     if args.cmd == "login":
         key = args.key or os.environ.get("URAI_MASTER_KEY", "")
@@ -697,6 +719,37 @@ def main(argv=None):
         except Exception as e:
             sys.exit(f"whoami failed ({e}); is the VPS reachable?")
         return
+
+    if args.cmd == "studio":
+        remote = bool(getattr(args, "remote", False) or os.environ.get("URAI_REMOTE"))
+        if args.action == "status":
+            try:
+                d = call("GET", "/v1/media/profiles", remote=remote)
+            except Exception as e:
+                sys.exit(f"studio status failed ({e}); is the API up? run: urai api")
+            profiles = d.get("profiles", []) if isinstance(d, dict) else []
+            print(f"media profiles{' (remote)' if remote else ''}:")
+            for pr in profiles:
+                print(f"  - {pr.get('id')}: {pr.get('provider', '?')} "
+                      f"{str(pr.get('desc', ''))[:80]}")
+            if not profiles:
+                print("  (none advertised; see docs/VIDEO_REF2VA.md)")
+            return
+        if not args.prompt:
+            sys.exit(f"usage: urai studio {args.action} <prompt|image>")
+        if args.action == "see":
+            args = argparse.Namespace(cmd="see", image=args.prompt,
+                                      question="Describe this image in detail.",
+                                      max_tokens=512, remote=remote)
+        elif args.action == "image":
+            args = argparse.Namespace(cmd="imagine", prompt=args.prompt,
+                                      out=args.out, steps=None, seed=7,
+                                      remote=remote)
+        else:  # video
+            args = argparse.Namespace(cmd="video", prompt=args.prompt,
+                                      out=args.out, duration=4, provider="auto",
+                                      ref=[], width=None, height=None, frames=None,
+                                      sparsity=None, as_json=False, remote=remote)
 
     if args.cmd == "video":
         settings = {}
@@ -931,6 +984,15 @@ def main(argv=None):
         if args.action == "list":
             for s in _skills.all_skills():
                 print(f"{s['name']}: {s['description'][:120]}")
+            return
+        if args.action == "add":
+            if not args.name:
+                sys.exit("usage: urai skill add <name> [--desc TEXT]")
+            try:
+                info = _skills.add_skill(args.name, getattr(args, "desc", "") or "")
+            except ValueError as e:
+                sys.exit(str(e))
+            print(f"created skill: {info['name']} -> {info['path']}")
             return
         if args.action == "show":
             if not args.name:

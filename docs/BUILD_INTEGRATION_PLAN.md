@@ -392,6 +392,23 @@ gets the same tokens + theme toggle.
 - One-line install already keyless/remote-first (keep); document full command
   set in `docs/CLI.md`.
 
+**Status (implemented):**
+- Local `ask` is a lightweight one-shot (nlp+vibe directive + single model
+  call, plain text — no agent JSON).
+- Local `agent --session/--no-remember` reads/writes `jev.sessions`.
+- `urai agent apply FILE` and `urai apply FILE` share one implementation
+  (`_cmd_apply` → POST `/agent/apply`).
+- `--remote` on `see`/`imagine`/`image`/`embed`/`evaluate`/`video`/`browse`/
+  `swarm`; `swarm --mode conductor`; `--model urai|cyberurai` brand flag on
+  `ask`/`agent`/`swarm`/`chat`.
+- `skill list|show|add|enable|disable` (`add` scaffolds `skills/<name>/SKILL.md`);
+  `serve stop|restart --all` stops chat + embed.
+- Config hardened: `~/.config/urai/config.json` parent `0700`/file `0600`,
+  prefers `$URAI_MASTER_KEY`, key masked (`_mask`) in output, never echoed.
+- Webapp-matching commands: `urai profile`, `urai vibe on|off|status`,
+  `urai studio [status|image|video|see]`, `urai tasks`, `urai theme`.
+- `docs/CLI.md` documents the full command set.
+
 ---
 
 ## 9. Cross-cutting contracts
