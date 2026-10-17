@@ -136,8 +136,10 @@ def generate(prompt: str, out: str = None, duration: int = 4, width: int = 512,
     """Render prompt to MP4. Returns {"ok", "id", "path"|"error", ...}.
 
     provider:
-      auto      -> H3 Ref2VA VSA when installed -> configured provider -> local
+      auto      -> H3 Ref2VA VSA when installed -> Wan 3.0 relay -> configured
+                   provider -> local
       ref2va    -> H3 Ref2VA VSA (MiniMax H3 + VSA, local ComfyUI; needs ref_images)
+      wan3      -> Wan 3.0 async relay (Alibaba DashScope; needs DASHSCOPE_API_KEY)
       higgsfield/runway/custom -> provider proxy
       local     -> sd-turbo frames + ffmpeg animatic
     """
@@ -182,6 +184,27 @@ def generate(prompt: str, out: str = None, duration: int = 4, width: int = 512,
                                 ref_images=ref_images, profile=profile, settings=settings)
         except Exception:
             pass
+
+    # 0b. Wan 3.0 relay (Alibaba DashScope async) — SOTA t2v/i2v.
+    if prov in ("wan3", "wan3.0", "wan", "dashscope") or \
+            (prov == "auto" and os.environ.get("DASHSCOPE_API_KEY")):
+        from . import relays as _relays
+        media = {}
+        if ref_images:
+            media["reference_image"] = list(ref_images)[:1]
+        if settings:
+            for k in ("first_frame", "last_frame", "reference_image",
+                      "reference_video"):
+                if settings.get(k):
+                    media[k] = settings[k]
+        resolution = (settings or {}).get("resolution") or "720P"
+        ratio = (settings or {}).get("ratio") or "16:9"
+        res = _relays.wan_video(prompt, duration=duration or 5,
+                                resolution=resolution, ratio=ratio,
+                                seed=seed, media=media or None, out=out)
+        if res.get("ok") or prov not in ("", "auto"):
+            return res
+        # auto + relay unavailable -> fall through to local animatic
 
     # 1. External SOTA provider path (honest Veo3-class route).
     use_provider = prov not in ("", "auto", "local", "none")

@@ -30,6 +30,13 @@ OUT_DIR = ROOT / "out" / "images"
 TIMEOUT_S = int(os.environ.get("URAI_IMAGINE_TIMEOUT", "900"))
 
 
+def _size_token(width, height):
+    """Seedream accepts size tokens (1K/2K/4K) or explicit WxH px."""
+    if width is None and height is None:
+        return None
+    return f"{int(width or 1024)}x{int(height or 1024)}"
+
+
 def status() -> dict:
     from . import models_registry as reg
     m = reg.load()["models"]["sd-turbo"]
@@ -43,8 +50,23 @@ def status() -> dict:
 
 def generate(prompt: str, out: str = None, steps: int = None,
              width: int = None, height: int = None,
-             seed: int = 7) -> dict:
-    """Render `prompt` to a PNG. Returns {"ok", "path"|"error", ...}."""
+             seed: int = 7, provider: str = None) -> dict:
+    """Render `prompt` to a PNG. Returns {"ok", "path"|"error", ...}.
+
+    provider:
+      auto     -> Seedream 4.0 relay when ARK_API_KEY is set, else local SD-Turbo
+      seedream -> force the Seedream 4.0 relay (fails honestly without a key)
+      local    -> force local stable-diffusion.cpp
+    """
+    prov = (provider or "auto").lower()
+    if prov in ("seedream", "seedream4", "ark") or \
+            (prov == "auto" and os.environ.get("ARK_API_KEY")):
+        from . import relays as _relays
+        r = _relays.seedream_images(prompt, size=_size_token(width, height),
+                                    out=out)
+        if r.get("ok") or prov != "auto":
+            return r
+        # auto + relay unavailable -> fall through to the local runner
     from . import models_registry as reg
     st = status()
     if not st["runner_built"]:

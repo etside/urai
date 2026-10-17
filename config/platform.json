@@ -1,0 +1,22 @@
+{
+  "_comment": "Model ids + endpoints live here, never hardcoded in code (PRODUCTION_SPEC §4). Env vars override these values at runtime.",
+  "media": {
+    "image": {
+      "provider": "seedream",
+      "ark_base": "https://ark.ap-southeast.bytepluses.com",
+      "model": "seedream-4-0-250828",
+      "default_size": "2K",
+      "max_refs": 14,
+      "persist_dir": "out/images",
+      "cost_usd_per_image": 0.03
+    },
+    "video": {
+      "provider": "wan3",
+      "dashscope_base": "https://dashscope.aliyuncs.com",
+      "model": "wan3.0-video",
+      "prime_model": "wan3.0-video-prime",
+      "persist_dir": "out/videos",
+      "cost_note": "per-second, per-resolution; Prime = faster, higher rate"
+    }
+  }
+}
