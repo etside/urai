@@ -9,8 +9,14 @@ name: Urai Android
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - "v*"
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  pull_request:
     paths:
       - "android/**"
       - ".github/workflows/android.yml"
@@ -71,7 +77,18 @@ jobs:
             echo "AAB_PATH=app/build/outputs/bundle/debug/app-debug.aab" >> "$GITHUB_ENV"
           fi
 
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-android
+          if-no-files-found: warn
+          path: |
+            android/app/build/outputs/apk/**/*.apk
+            android/app/build/outputs/bundle/**/*.aab
+
       - name: Publish APK + AAB to urai-deps release
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
