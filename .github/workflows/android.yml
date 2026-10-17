@@ -78,6 +78,9 @@ jobs:
           fi
 
       - name: Upload build artifacts
+        # Best-effort: the repo's Actions artifact storage can be over quota,
+        # which must not fail a successful build (APK/AAB still publish below).
+        continue-on-error: true
         if: always()
         uses: actions/upload-artifact@v4
         with:
