@@ -402,6 +402,24 @@ def _normalize_error(obj, code):
     return obj
 
 
+def _safety_refusal(text):
+    """Return a refusal message when the prompt trips a safety red flag, else None."""
+    try:
+        from .nlp import redflags
+        flags = redflags(text)
+    except Exception:
+        return None
+    if not flags:
+        return None
+    try:
+        from .agent import SAFETY_REPLY
+    except Exception:
+        SAFETY_REPLY = {}
+    if "self-harm" in flags:
+        return SAFETY_REPLY.get("self-harm") or "I can't help with that request."
+    return SAFETY_REPLY.get(flags[0]) or "I can't help with that request."
+
+
 def _complete(backend, msgs, max_tokens=256, temperature=0.2) -> dict:
     """backend.complete() behind the prompt cache (never raises on cache error)."""
     from . import cache as _cache
@@ -698,7 +716,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _frontend(self):
         p = self._path()
-        rel = p[len("/frontend/"):]
+        # /assets/* is an alias for /frontend/* (bundled, hash-named assets).
+        if p.startswith("/assets/"):
+            rel = p[len("/assets/"):]
+        else:
+            rel = p[len("/frontend/"):]
         if not rel or ".." in rel or rel.startswith("/"):
             return self._send({"error": "not found"}, 404)
         base = (ROOT / "frontend").resolve()
@@ -710,12 +732,26 @@ class Handler(BaseHTTPRequestHandler):
         if not f.is_file():
             return self._send({"error": "not found"}, 404)
         data = f.read_bytes()
+        etag = '"%s"' % hashlib.md5(data).hexdigest()
+        if (self.headers.get("If-None-Match") or "").strip() == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.send_header("X-Request-Id", self._reqid())
+            self._cors()
+            self.end_headers()
+            return
+        # Content-hashed filenames (name<sep><8+ hex>.<ext>) are immutable.
+        immutable = bool(re.search(r"[.-][0-9a-fA-F]{8,}\.[A-Za-z0-9]+$", rel))
         self.send_response(200)
         self.send_header("Content-Type",
                          mimetypes.guess_type(str(f))[0] or
                          "application/octet-stream")
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "public, max-age=3600")
+        self.send_header("ETag", etag)
+        self.send_header("Cache-Control",
+                         "public, max-age=31536000, immutable" if immutable
+                         else "public, max-age=3600")
         self.send_header("X-Request-Id", self._reqid())
         self._cors()
         self.end_headers()
@@ -777,7 +813,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(_metrics_snapshot())
         if p == "/trace":
             return self._trace_page()
-        if p == "/admin/trace":
+        if p in ("/admin/trace", "/v1/trace"):
             if str(q.get("key", "")) != MASTER_API_KEY and \
                     self.headers.get("X-Admin-Key") != MASTER_API_KEY:
                 return self._send({"error": {"message": "forbidden",
@@ -921,7 +957,7 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/manifest.webmanifest":
             return self._send_static_file(ROOT / "frontend" / "manifest.webmanifest",
                                           "application/manifest+json")
-        if p.startswith("/frontend/"):
+        if p.startswith("/frontend/") or p.startswith("/assets/"):
             return self._frontend()
         if p in ("/", "/app", "/app/", "/welcome", "/welcome/") or p.startswith("/app/") or p == "/superadmin":
             return self._static()
@@ -1093,6 +1129,23 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/chat":
             msgs = _as_messages(body.get("messages", []))
             user_text = _text_of(msgs)
+            _refuse = _safety_refusal(user_text)
+            if _refuse:
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                _log("chat", ip, device, user_text[:160] + " -> (refused)",
+                     {"master": bool(body.get("_urai_authed")), "safety": True})
+                return self._send({
+                    "id": "chatcmpl-urai", "object": "chat.completion",
+                    "model": __import__("jev.brand", fromlist=["brand_id"]).brand_id(body.get("model", "urai")),
+                    "choices": [{"index": 0, "message": {"role": "assistant",
+                                                          "content": _refuse},
+                                 "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 0, "completion_tokens": 0,
+                              "total_tokens": 0, "cost": 0},
+                    "urai": {"tokens_remaining": body.get("_urai_remaining", 0),
+                             "auth": body.get("_urai_reason", "free"),
+                             "refused": True},
+                    "jev": {"refused": True}})
             msgs, _meta = _apply_vibe(msgs)
             max_tokens = body.get("max_tokens", 256)
             temperature = body.get("temperature", 0.2)
@@ -1139,6 +1192,22 @@ class Handler(BaseHTTPRequestHandler):
             model = body.get("model", "urai")
             max_tokens = body.get("max_tokens", 256)
             temperature = body.get("temperature", 0.2)
+            _refuse = _safety_refusal(_text_of(msgs))
+            if _refuse:
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                _log("chat", ip, device, _text_of(msgs)[:160] + " -> (refused)",
+                     {"master": bool(body.get("_urai_authed")), "safety": True})
+                return self._send({
+                    "id": "chatcmpl-urai", "object": "chat.completion",
+                    "created": int(time.time()), "model": model,
+                    "choices": [{"index": 0, "message": {"role": "assistant",
+                                                          "content": _refuse},
+                                 "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 0, "completion_tokens": 0,
+                              "total_tokens": 0, "cost": 0},
+                    "urai": {"tokens_remaining": body.get("_urai_remaining", 0),
+                             "auth": body.get("_urai_reason", "free"),
+                             "refused": True}})
             if _has_image(msgs):
                 from . import vision as _vision
                 img, question = _split_image(msgs)
@@ -1282,6 +1351,12 @@ class Handler(BaseHTTPRequestHandler):
 
         if p == "/generate":
             prompt = body.get("prompt", "")
+            _refuse = _safety_refusal(prompt)
+            if _refuse:
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                return self._send({"text": _refuse, "backend": "safety",
+                                   "usage": {"total_tokens": 0, "cost": 0},
+                                   "urai": {"refused": True}})
             msgs, _meta = _apply_vibe([{"role": "user", "content": prompt}])
             max_tokens = body.get("max_tokens", 256)
             temperature = body.get("temperature", 0.2)
@@ -1302,6 +1377,17 @@ class Handler(BaseHTTPRequestHandler):
 
         if p == "/v1/completions":
             prompt = body.get("prompt", "")
+            _refuse = _safety_refusal(prompt)
+            if _refuse:
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                return self._send({
+                    "id": "cmpl-urai", "object": "text_completion",
+                    "created": int(time.time()), "model": body.get("model", "urai"),
+                    "choices": [{"index": 0, "text": _refuse,
+                                 "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 0, "completion_tokens": 0,
+                              "total_tokens": 0, "cost": 0},
+                    "urai": {"refused": True}})
             msgs, _meta = _apply_vibe([{"role": "user", "content": prompt}])
             max_tokens = body.get("max_tokens", 256)
             temperature = body.get("temperature", 0.2)

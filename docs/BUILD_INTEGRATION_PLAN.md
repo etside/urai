@@ -318,6 +318,15 @@ block, Jobs/Memory/Focus panels, and a right “Parameters” inspector
 - Frontend build is bundled by CI and served same-origin by `server.py`
   (`/app`, `/assets/*`); no CDN, works offline behind the tunnel.
 
+**Status (implemented):** routed shell + History API + deep links
+(`frontend/shell.js`, routes registered in `jev/static/app.html`); 260↔72↔0
+sidebar with search, Today/Yesterday/Previous 7 days/Earlier grouping, and
+pin/rename/delete (inline actions + double-click rename); Light/Dark/System
+theme toggle; 3D tokens + `data-tilt`; route/msg animations ≤240 ms with
+reduced-motion guards; settings grouped into Appearance / Generation / Media
+profiles / Connection / Data / About. `/assets/*` alias + `ETag`/`304` served
+by `server.py` (§8.3).
+
 ---
 
 ## 8. Client surfaces (fully done)
@@ -344,6 +353,19 @@ gets the same tokens + theme toggle.
   optional Play internal track.
 - **Navigation:** APK surfaces the routed pages via the WebView (hash routes)
   and the Cyber guard as a native entry.
+
+**Status (implemented):**
+- `values/strings.xml` added (app + Cyber titles, notif channel) and the
+  manifest uses `@string/app_name`.
+- `versionName`/`versionCode` are CI-driven (`URAI_VERSION_NAME`/`URAI_VERSION_CODE`);
+  the Android workflow derives them from the git tag + run number.
+- CI builds **both** APK and AAB (`assembleRelease`/`bundleRelease`, falling back
+  to the debug variants when unsigned) and publishes both to `urai-deps` and to
+  version-tag Releases.
+- R8 (`isMinifyEnabled` + `isShrinkResources`), project-scope `dependencies{}`,
+  `signingConfigs.release` from CI secrets, and `allowBackup=false` were already
+  landed. Gradle is pinned to 8.10.2 via `setup-gradle@v4`, so no committed
+  `./gradlew` wrapper is required (documented in `android/README.md`).
 
 ### 8.3 API — fully done (closes G7, G9)
 - **Auth unification:** apply `_auth_ok` to GET discovery routes too (config
@@ -374,8 +396,16 @@ gets the same tokens + theme toggle.
 - Prompt cache + retrieval wired end to end (`/chat`, `/v1/chat/completions`,
   `/generate`, `/v1/completions`, `/agent`); responses expose `urai.cached`.
 
-**Still open:** UI normaliser (`errText`) uses the new shape; CLI hardening
-(§8.4) is tracked separately.
+**Status (implemented, cont.):**
+- UI `errText()` (both `frontend/api.js` and the inline `app.html` copy) now
+  unwraps the nested `{error:{message,type,code}}` contract.
+- `GET /v1/trace` is an API-namespace alias of master-gated `/admin/trace`
+  (`GET /trace` remains the human UI page).
+- `GET /assets/*` aliases `/frontend/*` and serves content-hashed filenames as
+  `immutable`; all frontend responses carry `ETag` + `304` revalidation.
+- Safety gate: `nlp.redflags` → refusal on `/chat`, `/v1/chat/completions`,
+  `/generate`, `/v1/completions` and inside `agent.run_agent` (no model call;
+  `urai.refused=true`).
 
 ### 8.4 CLI — fully done (closes G6)
 - Fix local `ask` (lightweight one-shot; not full agent JSON) and local
@@ -418,9 +448,13 @@ gets the same tokens + theme toggle.
   for GET and POST. Cloudflare Access in front of `/admin`.
 - **Error contract:** §8.3 shape everywhere; UI `errText()` updated.
 - **Trace:** every request records `{request_id, nlp, vibe, route, tier,
-  backend, usage, latency}`; `/agent/routing` and a new `/v1/trace` UI surface.
-- **Safety:** `nlp.redflags` → refusal/de-escalation path (extend
-  `docs/SAFETY.md`); no secret logging (already in `_log`).
+  backend, usage, latency}`; `/agent/routing`, `/admin/trace` (JSON) and its
+  API alias `/v1/trace`, plus the `/trace` UI page. **Implemented.**
+- **Safety:** `nlp.redflags` → refusal path. **Implemented** as `SAFETY_REPLY`
+  in `jev/agent.py` + `_safety_refusal` in `jev/server.py`, enforced on every
+  chat/generate surface; refusal metadata (`urai.refused`) is returned and, for
+  self-harm, a crisis-line message is given. No secret logging (already in
+  `_log`).
 - **Observability:** request-id logs, Prometheus metrics, dashboards (§DEPLOY).
 
 ---
@@ -456,6 +490,15 @@ gets the same tokens + theme toggle.
 | **P4 APK done** | backend wiring, signing, R8, cyber fixes, signed release | gate 4 |
 | **P5 CLI done** | commands + flags + config hardening + docs | gate 6 |
 | **P6 LLM/media** | MoE backbone + accel detect; Seedream/Wan relays + persistence | gates 7 |
+
+**P6 status (relays implemented):** `config/platform.json` + `jev/platform.py`
+hold model ids/endpoints (env-overridable); `jev/relays.py` implements Seedream
+4.0 (`seedream-4-0-250828`, url/b64, persist to `out/images`) and Wan 3.0 async
+video (`wan3.0-video`, DashScope submit+poll, persist to `out/videos`). Missing
+keys fail honestly (`configured:false`) — never a fabricated result.
+`imagine.generate(provider=auto|seedream|local)` and
+`video.generate(provider=wan3|...)` route through them. MoE backbone training
+itself runs on Modal (~$1, user-initiated) — CI validates contracts only.
 | **P7 Edge + burn-in** | Cloudflare Tunnel/Access/WAF/PQC; SLO dashboards | DEPLOYMENT_PLAN gates |
 
 Verification is always remote: GitHub Actions matrices (cpu/cuda/hip), APK

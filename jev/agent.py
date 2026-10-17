@@ -41,6 +41,20 @@ SYSTEM = ("You are Urai, developed by Tynio LTD, a senior engineer runtime. Plan
           "After the tool result arrives, continue the task.")
 TOOL_RE = re.compile(r"```tool\s*\n(.*?)```", re.DOTALL)
 
+SAFETY_REPLY = {
+    "self-harm": (
+        "I can't help with that. If you're thinking about harming yourself, "
+        "please reach out to a local crisis line or emergency services right "
+        "now — you deserve support."),
+    "weapon": (
+        "I can't help build weapons or explosives. I can help with chemistry, "
+        "engineering, or safety topics in a constructive way."),
+    "csam": (
+        "I can't help with that request."),
+}
+_SAFETY_DEFAULT = "I can't help with that request."
+
+
 
 def categorize_failure(answer: str, tool_error: str = "") -> str:
     if tool_error:
@@ -139,6 +153,21 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
                               "de-escalate": vibe_out.get("de-escalate")})
     except Exception as e:
         trace.append({"step": "vibe-skip", "error": str(e)[:120]})
+
+    # ── Safety gate: refuse clearly-harmful intents without calling a model.
+    _flags = nlp_out.get("redflags") or []
+    if _flags:
+        trace.append({"step": "safety", "redflags": _flags, "action": "refuse"})
+        if isinstance(vibe_out, dict):
+            vibe_out.setdefault("de-escalate", True)
+        msg = SAFETY_REPLY.get(_flags[0], _SAFETY_DEFAULT)
+        if "self-harm" in _flags:
+            msg = SAFETY_REPLY["self-harm"]
+        return {"ok": True, "answer": msg, "proposals": [], "tier": tier or "urai",
+                "level": 0, "backend": "safety", "fixes": [], "failure_kind": None,
+                "tool_calls": [], "elapsed_s": round(time.time() - t0, 2),
+                "trace": trace, "refused": True,
+                "urai": {"nlp": nlp_out, "vibe": vibe_out}}
 
     r = route(task, tier=tier, complexity=nlp_out.get("complexity"))
     trace.append({"step": "route", "level": r["level"], "reason": r["reason"],
