@@ -24,4 +24,13 @@ capable junior engineer with strict but narrow guardrails — not a sandbox.
 - Do not expose credentials to untrusted prompts, plugins, or web content.
 - Keep backups; prefer disposable environments for untrusted workloads.
 
+## Model-level safety (redflags gate)
+`jev/nlp.py` scans every prompt for `self-harm`, `weapon` and `csam` red flags.
+On a hit, `jev/server.py:_safety_refusal` / `jev/agent.py:SAFETY_REPLY` short-
+circuit the request **before any model call** on `/chat`,
+`/v1/chat/completions`, `/generate`, `/v1/completions` and inside the agent
+loop. The response is marked `urai.refused=true`; self-harm prompts get a
+crisis-line message. This is a small deterministic lexicon, not a classifier —
+it complements (does not replace) the sandbox guardrails above.
+
 Run with least privilege. No warranty.

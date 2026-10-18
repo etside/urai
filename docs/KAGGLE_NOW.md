@@ -8,7 +8,7 @@ No CLI keys needed on your side. 5 steps, ~10 minutes of your time:
 3. First cell, install + fetch the trainer:
    ```
    !pip install -q unsloth trl peft accelerate bitsandbytes datasets
-   !curl -sLO https://raw.githubusercontent.com/etside/urai/main/kaggle/train_qlora.py
+   !curl -sLO https://raw.githubusercontent.com/tukitattu/urai/main/kaggle/train_qlora.py
    ```
    (Repo is private → instead upload `kaggle/train_qlora.py` from this repo
    as a second input, or paste its contents into a cell.)

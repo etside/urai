@@ -3,7 +3,7 @@
 `urai` (alias `jev`) is stdlib-only and runs from a checkout with no install:
 
 ```bash
-git clone --depth 1 https://github.com/etside/urai.git ~/.local/share/urai
+git clone --depth 1 https://github.com/tukitattu/urai.git ~/.local/share/urai
 mkdir -p ~/.local/bin
 ln -sf ~/.local/share/urai/bin/urai ~/.local/bin/urai
 export PATH="$HOME/.local/bin:$PATH"

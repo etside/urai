@@ -132,7 +132,7 @@ nav a:hover::after{right:0}
 <div class="pill"><span class="dot"></span><span id="live-line">checking live status…</span></div>
 <h1>One harness.<br /><span>Every agent superpower.</span></h1>
 <p>Urai is an OpenCode-class agent harness with its own local models: verify-first agents, parallel swarm, conductor orchestration, browser, skills, memory, scheduler — served over an OpenAI-compatible API. Zero cost, no keys, privacy by default.</p>
-<div class="cta"><a class="btn" href="/app">Open the app</a><a class="btn ghost" href="https://github.com/etside/urai/releases/download/urai-deps/urai-app-debug.apk">Android APK</a><a class="btn ghost" href="#api">Use the API</a></div>
+<div class="cta"><a class="btn" href="/app">Open the app</a><a class="btn ghost" href="https://github.com/tukitattu/urai/releases/download/urai-deps/urai-app-debug.apk">Android APK</a><a class="btn ghost" href="#api">Use the API</a></div>
 </div>
 
 <section id="harness"><h2>Harness</h2><p class="sub">Not a chatbot — a runtime that plans, acts, verifies.</p>
@@ -160,7 +160,7 @@ curl $URAI/v1/chat/completions \
 <p class="sub">Agents, tiers and tools: <code>POST /agent</code> (tier, plan, session) · <code>POST /agent/swarm</code> (parallel/conductor) · <code>POST /tools</code> · full reference in <a href="/v1/docs">docs</a>.</p></section>
 
 <section id="cli"><h2>CLI</h2><p class="sub">Remote-first: nothing heavy installs locally.</p>
-<pre><code>git clone --depth 1 https://github.com/etside/urai.git ~/.local/share/urai
+<pre><code>git clone --depth 1 https://github.com/tukitattu/urai.git ~/.local/share/urai
 ln -sf ~/.local/share/urai/bin/urai ~/.local/bin/urai
 urai login 856777
 urai ask --remote "hello"        # chat
@@ -173,7 +173,7 @@ urai swarm --remote "task one" "task two"  # fan out</code></pre></section>
 <tr><td>Master <code>856777</code></td><td>Unlimited, zero cost</td><td>Unlock in the app</td></tr>
 <tr><td>API token <code>urai_…</code></td><td>Quotas you set, usage tracked</td><td>Superadmin issues + revokes</td></tr></table></div></section>
 
-<section id="android"><h2>Android app</h2><p class="sub">Chat, voice, image attach, and the CyberUrai privacy guard (AppOps monitor, tracker scoring, Shizuku blocking).</p><div class="cta" style="justify-content:flex-start"><a class="btn" href="https://github.com/etside/urai/releases/download/urai-deps/urai-app-debug.apk">Download APK (debug)</a></div></section>
+<section id="android"><h2>Android app</h2><p class="sub">Chat, voice, image attach, and the CyberUrai privacy guard (AppOps monitor, tracker scoring, Shizuku blocking).</p><div class="cta" style="justify-content:flex-start"><a class="btn" href="https://github.com/tukitattu/urai/releases/download/urai-deps/urai-app-debug.apk">Download APK (debug)</a></div></section>
 <footer><img class="foot-logo" src="/frontend/brand/urai-mark-trans.png" alt="Urai" width="20" height="20" /><span>Urai, developed by Tynio LTD</span><a href="/status">live status</a><a href="/app">app</a><a href="/superadmin">superadmin</a><a href="/v1/docs">docs</a></footer>
 </div>
 <script>

@@ -32,11 +32,11 @@ modal volume get urai-adapters "${TAG}-modal" "./adapters/${TAG}-modal"
 tar -czf "/tmp/adapters-${TAG}-modal.tgz" "adapters/${TAG}-modal"
 
 if [ -n "${GH_TOKEN:-}" ]; then
-  gh release view urai-deps --repo etside/urai >/dev/null 2>&1 || \
-    gh release create urai-deps --repo etside/urai \
+  gh release view urai-deps --repo tukitattu/urai >/dev/null 2>&1 || \
+    gh release create urai-deps --repo tukitattu/urai \
       --title "Urai vendored deps" --notes "Binaries + adapters." --prerelease
   gh release upload urai-deps "/tmp/adapters-${TAG}-modal.tgz" \
-    --repo etside/urai --clobber
+    --repo tukitattu/urai --clobber
   echo "published: adapters-${TAG}-modal.tgz"
 fi
 echo "MODAL_DONE ${TAG}"

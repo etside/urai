@@ -99,10 +99,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ls "$APK_PATH" "$AAB_PATH"
-          gh release view urai-deps --repo etside/urai >/dev/null 2>&1 || gh release create urai-deps --repo etside/urai --title "Urai vendored deps" --notes "Binaries + adapters + APK/AAB." --prerelease
+          REPO="${{ github.repository }}"
+          gh release view urai-deps --repo "$REPO" >/dev/null 2>&1 || gh release create urai-deps --repo "$REPO" --title "Urai vendored deps" --notes "Binaries + adapters + APK/AAB." --prerelease
           cp "$APK_PATH" /tmp/urai-app.apk
           cp "$AAB_PATH" /tmp/urai-app.aab
-          gh release upload urai-deps /tmp/urai-app.apk /tmp/urai-app.aab --repo etside/urai --clobber
+          gh release upload urai-deps /tmp/urai-app.apk /tmp/urai-app.aab --repo "$REPO" --clobber
       - name: Attach to Release (tags only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
