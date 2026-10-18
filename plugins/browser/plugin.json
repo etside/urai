@@ -1,0 +1,1 @@
+{"name": "browser", "version": "1.0.0", "description": "Human-like device-browser control (Playwright): goto/click/fill with credential-approval safety.", "enabled": true, "hooks": ["browser"]}

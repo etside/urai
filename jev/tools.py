@@ -13,6 +13,7 @@ to the agent trace by agent.py.
 """
 
 import html as _html
+import json
 import os
 import re as _re
 import subprocess
@@ -22,6 +23,25 @@ import urllib.request as _urlreq
 WORKSPACE = os.path.realpath(os.environ.get("JEV_WORKSPACE", os.getcwd()))
 TIMEOUT_S = 30
 OUT_CAP = 8000
+
+
+def _load_policy() -> dict:
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "..", "policy.json")) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+POLICY = _load_policy()
+
+
+def reload_policy() -> dict:
+    global POLICY
+    POLICY = _load_policy()
+    load_toolpacks()
+    return {"ok": True, "policy_keys": sorted(POLICY)}
 WEB_TIMEOUT = 25
 WEB_MAX_BYTES = 300_000
 
@@ -29,6 +49,7 @@ SAFE_BINARIES = {"ls", "cat", "head", "tail", "wc", "grep", "rg", "find",
                  "git", "python3", "node", "npm", "lsblk", "df", "free",
                  "du", "sed", "awk", "sort", "uniq", "diff", "file",
                  "pytest", "ruff", "tsc", "cargo"}
+SAFE_BINARIES = set(POLICY.get("allowed_binaries", sorted(SAFE_BINARIES)))
 GIT_SAFE = {"status", "log", "diff", "show", "branch", "rev-parse"}
 BLOCKED_RE = ("rm ", "mv ", "dd ", ">", "mkfs", ":(){", "chmod 777")
 
@@ -169,3 +190,132 @@ def web_fetch(url: str) -> dict:
 
 
 TOOLS.update({"web_search": web_search, "web_fetch": web_fetch})
+
+
+def browse(goal: str = "", steps: str = "[]") -> dict:
+    """Human-like browser run (agent tool). Auth fields pause for user approval
+    instead of failing: returns {needs_approval, run_id, fields} for the
+    human to approve with real input (see docs/agent-swarm.md safety policy)."""
+    import json as _json
+    try:
+        step_list = _json.loads(steps) if isinstance(steps, str) else (steps or [])
+    except Exception:
+        return {"ok": False, "error": "steps must be a JSON array"}
+    try:
+        from . import browser as _b
+        return _b.run_steps(step_list, goal=goal)
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
+TOOLS["browse"] = browse
+
+def analyze(target: str = "", max_bytes: int = 1000000) -> dict:
+    from . import analyze as _a
+    return _a.analyze(target, max_bytes)
+
+TOOLS["analyze"] = analyze
+
+
+WRITE_MAX_BYTES = int(POLICY.get("max_write_bytes", 200_000))
+
+
+def write_file(path: str, content: str = "") -> dict:
+    """Create/overwrite a workspace-jailed file (cap 200KB). Logged by agent trace."""
+    try:
+        dest = _jail(path)
+        data = (content or "")[:WRITE_MAX_BYTES]
+        os.makedirs(os.path.dirname(dest) or WORKSPACE, exist_ok=True)
+        with open(dest, "w") as f:
+            f.write(data)
+        return {"ok": True, "path": os.path.relpath(dest, WORKSPACE),
+                "bytes": len(data)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def edit_file(path: str, old: str = "", new: str = "", replace_all: bool = False) -> dict:
+    """Exact-match edit on a workspace-jailed file. Unique match required
+    unless replace_all=true. Returns occurrence count."""
+    try:
+        dest = _jail(path)
+        with open(dest) as f:
+            text = f.read()
+        n = text.count(old) if old else 0
+        if not old or n == 0:
+            return {"ok": False, "error": "oldString not found"}
+        if n > 1 and not replace_all:
+            return {"ok": False,
+                    "error": f"oldString matches {n} locations; be specific or use replace_all"}
+        text = text.replace(old, new or "")
+        with open(dest, "w") as f:
+            f.write(text[:WRITE_MAX_BYTES])
+        return {"ok": True, "path": os.path.relpath(dest, WORKSPACE),
+                "replaced": n if replace_all else 1}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+TOOLS["write_file"] = write_file
+TOOLS["edit_file"] = edit_file
+
+
+def mcp_servers(server: str = "") -> dict:
+    try:
+        from . import mcp_client as _mc
+    except ImportError:
+        import mcp_client as _mc  # noqa
+    return _mc.list_server_tools(server)
+
+
+def mcp(server: str = "", tool: str = "", args=None) -> dict:
+    """Call an external MCP server tool (configured in mcp_clients.json)."""
+    try:
+        from . import mcp_client as _mc
+    except ImportError:
+        import mcp_client as _mc  # noqa
+    return _mc.call_server_tool(server, tool, args)
+
+
+TOOLS["mcp_servers"] = mcp_servers
+TOOLS["mcp"] = mcp
+
+
+def load_toolpacks() -> dict:
+    """Everything-is-a-plugin tools: toolpacks/*.json manifests become tools.
+
+    Manifest: {"name","description","argv":["git","log","--oneline"],
+               "timeout_s": 30}. Fixed argv only (no interpolation) — safe.
+    Disabled with {"enabled": false} or policy flag.
+    """
+    import glob as _glob
+    loaded = []
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "..", "toolpacks")
+    if POLICY.get("toolpacks_enabled", True):
+        for mf in sorted(_glob.glob(os.path.join(base, "*.json"))):
+            try:
+                with open(mf) as f:
+                    m = json.load(f)
+                name = m.get("name", "")
+                argv = m.get("argv", [])
+                if not name or not argv or not m.get("enabled", True):
+                    continue
+                if name in TOOLS:
+                    continue
+                def _make(a, t):
+                    def _run(extra_args=None):
+                        if extra_args:
+                            return {"ok": False,
+                                    "error": "toolpack takes no arguments"}
+                        return run_cmd(list(a))
+                    _run.__doc__ = t
+                    return _run
+                TOOLS[name] = _make(list(argv), m.get("description", name))
+                loaded.append(name)
+            except Exception:
+                continue
+    return {"ok": True, "toolpacks": loaded}
+
+
+load_toolpacks()

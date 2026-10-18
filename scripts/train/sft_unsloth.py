@@ -30,8 +30,8 @@ def load_distill(path: Path) -> list:
         if not line:
             continue
         r = json.loads(line)
-        task, completion = r.get("task", {}), r.get("completion", "")
-        prompt = task.get("prompt", "") if isinstance(task, dict) else str(task)
+        task, completion = r.get("task", r.get("prompt", "")), r.get("completion", "")
+        prompt = task.get("prompt", "") if isinstance(task, dict) else str(task or "")
         if prompt and completion:
             rows.append({"instruction": prompt, "output": completion})
     return rows

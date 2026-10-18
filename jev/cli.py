@@ -13,6 +13,13 @@
     urai see <image> [question]          ask about a picture (vision model)
     urai imagine <prompt> [-o out.png]   text-to-image (stable-diffusion.cpp)
     urai embed "text..."                 vectors (embedding server)
+    urai video "prompt" [-o out.mp4]     text-to-video (local animatic or provider)
+    urai login [key]                     save VPS master key (856777) for remote use
+    urai logout                          forget saved remote credentials
+    urai whoami                          show remote token status
+    urai swarm "t1" "t2" [...]            parallel multi-agent fan-out
+    urai plugin list|enable|disable|serve  OpenClaw-style plugins
+    urai browse "goal" --steps file.json  human-like browser run
     urai mcp                             MCP stdio server (Claude/opencode tools)
     urai evaluate "task" --expect a,b   scored check via running server
     urai api [--host ADDR] [--port P]   start Urai API + web playground (:8777)
@@ -26,15 +33,77 @@ import sys
 import urllib.request
 
 BASE = "http://127.0.0.1:8777"
+DEFAULT_REMOTE = "https://urai.daddyai.online"
 
 
-def call(method, path, payload=None, timeout=300):
+def _cfg_path():
+    d = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(d, "urai", "config.json")
+
+
+def _cfg_load():
+    try:
+        with open(_cfg_path()) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _cfg_save(cfg):
+    p = _cfg_path()
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w") as f:
+        json.dump(cfg, f, indent=2)
+
+
+def _remote_base():
+    return (os.environ.get("URAI_REMOTE_URL")
+            or _cfg_load().get("remote_url")
+            or DEFAULT_REMOTE).rstrip("/")
+
+
+def _master_key():
+    return (os.environ.get("URAI_MASTER_KEY")
+            or _cfg_load().get("master_key") or "")
+
+
+def _device_id():
+    cfg = _cfg_load()
+    dev = (os.environ.get("URAI_DEVICE_ID") or cfg.get("device_id") or "")
+    if not dev:
+        import random, string
+        dev = "cli-" + "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+        cfg["device_id"] = dev
+        try:
+            _cfg_save(cfg)
+        except Exception:
+            pass
+    return dev
+
+
+def call(method, path, payload=None, timeout=300, remote=False):
+    base = _remote_base() if remote else BASE
+    if isinstance(payload, dict):
+        payload = dict(payload)
+        payload.setdefault("device_id", _device_id())
     data = json.dumps(payload or {}).encode() if payload is not None else None
-    req = urllib.request.Request(BASE + path, data,
-                                 {"Content-Type": "application/json"},
-                                 method=method)
+    headers = {"Content-Type": "application/json", "X-Device-Id": _device_id()}
+    key = _master_key()
+    if key:
+        headers["Authorization"] = "Bearer " + key
+    req = urllib.request.Request(base + path, data, headers, method=method)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.load(resp)
+
+
+def remote_chat_once(messages, max_tokens=512):
+    """One remote chat turn (non-streaming) against the VPS API."""
+    d = call("POST", "/v1/chat/completions",
+             {"messages": messages, "max_tokens": max_tokens, "stream": False},
+             timeout=300, remote=True)
+    if isinstance(d, dict) and d.get("choices"):
+        return d["choices"][0]["message"]["content"]
+    return json.dumps(d)[:4000]
 
 
 def stream_chat(messages, max_tokens=512):
@@ -61,7 +130,28 @@ def stream_chat(messages, max_tokens=512):
     return "".join(full)
 
 
-def cmd_chat(_):
+def cmd_chat(args):
+    remote = bool(getattr(args, "remote", False) or os.environ.get("URAI_REMOTE"))
+    if remote:
+        print("urai chat — remote VPS (master key 856777, empty line quits)")
+        history = []
+        while True:
+            try:
+                q = input("\nyou> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            if not q:
+                break
+            history.append({"role": "user", "content": q})
+            print("urai> ", end="", flush=True)
+            try:
+                text = remote_chat_once(history[-8:])
+                print(text)
+                history.append({"role": "assistant", "content": text})
+            except Exception as e:
+                print(f"\n[error: {e} — check: urai whoami]")
+        return
     print("urai chat — streaming local model (empty line quits)")
     history = []
     while True:
@@ -85,9 +175,19 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="urai")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("chat")
+    p = sub.add_parser("chat"); p.add_argument("--remote", action="store_true",
+        help="use VPS API instead of local model (needs: urai login)")
     p = sub.add_parser("ask"); p.add_argument("text")
+    p.add_argument("--remote", action="store_true",
+        help="use VPS API instead of local model (needs: urai login)")
     p = sub.add_parser("agent"); p.add_argument("text")
+    p.add_argument("--plan", action="store_true",
+                   help="propose file writes, do not apply")
+    p.add_argument("--session", default="",
+                   help="persist turns under this session id")
+    p.add_argument("--no-remember", action="store_true")
+    p.add_argument("--remote", action="store_true",
+        help="use VPS /agent instead of local run (needs: urai login)")
 
     p = sub.add_parser("model")
     p.add_argument("action", choices=["list", "download", "use", "bench"])
@@ -118,6 +218,27 @@ def main(argv=None):
     p = sub.add_parser("embed"); p.add_argument("text", nargs="+")
     p = sub.add_parser("skill"); p.add_argument("action", nargs="?",
                                                 default="list")
+    p = sub.add_parser("video"); p.add_argument("prompt")
+    p.add_argument("-o", "--out", default=None)
+    p.add_argument("--duration", type=int, default=4)
+    p.add_argument("--remote", action="store_true",
+        help="render on VPS API instead of locally")
+    p = sub.add_parser("login"); p.add_argument("key", nargs="?",
+        help="master key (856777); omit to read URAI_MASTER_KEY env")
+    p.add_argument("--url", default=None, help="API base URL")
+    p = sub.add_parser("logout")
+    p = sub.add_parser("whoami")
+    p = sub.add_parser("swarm"); p.add_argument("tasks", nargs="+")
+    p.add_argument("--workers", type=int, default=3)
+    p.add_argument("--remote", action="store_true",
+        help="fan out on VPS /agent/swarm (needs: urai login)")
+    p = sub.add_parser("plugin"); p.add_argument("action",
+        choices=["list", "enable", "disable", "serve"], nargs="?", default="list")
+    p.add_argument("name", nargs="?", default=None)
+    p = sub.add_parser("browse"); p.add_argument("goal")
+    p.add_argument("--steps", default=None, help="JSON file with steps array")
+    p.add_argument("--remote", action="store_true",
+        help="run on VPS /browser/run (needs: urai login)")
     p = sub.add_parser("mcp")
     p = sub.add_parser("api"); p.add_argument("--port", type=int, default=8777)
     p.add_argument("--host", default="127.0.0.1",
@@ -129,13 +250,77 @@ def main(argv=None):
         return cmd_chat(args)
 
     if args.cmd == "ask":
+        if args.remote or os.environ.get("URAI_REMOTE"):
+            try:
+                print(remote_chat_once([{"role": "user", "content": args.text}])[:4000])
+            except Exception as e:
+                sys.exit(f"remote ask failed ({e}); check: urai whoami")
+            return
         from .agent import run_agent
         print(json.dumps(run_agent(args.text), indent=2)[:4000])
         return
 
     if args.cmd == "agent":
+        if args.remote or os.environ.get("URAI_REMOTE"):
+            try:
+                print(json.dumps(call("POST", "/agent", {"task": args.text,
+                                 "plan": args.plan, "session_id": args.session,
+                                 "remember": not args.no_remember}, remote=True),
+                                 indent=2)[:6000])
+            except Exception as e:
+                sys.exit(f"remote agent failed ({e}); check: urai whoami")
+            return
         from .agent import run_agent
-        print(json.dumps(run_agent(args.text), indent=2)[:6000])
+        print(json.dumps(run_agent(args.text, plan=args.plan,
+                                   history=[]), indent=2)[:6000])
+        return
+
+    if args.cmd == "login":
+        key = args.key or os.environ.get("URAI_MASTER_KEY", "")
+        if not key:
+            sys.exit("usage: urai login <master-key>  (VPS master key is 856777)")
+        cfg = _cfg_load()
+        cfg["master_key"] = key
+        if args.url:
+            cfg["remote_url"] = args.url.rstrip("/")
+        _cfg_save(cfg)
+        try:
+            st = call("GET", "/v1/token/status?device_id=" + _device_id(),
+                      remote=True)
+            print(json.dumps({"saved": True, "token": st}, indent=2)[:1000])
+        except Exception as e:
+            print(json.dumps({"saved": True, "verify": f"unverified: {e}"}))
+        return
+
+    if args.cmd == "logout":
+        cfg = _cfg_load()
+        cfg.pop("master_key", None)
+        _cfg_save(cfg)
+        print("logged out (master key forgotten)")
+        return
+
+    if args.cmd == "whoami":
+        try:
+            print(json.dumps(call("GET", "/v1/token/status?device_id=" + _device_id(),
+                                  remote=True), indent=2)[:2000])
+        except Exception as e:
+            sys.exit(f"whoami failed ({e}); is the VPS reachable?")
+        return
+
+    if args.cmd == "video":
+        if args.remote or os.environ.get("URAI_REMOTE"):
+            try:
+                print(json.dumps(call("POST", "/v1/videos/generations",
+                                      {"prompt": args.prompt, "out": args.out,
+                                       "duration": args.duration}), indent=2)[:4000])
+            except Exception as e:
+                sys.exit(f"remote video failed ({e}); check: urai whoami")
+            return
+        from . import video
+        res = video.generate(args.prompt, args.out, duration=args.duration)
+        print(json.dumps(res, indent=2))
+        if not res.get("ok"):
+            sys.exit(1)
         return
 
     if args.cmd == "model":
@@ -302,6 +487,52 @@ def main(argv=None):
         from . import skills as _skills
         for s in _skills.all_skills():
             print(f"{s['name']}: {s['description'][:120]}")
+        return
+
+    if args.cmd == "swarm":
+        if args.remote or os.environ.get("URAI_REMOTE"):
+            try:
+                print(json.dumps(call("POST", "/agent/swarm",
+                                      {"tasks": args.tasks,
+                                       "max_workers": args.workers}, remote=True), indent=2)[:8000])
+            except Exception as e:
+                sys.exit(f"remote swarm failed ({e}); check: urai whoami")
+            return
+        from .swarm import run_swarm
+        print(json.dumps(run_swarm(args.tasks, args.workers), indent=2)[:8000])
+        return
+
+    if args.cmd == "plugin":
+        from . import plugins as _pl
+        if args.action == "list":
+            for m in _pl.all_plugins():
+                print(f"{m['name']}: {'on' if m.get('enabled') else 'off'} — {m.get('description','')[:90]}")
+            return
+        if args.action in ("enable", "disable"):
+            if not args.name:
+                sys.exit("usage: urai plugin enable|disable <name>")
+            print(json.dumps(_pl.set_enabled(args.name, args.action == "enable")))
+            return
+        if args.action == "serve":
+            if args.name == "telegram":
+                from plugins.telegram.handler import serve_forever
+                return serve_forever()
+            sys.exit("usage: urai plugin serve telegram")
+        return
+
+    if args.cmd == "browse":
+        steps = []
+        if args.steps:
+            steps = json.load(open(args.steps))
+        if args.remote or os.environ.get("URAI_REMOTE"):
+            try:
+                print(json.dumps(call("POST", "/browser/run",
+                                      {"goal": args.goal, "steps": steps}, remote=True), indent=2)[:6000])
+            except Exception as e:
+                sys.exit(f"remote browse failed ({e}); check: urai whoami")
+            return
+        from . import browser as _b
+        print(json.dumps(_b.run_steps(steps, goal=args.goal), indent=2)[:6000])
         return
 
     if args.cmd == "mcp":

@@ -1,0 +1,14 @@
+{
+  "teacher": "self-local",
+  "total": 28,
+  "kept": 13,
+  "rejected": 15,
+  "dupes": 0,
+  "reject_reasons": {
+    "leaked-password": 1,
+    "leaked-api-key": 1,
+    "syntax-error: 'return' outside function (<candidate>, line 1)": 4,
+    "syntax-error: invalid syntax (<candidate>, line 1)": 1,
+    "empty-completion": 8
+  }
+}

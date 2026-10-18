@@ -1,0 +1,43 @@
+name: Urai Free Distill (VPS-safe chunked)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Output tag (e.g. distill-free-gh)"
+        required: true
+        default: "distill-free-gh"
+      tasks_dir:
+        description: "Tasks directory"
+        required: true
+        default: "data/raw_tasks/expanded"
+
+jobs:
+  distill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Setup tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y build-essential cmake jq
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp.git third_party/llama.cpp
+          cmake -S third_party/llama.cpp -B third_party/llama.cpp/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=ON
+          cmake --build third_party/llama.cpp/build -j$(nproc) --target llama-server llama-cli
+      - name: Run chunked distill
+        env:
+          URAI_FREE_TEACHER: 1
+          OPENCODE_BIN: /usr/local/bin/opencode
+        run: |
+          bash scripts/distill/run_free_grind.sh "${{ inputs.tasks_dir }}" "${{ inputs.tag }}"
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-free-distill-${{ inputs.tag }}
+          path: |
+            data/verified/${{ inputs.tag }}.jsonl
+            eval/reports/${{ inputs.tag }}-*.json

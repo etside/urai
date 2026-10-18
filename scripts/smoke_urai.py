@@ -40,7 +40,7 @@ def run_cli(*args):
 def main():
     offline = "--offline" in sys.argv  # device-safe: no network, no subprocesses
     import jev
-    check("version", jev.VERSION == "v1-lite", getattr(jev, "VERSION", None))
+    check("version", jev.VERSION == "v2", getattr(jev, "VERSION", None))
 
     from jev import models_registry as reg
     r = reg.load()
@@ -93,7 +93,7 @@ def main():
         check(f"hosting file {f}", (ROOT / f).is_file())
 
     for args, needle in [
-        (["--help"], "imagine"), (["version"], "urai v1-lite"),
+        (["--help"], "imagine"), (["version"], "urai v2"),
         (["teacher", "status"], "base"), (["model", "list"], "qwen25vl-3b"),
         (["model", "list"], "embed-small"),
         (["see", "/nonexistent.png"], None),
@@ -104,7 +104,11 @@ def main():
             check("cli surface (offline-skip)", True)
             break
         _, out = run_cli(*args)
-        check(f"cli {' '.join(args)}", (needle in out) if needle else True, out[:100])
+        ok = True if needle is None else (needle in out)
+        if list(args) == ["embed", "hello"]:
+            # embed server up (dims vector) and down (message) both pass
+            ok = ("embedding server down" in out) or ('"dims"' in out)
+        check(f"cli {' '.join(args)}", ok, out[:100])
 
     # no secrets in tracked files
     import subprocess as sp

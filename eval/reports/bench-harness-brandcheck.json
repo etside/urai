@@ -1,0 +1,44 @@
+{
+  "tag": "brandcheck",
+  "full": false,
+  "started": "2026-10-16T03:38:59Z",
+  "identity": "Urai, developed by Tynio LTD",
+  "checks": {
+    "tool-write-read": {
+      "pass": true,
+      "detail": ""
+    },
+    "tool-edit-unique": {
+      "pass": true,
+      "detail": ""
+    },
+    "tool-jail": {
+      "pass": true,
+      "detail": ""
+    },
+    "toolpacks": {
+      "pass": true,
+      "detail": "11"
+    },
+    "mcp-loop": {
+      "pass": true,
+      "detail": ""
+    },
+    "brands": {
+      "pass": true,
+      "detail": "['urai', 'urai-fast', 'urai-ultra', 'urai-cyber', 'laya']"
+    },
+    "registry-active": {
+      "pass": true,
+      "detail": "qwen3-4b 4B"
+    },
+    "plan-intercept": {
+      "pass": true,
+      "detail": ""
+    }
+  },
+  "calls": 0,
+  "total_s": 0.1,
+  "passed": 8,
+  "total": 8
+}

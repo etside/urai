@@ -33,13 +33,21 @@ class MockBackend(Backend):
                 "backend": self.name, "mock": True}
 
 
-def _post_json(url, payload, key=None, timeout=300):
+def _post_json(url, payload, key=None, timeout=900):
+    import urllib.error as _ue
     headers = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = "Bearer " + key
     req = urllib.request.Request(url, json.dumps(payload).encode(), headers)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.load(resp)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.load(resp)
+    except _ue.HTTPError as e:
+        try:
+            detail = e.read().decode()[:300]
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"HTTP {e.code}: {detail}")
 
 
 class LlamaServerBackend(Backend):
@@ -85,8 +93,17 @@ class LlamaServerBackend(Backend):
             "max_tokens": max_tokens, "temperature": temperature,
             "stream": False,
         })
-        return {"content": data["choices"][0]["message"]["content"],
-                "backend": self.name, "model": self.model}
+        _msg = data["choices"][0]["message"]
+        _content = _msg.get("content") or ""
+        if not _content.strip() and _msg.get("reasoning_content"):
+            _content = _msg["reasoning_content"]
+        out = {"content": _content,
+               "backend": self.name, "model": self.model}
+        if isinstance(data.get("usage"), dict):
+            out["usage"] = data["usage"]
+        if isinstance(data.get("timings"), dict):
+            out["timings"] = data["timings"]
+        return out
 
 
 class EmbeddingBackend(Backend):
@@ -135,5 +152,14 @@ class TeacherAPIBackend(Backend):
             "model": self.model, "messages": messages,
             "max_tokens": max_tokens, "temperature": temperature,
         }, key=self.key)
-        return {"content": data["choices"][0]["message"]["content"],
-                "backend": self.name, "model": self.model}
+        _msg = data["choices"][0]["message"]
+        _content = _msg.get("content") or ""
+        if not _content.strip() and _msg.get("reasoning_content"):
+            _content = _msg["reasoning_content"]
+        out = {"content": _content,
+               "backend": self.name, "model": self.model}
+        if isinstance(data.get("usage"), dict):
+            out["usage"] = data["usage"]
+        if isinstance(data.get("timings"), dict):
+            out["timings"] = data["timings"]
+        return out

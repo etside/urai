@@ -24,7 +24,7 @@ def content_hash(content: str) -> str:
 
 def build_record(task: dict, teacher_out, verdict: dict) -> dict:
     return {
-        "task_id": task["id"],
+        "task_id": task.get("id") or hashlib.sha256(task.get("prompt", "").encode()).hexdigest()[:12],
         "category": task.get("category", "general"),
         "prompt": task["prompt"],
         "completion": teacher_out.content,

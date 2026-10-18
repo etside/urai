@@ -1,0 +1,48 @@
+name: Urai Self-Improve - Traces to Datasets (safe)
+
+# Overmind-style loop, safety-first: probes the live API, turns failures into
+# distill tasks (DATA ONLY). Never modifies serving code, never deploys,
+# never stores credentials or PII. Weekly schedule + manual dispatch.
+
+on:
+  schedule:
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Run tag (e.g. weekly-2026-10-19)"
+        required: false
+        default: "weekly"
+
+permissions:
+  contents: write
+
+jobs:
+  selfimprove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout Urai repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python (stdlib only)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Probe live VPS + mine failures into tasks
+        env:
+          URAI_MASTER_KEY: ${{ secrets.URAI_MASTER_KEY }}
+        run: |
+          test -n "$URAI_MASTER_KEY" || { echo "::error::URAI_MASTER_KEY secret missing"; exit 1; }
+          python3 jev/selfimprove.py --base https://urai.daddyai.online \
+            --tag "${{ inputs.tag || 'weekly' }}"
+
+      - name: Commit data-only results
+        run: |
+          git config user.name "urai-selfimprove"
+          git config user.email "urai-selfimprove@daddyai.online"
+          git add data/raw_tasks/selfimprove/ eval/reports/selfimprove-*.json
+          git diff --cached --quiet && echo "no new tasks" || \
+            git commit -m "Self-improve ${{ inputs.tag || 'weekly' }}: failure-mined distill tasks (data only)" && \
+            git push origin HEAD:main

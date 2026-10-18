@@ -1,0 +1,49 @@
+name: Urai Distill (VPS/GH)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tasks_dir:
+        description: "Path in repo/VPS workspace"
+        required: false
+        default: "data/raw_tasks/expanded"
+      tag:
+        description: "Output tag"
+        required: false
+        default: "distill-gh-s1"
+  schedule:
+    - cron: "0 3 * * *"
+
+jobs:
+  distill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build llama.cpp
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y build-essential cmake
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp.git third_party/llama.cpp
+          cmake -S third_party/llama.cpp -B third_party/llama.cpp/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=ON
+          cmake --build third_party/llama.cpp/build -j$(nproc) --target llama-server llama-cli llama-bench
+      - name: Download models
+        run: |
+          mkdir -p model/base
+          python3 bin/urai model download qwen3-17b 2>/dev/null || true
+      - name: Distill
+        env:
+          URAI_FREE_TEACHER: 1
+          OPENCODE_BIN: /usr/local/bin/opencode
+        run: |
+          bash scripts/distill/run_free_grind.sh "${{ inputs.tasks_dir }}" "${{ inputs.tag }}" 2>&1 | tail -40
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-distill-${{ inputs.tag }}
+          path: |
+            data/verified/${{ inputs.tag }}.jsonl
+            eval/reports/${{ inputs.tag }}-*.json

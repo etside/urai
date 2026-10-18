@@ -1,0 +1,8 @@
+{
+  "tag": "distill-now-b",
+  "chunk": "reasoning",
+  "scanned": 16,
+  "promoted": 14,
+  "threshold": 0.8,
+  "fewshots_total": 33
+}

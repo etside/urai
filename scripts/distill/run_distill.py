@@ -49,6 +49,8 @@ def main():
     ap.add_argument("--system", default="default",
                     choices=sorted(SYSTEMS),
                     help="teacher system prompt (reasoning = R1-style think traces)")
+    ap.add_argument("--max-examples", type=int, default=0,
+                    help="0 = all tasks; >0 = stop after N tasks")
     args = ap.parse_args()
 
     teacher = get_teacher()
@@ -56,8 +58,8 @@ def main():
 
     scored = []
     import glob as _glob
-    task_files = sorted(_glob.glob(str(Path(args.tasks) / "*.jsonl"))) \
-        if Path(args.tasks).is_dir() else [args.tasks]
+    task_files = sorted(_glob.glob(str(Path(args.tasks) / "*.jsonl")))         if Path(args.tasks).is_dir() else [args.tasks]
+    tasks = []
     for tf in task_files:
         with open(tf) as f:
             for line in f:
@@ -65,13 +67,37 @@ def main():
                 if not line:
                     continue
                 task = json.loads(line)
+                if "prompt" not in task and "task" in task:
+                    task["prompt"] = task["task"]
                 if args.system != "default":
                     task["system"] = SYSTEMS[args.system]
+                tasks.append(task)
+    for idx, task in enumerate(tasks, 1):
+        if args.max_examples and idx > args.max_examples:
+            print(f"  stopped at --max-examples {args.max_examples}", flush=True)
+            break
+        print(f"  [{idx}/{len(tasks)}] {task.get("id", task.get("category", "?"))[:40]}", flush=True)
+        out = None
+        for _attempt in (1, 2):
+            try:
                 out = teacher.generate(task)
-                verdict = score_completion(task, out, exec_python=args.exec_python,
-                                           use_judge=args.judge, teacher=teacher)
-                scored.append({"record": build_record(task, out, verdict),
-                               "verdict": verdict})
+            except Exception as e:
+                print(f"  teacher-error attempt {_attempt}: {str(e)[:120]}", flush=True)
+                continue
+            if (out.content or "").strip():
+                break
+            print(f"  empty-completion, retrying ({_attempt}/2)", flush=True)
+        if out is None:
+            from teacher_client import TeacherOutput
+            out = TeacherOutput(content="", model="error", meta={})
+        if not (out.content or "").strip():
+            verdict = {"score": 0.0, "checks": 0, "passed": 0,
+                       "failures": ["empty-completion"], "exec": []}
+        else:
+            verdict = score_completion(task, out, exec_python=args.exec_python,
+                                       use_judge=args.judge, teacher=teacher)
+        scored.append({"record": build_record(task, out, verdict),
+                       "verdict": verdict})
 
     result = filter_batch(scored, args.threshold)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)

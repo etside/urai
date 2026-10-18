@@ -1,0 +1,8 @@
+{
+  "tag": "distill-now-b",
+  "chunk": "code-repair",
+  "scanned": 24,
+  "promoted": 15,
+  "threshold": 0.8,
+  "fewshots_total": 19
+}

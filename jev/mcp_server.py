@@ -2,7 +2,7 @@
 """Urai MCP server (Model Context Protocol, stdio, stdlib only).
 
 Lets Claude Code / opencode / Claude Desktop / OpenClaw drive Urai as tools:
-chat, agent, vision, image-gen, embeddings, model registry, evaluation.
+chat, agent, swarm, vision, image-gen, video-gen, browse, embeddings, model registry, evaluation (10 tools).
 
   Add to the MCP client config (served from this repo, no install):
     {"mcpServers": {"urai": {"command": "python3",
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-SERVER_INFO = {"name": "urai", "version": "v1-lite"}
+SERVER_INFO = {"name": "urai", "version": "v2"}
 
 
 def _t(name, desc, props, required=()):
@@ -40,6 +40,14 @@ TOOLS = [
     _t("urai_imagine", "Generate a PNG from a prompt (stable-diffusion.cpp).",
        {"prompt": {"type": "string"}, "out": {"type": "string"},
         "steps": {"type": "integer", "default": 2}, "seed": {"type": "integer", "default": 7}}, ["prompt"]),
+    _t("urai_video", "Text-to-video: local CPU slideshow (animatic-grade) or SOTA provider proxy (Higgsfield/Runway keys).",
+       {"prompt": {"type": "string"}, "duration": {"type": "integer", "default": 4},
+        "width": {"type": "integer", "default": 512}, "height": {"type": "integer", "default": 512},
+        "fps": {"type": "integer", "default": 4}, "provider": {"type": "string", "default": "auto"}}, ["prompt"]),
+    _t("urai_swarm", "Parallel multi-agent fan-out (Kimi/Hermes-style swarm).",
+       {"tasks": {"type": "array"}, "max_workers": {"type": "integer", "default": 3}}, ["tasks"]),
+    _t("urai_browse", "Human-like browser run (goto/click/fill). Auth fields pause for user approval.",
+       {"goal": {"type": "string", "default": ""}, "steps": {"type": "array"}}, []),
     _t("urai_embed", "Embed one or more texts (embedding server must be up).",
        {"texts": {"type": ["string", "array"]}}, ["texts"]),
     _t("urai_model_list", "Registry: ids, kinds, roles, availability, bench numbers.", {}),
@@ -76,6 +84,25 @@ def tool_call(name, args):
         if not res["ok"]:
             raise RuntimeError(res["error"])
         return json.dumps(res, indent=2)
+    if name == "urai_video":
+        from jev import video
+        res = video.generate(args.get("prompt", ""), args.get("out"),
+                             args.get("duration", 4), args.get("width", 512),
+                             args.get("height", 512), args.get("fps", 4),
+                             args.get("seed", 7), args.get("provider", "auto"))
+        if not res.get("ok"):
+            raise RuntimeError(res.get("error", "video failed"))
+        return json.dumps(res, indent=2)
+    if name == "urai_swarm":
+        from jev.swarm import run_swarm
+        tasks = args.get("tasks", [])
+        if isinstance(tasks, str):
+            tasks = [tasks]
+        return json.dumps(run_swarm(tasks, args.get("max_workers", 3)), indent=2)[:8000]
+    if name == "urai_browse":
+        from jev import browser as _b
+        res = _b.run_steps(args.get("steps", []), goal=args.get("goal", ""))
+        return json.dumps(res, indent=2)[:6000]
     if name == "urai_embed":
         from jev.backends import EmbeddingBackend
         be = EmbeddingBackend()

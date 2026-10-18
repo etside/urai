@@ -1,0 +1,31 @@
+name: Urai GPU Check (token-safe)
+on:
+  workflow_dispatch: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check DO account + GPU sizes (secret stays masked)
+        env:
+          DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          tok = os.environ["DO_API_TOKEN"]
+          def api(path):
+              req = urllib.request.Request(
+                  "https://api.digitalocean.com/v2" + path,
+                  headers={"Authorization": "Bearer " + tok})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return json.load(r)
+          acct = api("/account").get("account", {})
+          print("droplet_limit:", acct.get("droplet_limit"))
+          print("status:", acct.get("status"))
+          sizes = api("/sizes").get("sizes", [])
+          gpu = [s for s in sizes if any(k in s["slug"] for k in ("gpu", "h100", "h200", "l40", "mi300", "rtx", "b300", "ada"))]
+          print("gpu_sizes_via_api:", len(gpu))
+          for s in gpu:
+              print(s["slug"], s.get("price_hourly"), (s.get("regions") or [])[:3])
+          if not gpu:
+              print("NOTE: no GPU sizes on self-service API = contract-only account.")
+          PY

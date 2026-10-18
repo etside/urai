@@ -8,6 +8,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import io.github.tukitattu.urai.cyber.CyberActivity;
 import android.provider.MediaStore;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -124,12 +125,14 @@ public class MainActivity extends Activity {
     public boolean onCreateOptionsMenu(Menu m) {
         m.add(0, 1, 0, "Settings").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
         m.add(0, 2, 0, "Reload").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+        m.add(0, 3, 0, "Cyber guard");
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem it) {
         if (it.getItemId() == 1) startActivity(new Intent(this, SettingsActivity.class));
+        else if (it.getItemId() == 3) startActivity(new Intent(this, CyberActivity.class));
         else web.reload();
         return true;
     }
