@@ -1,10 +1,12 @@
 # Kaggle T4 free GPU — run tonight (~30 free GPU-hours/week)
 
-No CLI keys needed on your side. 5 steps, ~10 minutes of your time:
+This is the GPU path used for the training run (free T4); Modal remains the
+optional scripted alternative. No CLI keys needed on your side. 5 steps,
+~10 minutes of your time:
 
 1. Go to kaggle.com → Create → Notebook. Turn **GPU T4 x2** ON, **Internet** ON.
 2. **Add input → Upload** `data/verified/distill-now.jsonl`
-   (download it from this repo, or ask — current file has 76 rows).
+   (download it from this repo, or ask — current file has 245 rows).
 3. First cell, install + fetch the trainer:
    ```
    !pip install -q unsloth trl peft accelerate bitsandbytes datasets

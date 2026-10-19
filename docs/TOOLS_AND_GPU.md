@@ -81,8 +81,8 @@ Reference tokens stay **dense**; video tiles get VSA sparsity
 
 | Path | Where | Notes |
 |---|---|---|
-| **Modal (default)** | `scripts/train/modal_train.sh`, `modal/modal_train.py`, workflow `urai-train.yml` | ephemeral remote GPU, `URAI_MODAL_GPU = T4 \| A100 \| L40S`, publishes adapter to the `urai-deps` release. Secrets: `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` |
-| Kaggle T4 | `scripts/train/sft_unsloth.py`, [KAGGLE_NOW.md](KAGGLE_NOW.md) | free single-GPU QLoRA (rank 16, 4-bit) |
+| **Kaggle T4 (path used)** | `kaggle/train_qlora.py`, `scripts/train/sft_unsloth.py`, [KAGGLE_NOW.md](KAGGLE_NOW.md) | free single-GPU QLoRA (rank 16, 4-bit); run the notebook with `distill-now.jsonl` as an input dataset. No repo secrets needed. |
+| Modal (optional) | `scripts/train/modal_train.sh`, `modal/modal_train.py`, workflow `urai-train.yml` | ephemeral remote GPU, `URAI_MODAL_GPU = T4 \| A100 \| L40S`, publishes adapter to the `urai-deps` release. Secrets: `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` |
 | DigitalOcean H100 | `scripts/train/gpu_train.sh`, workflow `urai-gpu-run.yml` | **contract-only**: DO account GPU limit is 0 (`docs/GPU_LIMIT_REQUEST.md`); script destroys droplets at the time cap |
 | GPU probe | workflow `urai-gpu-check.yml` | token-safe capability probe |
 

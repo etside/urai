@@ -168,14 +168,23 @@ scripts/distill/filter.py          -> data/verified/*.jsonl     (keep/drop + why
 scripts/distill/run_distill.py     -> one-shot orchestration + report
 ```
 
-Train the unified student on the merged verified set (remote GPU only):
+Train the unified student on the merged verified set (remote GPU only). The
+free path actually used is a **Kaggle T4** kernel (Unsloth QLoRA, rank 16,
+4-bit) — see [docs/KAGGLE_NOW.md](docs/KAGGLE_NOW.md):
 
 ```bash
-bash scripts/train/modal_train.sh        # Modal (default); URAI_MODAL_GPU=T4|A100|L40S
+# kaggle.com -> Notebook -> GPU T4 x2 + Internet ON
+# add data/verified/distill-now.jsonl as an input dataset, then:
+python3 kaggle/train_qlora.py            # MAX_TRAIN_STEPS=300, URAI_BASE=...
 ```
 
-LoRA path: Unsloth QLoRA (rank 16, 4-bit), merged adapters land on the
-`urai-deps` release. Details: [docs/TRAINING.md](docs/TRAINING.md),
+Modal is the scripted alternative (same adapter output):
+
+```bash
+bash scripts/train/modal_train.sh        # URAI_MODAL_GPU=T4|A100|L40S
+```
+
+Merged adapters land on the `urai-deps` release. Details: [docs/TRAINING.md](docs/TRAINING.md),
 [docs/GPU_COMBINED_STRATEGY.md](docs/GPU_COMBINED_STRATEGY.md),
 [docs/VIDEO_REF2VA.md](docs/VIDEO_REF2VA.md).
 
@@ -231,8 +240,8 @@ deploy/   Caddyfile · cloudflared · systemd
 
 The dev box (2-core Intel m3, ~3.2 GB RAM, no GPU) runs the runtime, data
 pipeline and eval harness — but cannot train weights and only lightly benches
-large models. Training/benching runs on remote GPUs (Modal by default) and
-artifacts return as GGUF/adapter files recorded in `model/registry.json` and the
+large models. Training/benching runs on remote GPUs (free Kaggle T4; Modal is
+the scripted alternative) and artifacts return as GGUF/adapter files recorded in `model/registry.json` and the
 `urai-deps` release. Verification is always remote: GitHub Actions matrices
 (cpu/cuda/hip), the APK build+sign job, and the API/CLI integration tests.
 
