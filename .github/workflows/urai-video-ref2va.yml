@@ -1,0 +1,30 @@
+# Urai video — H3 Ref2VA VSA offline checks.
+# Stdlib only: no model weights, no ComfyUI, no GPU inference.
+name: Urai Video Ref2VA
+
+on:
+  push:
+    branches: ["feat/unified-urai-surface"]
+  pull_request:
+    branches: ["feat/unified-urai-surface"]
+  workflow_dispatch:
+
+jobs:
+  ref2va:
+    name: ref2va
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile the Ref2VA modules
+        run: python3 -m py_compile jev/ref2va.py jev/ref2va_prompt.py
+
+      - name: Offline Ref2VA test (no GPU)
+        run: python3 scripts/video/test_ref2va.py
+
+      - name: Install script syntax
+        run: bash -n scripts/video/install_ref2va_vsa.sh

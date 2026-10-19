@@ -1,37 +1,21 @@
 {
-  "active": "coder05-fast",
+  "active": "qwen3-4b",
   "models": {
-    "qwen05-fast": {
-      "path": "model/base/qwen2.5-0.5b-instruct-q4_k_m.gguf",
-      "params": "0.5B",
-      "quant": "Q4_K_M",
-      "role": "fast",
-      "kind": "chat",
-      "hf": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
-      "pp_toks": 28.6,
-      "tg_toks": 6.9,
-      "ram_mb": 592,
-      "code_smoke": "retry-task: wrong shape (decorator), vacuous tests, truncated repetition - score 0.0"
-    },
-    "coder05-fast": {
-      "path": "model/base/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
-      "params": "0.5B",
-      "quant": "Q4_K_M",
-      "role": "fast-coding",
-      "kind": "chat",
-      "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
-      "pp_toks": 23.2,
-      "tg_toks": 6.35,
-      "ram_mb": 569,
-      "code_smoke": "retry-task: runnable, real asserts, flawed backoff (sleep 2**tries, swallows to None) - beats qwen05 (vacuous tests, syntax fail)"
-    },
-    "coder15-primary": {
-      "path": "model/base/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
-      "params": "1.5B",
+    "qwen3-17b": {
+      "path": "model/base/Qwen3-1.7B-Q4_K_M.gguf",
+      "params": "1.7B",
       "quant": "Q4_K_M",
       "role": "primary",
       "kind": "chat",
-      "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+      "hf": "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"
+    },
+    "qwen3-4b": {
+      "path": "model/base/Qwen3-4B-Q4_K_M.gguf",
+      "params": "4B",
+      "quant": "Q4_K_M",
+      "role": "primary",
+      "kind": "chat",
+      "hf": "https://huggingface.co/ggml-org/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"
     },
     "qwen25vl-3b": {
       "path": "model/base/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
@@ -75,21 +59,35 @@
       "port": 8081,
       "note": "~100MB; served with llama-server --embedding"
     },
-    "qwen3-06b": {
-      "path": "model/base/Qwen3-0.6B-Q8_0.gguf",
-      "params": "0.6B",
-      "quant": "Q8_0",
-      "role": "fast",
+    "coder05-fast": {
+      "path": "model/base/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+      "params": "0.5B",
+      "quant": "Q4_K_M",
+      "role": "fast-coding",
       "kind": "chat",
-      "hf": "https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf"
+      "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+      "pp_toks": 21.7,
+      "tg_toks": 8.0,
+      "ram_mb": 600
     },
-    "qwen3-17b": {
-      "path": "model/base/Qwen3-1.7B-Q4_K_M.gguf",
-      "params": "1.7B",
+    "coder15-primary": {
+      "path": "model/base/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+      "params": "1.5B",
       "quant": "Q4_K_M",
       "role": "primary",
       "kind": "chat",
-      "hf": "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"
+      "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+      "ram_mb": 1200
+    },
+    "laya": {
+      "path": "model/base/laya-Q4_K_M.gguf",
+      "params": "4B",
+      "quant": "Q4_K_M-imatrix+LoRA",
+      "role": "student",
+      "kind": "chat",
+      "status": "landing",
+      "hf": "",
+      "note": "Urai-owned student. See docs/LAYA.md. Absent until promotion."
     }
   }
 }

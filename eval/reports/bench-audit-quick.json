@@ -1,0 +1,203 @@
+{
+  "tag": "audit-quick",
+  "base": "http://127.0.0.1:8777",
+  "started": "2026-10-15T21:15:54Z",
+  "identity": "Urai, developed by Tynio LTD",
+  "categories": {
+    "knowledge": {
+      "passed": 12,
+      "total": 12,
+      "items": [
+        {
+          "q": "What is the capital of Bangladesh?",
+          "expected": [
+            "dhaka"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The capital of Bangladesh is **Dhaka**."
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "How many planets are in the solar system?",
+          "expected": [
+            "8",
+            "eight"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "As of now, the solar system is known to have **8 planets**. These are:\n\n1. **Mercury**  \n2. **Venus**  \n3. **Earth**  \n4. **Mars**  \n5. **Jupiter**  \n6. **Saturn**  \n"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What does CPU stand for?",
+          "expected": [
+            "central processing unit"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "CPU stands for **Central Processing Unit**. It is often referred to as the \"brain\" of a computer, as it performs the instructions of a computer program by executing basic arithmetic, logic, control, a"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "Which language has the most native speakers?",
+          "expected": [
+            "mandarin",
+            "chinese"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The language with the most native speakers is **Mandarin Chinese**. It is spoken by approximately **1.38 billion people** worldwide, making it the most spoken language in terms of native speakers. \n\nH"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What is H2O commonly known as?",
+          "expected": [
+            "water"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "H\u2082O is commonly known as **water**. It is the chemical formula for the molecule that is essential for life and is the main component of Earth's oceans, lakes, rivers, and even the human body."
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "How many days are in a leap year?",
+          "expected": [
+            "366"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "A **leap year** has **366 days**.\n\nThis is because, in a regular year, there are 365 days. A leap year adds an extra day, February 29, to make the year 366 days long. This adjustment helps keep our"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What is the largest ocean?",
+          "expected": [
+            "pacific"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The largest ocean in the world is the **Pacific Ocean**. It covers approximately **165 million square kilometers (63.8 million square miles)**, making it more than twice the size of the Atlantic Ocean"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What year did the first moon landing occur?",
+          "expected": [
+            "1969"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The first moon landing occurred in **1969**. It took place on **July 20, 1969**, when NASA's **Apollo 11** mission landed the **Apollo 11 lunar module**, **Eagle**, on the Moon. Astronauts"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What does HTTP stand for?",
+          "expected": [
+            "hypertext transfer protocol"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "HTTP stands for **HyperText Transfer Protocol**.\n\nIt is the foundation of data communication on the World Wide Web. HTTP is an application-layer protocol used to transfer hypertext documents between s"
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "How many bits are in a byte?",
+          "expected": [
+            "8",
+            "eight"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "A byte is made up of **8 bits**. \n\nSo, the answer is **8 bits**."
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "What is the chemical symbol for gold?",
+          "expected": [
+            "au"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The chemical symbol for gold is **Au**."
+            }
+          },
+          "pass": true
+        },
+        {
+          "q": "Which planet is known as the Red Planet?",
+          "expected": [
+            "mars"
+          ],
+          "modes": {
+            "direct": {
+              "pass": true,
+              "answer": "The planet known as the **Red Planet** is **Mars**. It receives this name because its surface appears reddish when viewed from Earth, due to the presence of iron oxide (rust) in its soil and atmospher"
+            }
+          },
+          "pass": true
+        }
+      ],
+      "latency_s": [
+        4.13,
+        14.29,
+        10.92,
+        13.63,
+        10.88,
+        14.26,
+        13.95,
+        13.59,
+        13.62,
+        5.97,
+        3.74,
+        12.1
+      ],
+      "usage_tokens": 801,
+      "accuracy": 1.0,
+      "avg_latency_s": 10.92,
+      "tokens_per_s": 6.11
+    },
+    "code": {
+      "passed": 0,
+      "total": 0,
+      "items": [],
+      "latency_s": [],
+      "usage_tokens": 0,
+      "accuracy": 0.0,
+      "avg_latency_s": 0.0,
+      "tokens_per_s": 0.0
+    }
+  },
+  "calls": 12,
+  "total_s": 131.1
+}

@@ -1,0 +1,2 @@
+{"id": "2e7692f9", "kind": "fact", "text": "Urai prod site runs on port 8777 behind nginx TLS.", "weight": 1.0, "hits": 0, "ts": 1792114040}
+{"id": "cc502417", "kind": "preference", "text": "Prefer Unsloth QLoRA r=16 for 4B fine-tunes.", "weight": 1.0, "hits": 0, "ts": 1792114040}

@@ -1,0 +1,8 @@
+{
+  "tag": "distill-now-a",
+  "chunk": "repo-reasoning",
+  "scanned": 24,
+  "promoted": 0,
+  "threshold": 0.8,
+  "fewshots_total": 46
+}

@@ -1,0 +1,25 @@
+# Cloudflare Tunnel for Urai — origin has NO public IP/port.
+#   cloudflared tunnel login
+#   cloudflared tunnel create urai-prod
+#   cloudflared tunnel route dns urai-prod urai.daddyai.online
+#   install -m600 urai-prod.json /etc/cloudflared/
+#   cp deploy/cloudflared.yml /etc/cloudflared/config.yml
+#   systemctl enable --now cloudflared
+#
+# After this, remove 80/443 from ufw on the VPS: everything arrives via the
+# tunnel. Put Cloudflare Access (Zero Trust) in front of the admin hostname.
+
+tunnel: urai-prod
+credentials-file: /etc/cloudflared/urai-prod.json
+
+ingress:
+  # public app + OpenAI-compatible API (WAF + rate limits + bot mgmt at edge)
+  - hostname: urai.daddyai.online
+    service: http://127.0.0.1:8777
+
+  # admin: ALSO protected by a Cloudflare Access application (SSO + device posture)
+  - hostname: admin.urai.daddyai.online
+    service: http://127.0.0.1:8777
+
+  # catch-all
+  - service: http_status:404

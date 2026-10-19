@@ -23,17 +23,37 @@ from .skills import match as skills_match
 
 MAX_FIXES = 2
 MAX_TOOLS = 6
-SYSTEM = ("You are Urai, a senior engineer runtime. Plan briefly, use tools, "
+SYSTEM = ("You are Urai, developed by Tynio LTD, a senior engineer runtime. Plan briefly, use tools, "
           "verify with tests. Never invent APIs, files, or results. "
           "To use a tool, emit exactly one fenced block per turn:\n"
           "```tool\n"
           '{"tool": "<name>", "args": {...}}\n'
           "```\n"
-          "Tools: read_file {path}, run {argv:[...]}, "
+          "Tiers: urai-fast (quick), urai (balanced), urai-ultra (quality), "
+          "urai-cyber (security). Conductor splits hard tasks automatically. "
+          "Tools: read_file {path}, write_file {path, content}, "
+          "edit_file {path, old, new, replace_all?}, run {argv:[...]}, analyze {target}, "
+          "mcp_servers {server?}, mcp {server, tool, args}, "
           "web_search {query, top?}, web_fetch {url}, "
-          "see {image, question?}, imagine {prompt, out?}. "
+          "see {image, question?}, imagine {prompt, out?}, "
+          "browse {goal, steps:[{action: goto|click|fill|wait|snapshot|screenshot, url?, selector?, text?, value?}]}. "
+          "browse pauses (never fails) on auth fields so the human can input them. "
           "After the tool result arrives, continue the task.")
 TOOL_RE = re.compile(r"```tool\s*\n(.*?)```", re.DOTALL)
+
+SAFETY_REPLY = {
+    "self-harm": (
+        "I can't help with that. If you're thinking about harming yourself, "
+        "please reach out to a local crisis line or emergency services right "
+        "now — you deserve support."),
+    "weapon": (
+        "I can't help build weapons or explosives. I can help with chemistry, "
+        "engineering, or safety topics in a constructive way."),
+    "csam": (
+        "I can't help with that request."),
+}
+_SAFETY_DEFAULT = "I can't help with that request."
+
 
 
 def categorize_failure(answer: str, tool_error: str = "") -> str:
@@ -50,11 +70,14 @@ def categorize_failure(answer: str, tool_error: str = "") -> str:
     return "reasoning"
 
 
-def run_tool_call(spec: dict) -> dict:
-    """Execute one parsed {"tool", "args"} spec through jailed engines."""
+def run_tool_call(spec: dict, plan: bool = False) -> dict:
+    """Execute one parsed {"tool", "args"} spec through jailed engines.
+    plan=True: write/edit calls are recorded as proposals, NOT applied."""
     import json as _json
     name = spec.get("tool", "")
     args = spec.get("args", {}) or {}
+    if plan and name in ("write_file", "edit_file"):
+        return {"ok": True, "plan_only": True, "proposal": spec}
     try:
         if name in tools.TOOLS:
             fn = tools.TOOLS[name]
@@ -91,17 +114,86 @@ def extract_tool_calls(answer: str) -> list:
     return calls[:1]  # one tool per turn: observe before the next
 
 
-def run_agent(task: str, files: dict = None, budget_tokens: int = 2048) -> dict:
+def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
+                consistency: int = 1, plan: bool = False,
+                history: list = None, tier: str = "urai") -> dict:
     t0 = time.time()
     trace = []
-    r = route(task)
+    from .router import apply_tier as _apply_tier
+    _tier = _apply_tier(tier)
+    if tier and tier != "urai":
+        consistency = max(int(consistency or 1), int(_tier["consistency"]))
+        trace.append({"step": "tier", "tier": tier})
+
+    # ── NLP + vibe (Phase 2): understand the request and fix a style contract
+    # BEFORE generation. Deterministic; never fails the run.
+    nlp_out, vibe_out = {}, {}
+    try:
+        from . import nlp as _nlp
+        nlp_out = _nlp.analyze(task, history=history)
+        trace.append({"step": "nlp", "language": nlp_out.get("language"),
+                      "intent": nlp_out.get("intent"),
+                      "sentiment": (nlp_out.get("sentiment") or {}).get("label"),
+                      "emotion": nlp_out.get("emotion"),
+                      "complexity": nlp_out.get("complexity"),
+                      "redflags": nlp_out.get("redflags")})
+    except Exception as e:
+        trace.append({"step": "nlp-skip", "error": str(e)[:120]})
+    try:
+        from . import vibe as _vibe
+        if _vibe.enabled():
+            vibe_out = _vibe.plan(nlp_out)
+            if vibe_out:
+                vibe_out["nlp"] = nlp_out
+                vibe_out["directive"] = _vibe.directive(vibe_out)
+                trace.append({"step": "vibe",
+                              "structure": vibe_out.get("structure"),
+                              "formatting": vibe_out.get("formatting"),
+                              "language": vibe_out.get("language"),
+                              "de-escalate": vibe_out.get("de-escalate")})
+    except Exception as e:
+        trace.append({"step": "vibe-skip", "error": str(e)[:120]})
+
+    # ── Safety gate: refuse clearly-harmful intents without calling a model.
+    _flags = nlp_out.get("redflags") or []
+    if _flags:
+        trace.append({"step": "safety", "redflags": _flags, "action": "refuse"})
+        if isinstance(vibe_out, dict):
+            vibe_out.setdefault("de-escalate", True)
+        msg = SAFETY_REPLY.get(_flags[0], _SAFETY_DEFAULT)
+        if "self-harm" in _flags:
+            msg = SAFETY_REPLY["self-harm"]
+        return {"ok": True, "answer": msg, "proposals": [], "tier": tier or "urai",
+                "level": 0, "backend": "safety", "fixes": [], "failure_kind": None,
+                "tool_calls": [], "elapsed_s": round(time.time() - t0, 2),
+                "trace": trace, "refused": True,
+                "urai": {"nlp": nlp_out, "vibe": vibe_out}}
+
+    r = route(task, tier=tier, complexity=nlp_out.get("complexity"))
     trace.append({"step": "route", "level": r["level"], "reason": r["reason"],
                   "backend": r["backend"].name})
 
-    ctx = build_context(task, files or {}, budget_tokens=budget_tokens)
+    ctx = build_context(task, files or {}, budget_tokens=budget_tokens,
+                          history=history or [])
     trace.append({"step": "context", "est_tokens": ctx["est_tokens"],
                   "dropped_history": ctx["dropped_history"]})
     messages = [{"role": "system", "content": SYSTEM}] + to_messages(ctx)
+    if vibe_out.get("directive"):
+        messages.append({"role": "system", "content": vibe_out["directive"]})
+    # Repo conventions: AGENTS.md auto-load (OpenCode-style).
+    try:
+        from .tools import WORKSPACE as _WS
+        import os as _os
+        _ag = _os.path.join(_WS, "AGENTS.md")
+        if _os.path.isfile(_ag):
+            with open(_ag) as _f:
+                _txt = _f.read(4000)
+            if _txt.strip():
+                messages.append({"role": "system",
+                                 "content": "Repo conventions (AGENTS.md):\n" + _txt})
+                trace.append({"step": "agents-md", "chars": len(_txt)})
+    except Exception as e:
+        trace.append({"step": "agents-md-skip", "error": str(e)[:120]})
     loaded = skills_match(task)
     if loaded:
         messages.append({"role": "system",
@@ -109,12 +201,72 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048) -> dict:
                          + skills_block(task)})
         trace.append({"step": "skills",
                       "loaded": [s["name"] for s in loaded]})
+    # Active memory + focus (Wonder-style): hybrid semantic recall over the
+    # memory/focus index (retrieval.query combines relevance + recency) and the
+    # current focus anchor into every run. Never fails the run.
+    try:
+        from . import config as _config
+        _cfg = _config.get()
+    except Exception:
+        _cfg = None
+    _mem_enabled = _cfg.MEMORY_ENABLED if _cfg is not None else True
+    if _mem_enabled:
+        try:
+            from . import retrieval as _retrieval
+            _mems = _retrieval.query(task, top_k=(_cfg.RETRIEVAL_TOP_K
+                                                  if _cfg is not None else 5))
+            if _mems:
+                messages.append({"role": "system",
+                                 "content": "Retrieved memory (use if relevant):\n"
+                                 + "\n".join(
+                                     f"- [{m['kind']}/{m['source']}] {m['text']}"
+                                     for m in _mems)})
+                trace.append({"step": "retrieval", "recalled": len(_mems),
+                              "top_score": _mems[0]["score"],
+                              "top_relevance": _mems[0]["relevance"],
+                              "top_recency": _mems[0]["recency"]})
+        except Exception as e:
+            try:
+                from .memory import recall as _recall
+                _mems = _recall(task, top=3)
+                if _mems:
+                    messages.append({"role": "system",
+                                     "content": "Active memory (use if relevant):\n"
+                                     + "\n".join(f"- [{m['kind']}] {m['text']}"
+                                                 for m in _mems)})
+                    trace.append({"step": "memory", "recalled": len(_mems)})
+            except Exception as e2:
+                trace.append({"step": "retrieval-skip", "error": str(e2)[:120]})
+    try:
+        from .focus import context_block as _focus_block
+        _fb = _focus_block()
+        if _fb:
+            messages.append({"role": "system", "content": _fb})
+            trace.append({"step": "focus", "chars": len(_fb)})
+    except Exception as e:
+        trace.append({"step": "focus-skip", "error": str(e)[:120]})
+    # Few-shot memory: solved examples promoted from landed distill chunks.
+    # This is how each chunk immediately improves answers (no retraining).
+    if r["level"] >= 1:
+        try:
+            from .fewshots import context_block as few_block
+            fb = few_block(task)
+            if fb:
+                messages.append({"role": "system", "content": fb})
+                trace.append({"step": "fewshots", "chars": len(fb)})
+        except Exception as e:
+            trace.append({"step": "fewshots-skip", "error": str(e)[:120]})
 
     answer, fixes, tool_calls = "", 0, 0
     failure_kind = None
+    proposals = []
+    if plan:
+        trace.append({"step": "plan-mode",
+                      "note": "writes recorded, not applied"})
     while True:
         try:
-            res = r["backend"].complete(messages, max_tokens=512)
+            from . import cache as _cache
+            res = _cache.cached_complete(r["backend"], messages, max_tokens=512)
             answer = res["content"]
         except Exception as e:
             if r["fallback"]:
@@ -123,7 +275,9 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048) -> dict:
                 answer = fb.complete(messages)["content"]
                 break
             return {"ok": False, "error": str(e)[:300], "trace": trace}
-        trace.append({"step": "generate", "chars": len(answer), "attempt": fixes})
+        trace.append({"step": "generate", "chars": len(answer),
+                      "attempt": fixes, "cached": bool(res.get("cached")),
+                      "cache_hit": res.get("cache_hit")})
 
         # ReAct tool pass: execute at most one requested tool per turn,
         # feed the observation back, and let the model continue.
@@ -132,7 +286,9 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048) -> dict:
                 trace.append({"step": "budget-exhausted", "kind": "tools"})
                 break
             tool_calls += 1
-            out = run_tool_call(spec)
+            out = run_tool_call(spec, plan=plan)
+            if out.get("plan_only"):
+                proposals.append(spec)
             import json as _json
             trace.append({"step": "tool", "tool": spec.get("tool"),
                           "ok": out.get("ok"), "n": tool_calls})
@@ -164,7 +320,36 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048) -> dict:
         else:
             break
 
-    return {"ok": True, "answer": answer, "level": r["level"],
+    # Self-consistency re-rank (opt-in): extra samples at temp 0.7,
+    # keep the highest verifier score. Default 1 = unchanged behavior.
+    tried = 1
+    if consistency and int(consistency) > 1 and r["verify"] and answer:
+        try:
+            best, best_score = answer, verify(answer)["score"]
+            from . import cache as _cache2
+            for _ in range(min(int(consistency) - 1, 4)):
+                cand = _cache2.cached_complete(r["backend"], messages,
+                                               max_tokens=512,
+                                               temperature=0.7)["content"]
+                tried += 1
+                sc = verify(cand)["score"]
+                if sc > best_score:
+                    best, best_score = cand, sc
+            answer = best
+            trace.append({"step": "consistency", "tried": tried,
+                          "best_score": best_score})
+        except Exception as e:
+            trace.append({"step": "consistency-skip",
+                          "error": str(e)[:120]})
+
+    try:
+        from .router import record_outcome as _rec
+        _rec(r["level"], getattr(r["backend"], "name", "?"), bool(answer))
+    except Exception:
+        pass
+    return {"ok": True, "answer": answer, "proposals": proposals, "tier": r.get("tier", "urai"),
+            "level": r["level"],
             "backend": r["backend"].name, "fixes": fixes,
             "failure_kind": failure_kind, "tool_calls": tool_calls,
-            "elapsed_s": round(time.time() - t0, 2), "trace": trace}
+            "elapsed_s": round(time.time() - t0, 2), "trace": trace,
+            "urai": {"nlp": nlp_out, "vibe": vibe_out}}

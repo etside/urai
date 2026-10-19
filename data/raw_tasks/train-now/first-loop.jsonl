@@ -1,0 +1,1 @@
+{"task": "A box holds 24 eggs. How many in 5 boxes? Reply with just the number.", "expected": "120", "tests": null, "kind": "selfimprove-math", "failure_kind": "reasoning", "answer_preview": "60", "source": "probe:first-loop"}

@@ -28,9 +28,15 @@ for tf in "$SRC"/*.jsonl; do
   if [ -s "$OUTDIR/$cat.jsonl" ]; then echo "SKIP done: $cat"; continue; fi
   echo "== chunk $cat =="
   python3 scripts/distill/run_distill.py --tasks "$tf" \
-    --out "$OUTDIR/$cat.jsonl" \
+    --out "$OUTDIR/$cat.jsonl" --system "${URAI_DISTILL_SYSTEM:-default}" \
+    --threshold "${URAI_DISTILL_THRESHOLD:-0.6}" \
     --report "eval/reports/$TAG-$cat.json" --exec --judge \
     || echo "CHUNK-FAILED: $cat (continuing)"
+  # self-improvement trigger: every landed chunk immediately promotes
+  # verified completions into live few-shot behavior (never fails grind)
+  if [ -s "$OUTDIR/$cat.jsonl" ]; then
+    python3 scripts/distill/promote_chunk.py --chunk "$OUTDIR/$cat.jsonl" --tag "$TAG" || true
+  fi
 done
 python3 - "$OUTDIR" "data/verified/$TAG.jsonl" <<'EOF'
 import json, sys

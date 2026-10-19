@@ -22,6 +22,19 @@ class Backend:
     def healthy(self) -> bool:
         return True
 
+    def stream(self, messages, max_tokens=256, temperature=0.2):
+        """Yield answer deltas. Default: chunk a single completion (fallback).
+        Subclasses with a native streaming endpoint override this."""
+        text = self.complete(messages, max_tokens=max_tokens,
+                             temperature=temperature).get("content", "")
+        for tok in _chunk_tokens(text):
+            yield tok
+
+
+def _chunk_tokens(text: str) -> list:
+    import re as _re
+    return _re.findall(r"\s*\S+|\s+", text or "") or ([text] if text else [])
+
 
 class MockBackend(Backend):
     name = "mock"
@@ -32,14 +45,27 @@ class MockBackend(Backend):
                            "configure a real backend for output.",
                 "backend": self.name, "mock": True}
 
+    def stream(self, messages, max_tokens=256, temperature=0.2):
+        for tok in _chunk_tokens(self.complete(messages, max_tokens,
+                                               temperature)["content"]):
+            yield tok
 
-def _post_json(url, payload, key=None, timeout=300):
+
+def _post_json(url, payload, key=None, timeout=900):
+    import urllib.error as _ue
     headers = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = "Bearer " + key
     req = urllib.request.Request(url, json.dumps(payload).encode(), headers)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.load(resp)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.load(resp)
+    except _ue.HTTPError as e:
+        try:
+            detail = e.read().decode()[:300]
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"HTTP {e.code}: {detail}")
 
 
 class LlamaServerBackend(Backend):
@@ -69,7 +95,7 @@ class LlamaServerBackend(Backend):
         except Exception:
             return False
 
-    def complete(self, messages, max_tokens=256, temperature=0.2):
+    def _prep(self, messages):
         msgs = [dict(m) for m in messages]
         # Qwen3 thinks by default (reasoning_content, empty answer, wasted
         # tokens). Our pipeline wants answers — disable thinking unless
@@ -80,13 +106,61 @@ class LlamaServerBackend(Backend):
                 if m.get("role") == "user" and isinstance(m.get("content"), str):
                     m["content"] = m["content"].rstrip() + "\n/no_think"
                     break
+        return msgs
+
+    def complete(self, messages, max_tokens=256, temperature=0.2):
+        msgs = self._prep(messages)
         data = _post_json(self.base + "/v1/chat/completions", {
             "model": self.model, "messages": msgs,
             "max_tokens": max_tokens, "temperature": temperature,
             "stream": False,
         })
-        return {"content": data["choices"][0]["message"]["content"],
-                "backend": self.name, "model": self.model}
+        _msg = data["choices"][0]["message"]
+        _content = _msg.get("content") or ""
+        if not _content.strip() and _msg.get("reasoning_content"):
+            _content = _msg["reasoning_content"]
+        out = {"content": _content,
+               "backend": self.name, "model": self.model}
+        if isinstance(data.get("usage"), dict):
+            out["usage"] = data["usage"]
+        if isinstance(data.get("timings"), dict):
+            out["timings"] = data["timings"]
+        return out
+
+    def stream(self, messages, max_tokens=256, temperature=0.2):
+        """True token streaming: pass llama-server's SSE through as it arrives.
+        Yields content deltas; first delta arrives before generation finishes
+        (TTFT < full-generation time)."""
+        msgs = self._prep(messages)
+        payload = json.dumps({
+            "model": self.model, "messages": msgs,
+            "max_tokens": max_tokens, "temperature": temperature,
+            "stream": True,
+        }).encode()
+        req = urllib.request.Request(
+            self.base + "/v1/chat/completions", payload,
+            {"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=900) as resp:
+            for raw in resp:
+                line = raw.decode("utf-8", "replace").strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data)
+                except Exception:
+                    continue
+                try:
+                    delta = obj["choices"][0].get("delta") or {}
+                except Exception:
+                    continue
+                piece = delta.get("content")
+                if not piece and delta.get("reasoning_content"):
+                    piece = delta["reasoning_content"]
+                if piece:
+                    yield piece
 
 
 class EmbeddingBackend(Backend):
@@ -135,5 +209,14 @@ class TeacherAPIBackend(Backend):
             "model": self.model, "messages": messages,
             "max_tokens": max_tokens, "temperature": temperature,
         }, key=self.key)
-        return {"content": data["choices"][0]["message"]["content"],
-                "backend": self.name, "model": self.model}
+        _msg = data["choices"][0]["message"]
+        _content = _msg.get("content") or ""
+        if not _content.strip() and _msg.get("reasoning_content"):
+            _content = _msg["reasoning_content"]
+        out = {"content": _content,
+               "backend": self.name, "model": self.model}
+        if isinstance(data.get("usage"), dict):
+            out["usage"] = data["usage"]
+        if isinstance(data.get("timings"), dict):
+            out["timings"] = data["timings"]
+        return out

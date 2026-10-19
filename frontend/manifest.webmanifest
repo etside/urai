@@ -1,0 +1,19 @@
+{
+  "name": "Urai",
+  "short_name": "Urai",
+  "description": "Urai — agent harness + local AI. Verify-first agents, swarm, browser, skills and memory over an OpenAI-compatible API.",
+  "id": "/",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e0f12",
+  "theme_color": "#0060fc",
+  "categories": ["productivity", "utilities", "developer"],
+  "icons": [
+    { "src": "/frontend/brand/favicon-32.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "/frontend/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/frontend/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/frontend/brand/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "maskable" }
+  ]
+}
