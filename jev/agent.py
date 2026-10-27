@@ -18,27 +18,29 @@ from verifier import verify
 from . import tools
 from .context import build_context, to_messages
 from .router import route
+from .reason import verify_answer as _verify_answer, chain_of_thought as _cot
 from .skills import context_block as skills_block
 from .skills import match as skills_match
 
 MAX_FIXES = 2
 MAX_TOOLS = 6
-SYSTEM = ("You are Urai, developed by Tynio LTD, a senior engineer runtime. Plan briefly, use tools, "
-          "verify with tests. Never invent APIs, files, or results. "
+SYSTEM = ("You are Urai, an AI developed by Tynio LTD. "
+          "Plan briefly, use tools, verify with tests. Never invent APIs, files, or results.\n"
           "To use a tool, emit exactly one fenced block per turn:\n"
           "```tool\n"
           '{"tool": "<name>", "args": {...}}\n'
           "```\n"
-          "Tiers: urai-fast (quick), urai (balanced), urai-ultra (quality), "
-          "urai-cyber (security). Conductor splits hard tasks automatically. "
-          "Tools: read_file {path}, write_file {path, content}, "
-          "edit_file {path, old, new, replace_all?}, run {argv:[...]}, analyze {target}, "
-          "mcp_servers {server?}, mcp {server, tool, args}, "
-          "web_search {query, top?}, web_fetch {url}, "
-          "see {image, question?}, imagine {prompt, out?}, "
-          "browse {goal, steps:[{action: goto|click|fill|wait|snapshot|screenshot, url?, selector?, text?, value?}]}. "
-          "browse pauses (never fails) on auth fields so the human can input them. "
-          "After the tool result arrives, continue the task.")
+          "Available tools:\n"
+          "  read_file {path}  write_file {path, content}  edit_file {path, old, new}\n"
+          "  run {argv:[...]}  run_code {source, language?}  analyze {target}\n"
+          "  web_search {query}  web_fetch {url}  research {query, depth?}\n"
+          "  see {image, question?}  imagine {prompt, out?}\n"
+          "  artifact {kind, content, name?}  (kind: code|markdown|html|svg|csv|json)\n"
+          "  remember {text, kind?}  recall {query, top?}\n"
+          "  mcp {server, tool, args}  browse {goal, steps:[...]}\n"
+          "Tiers: urai-fast (quick) urai (balanced) urai-ultra (deep reasoning+verify) urai-cyber (security)\n"
+          "For hard questions use chain-of-thought: think step by step before answering.\n"
+          "After every tool result, continue the task until done.")
 TOOL_RE = re.compile(r"```tool\s*\n(.*?)```", re.DOTALL)
 
 
@@ -65,6 +67,28 @@ def run_tool_call(spec: dict, plan: bool = False) -> dict:
     if plan and name in ("write_file", "edit_file"):
         return {"ok": True, "plan_only": True, "proposal": spec}
     try:
+        if name == "run_code":
+            return tools.TOOLS["run_code"](
+                source=args.get("source", ""),
+                language=args.get("language", "python"),
+                stdin=args.get("stdin", ""),
+            )
+        if name == "research":
+            return tools.TOOLS["research"](
+                query=args.get("query", ""),
+                depth=int(args.get("depth", 3)),
+            )
+        if name == "artifact":
+            return tools.TOOLS["artifact"](
+                kind=args.get("kind", "text"),
+                content=args.get("content", ""),
+                name=args.get("name", ""),
+                language=args.get("language", ""),
+            )
+        if name == "remember":
+            return tools.TOOLS["remember"](args.get("text",""), args.get("kind","fact"))
+        if name == "recall":
+            return tools.TOOLS["recall"](args.get("query",""), int(args.get("top",3)))
         if name in tools.TOOLS:
             fn = tools.TOOLS[name]
             if name == "run" and isinstance(args, dict):

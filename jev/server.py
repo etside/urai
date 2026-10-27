@@ -550,6 +550,12 @@ class Handler(BaseHTTPRequestHandler):
                         "identity": "Urai, developed by Tynio LTD",
                         "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
             return
+        if p in ("/v1/tools", "/v1/tools/schemas"):
+            from .tools import TOOL_SCHEMAS
+            return self._send({"object": "list",
+                               "data": TOOL_SCHEMAS,
+                               "count": len(TOOL_SCHEMAS)})
+
         if p in ("/models", "/v1/models"):
             self._send({"object": "list",
                         "data": [{"object": "model", **m} for m in _models()]})
@@ -900,6 +906,29 @@ class Handler(BaseHTTPRequestHandler):
                             cached['urai']['cached'] = True
                             return self._send(cached)
 
+                    # response_format json_object/json_schema
+                    resp_fmt = body.get("response_format") or {}
+                    if isinstance(resp_fmt, dict) and \
+                            resp_fmt.get("type") in ("json_object", "json_schema"):
+                        from .tools import force_json as _fj
+                        schema = (resp_fmt.get("json_schema") or {}).get("schema")
+                        fj = _fj(msgs, schema=schema, max_tokens=max_tokens)
+                        if fj.get("ok"):
+                            _record_use(ip, device, bool(body.get("_urai_authed")))
+                            return self._send({
+                                "id": "chatcmpl-urai",
+                                "object": "chat.completion",
+                                "created": int(time.time()),
+                                "model": body.get("model", "urai"),
+                                "choices": [{"index": 0,
+                                             "message": {"role": "assistant",
+                                                         "content": json.dumps(fj["data"])},
+                                             "finish_reason": "stop"}],
+                                "usage": {"prompt_tokens": 0,
+                                          "completion_tokens": 0,
+                                          "total_tokens": 0}})
+                        return self._send({"error": fj.get("error","json mode failed")}, 422)
+
                     r = route(_text_of(msgs), tier=tier,
                               stream=want_stream)
                     backend = r['backend']
@@ -1143,6 +1172,32 @@ class Handler(BaseHTTPRequestHandler):
                              "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 0, "completion_tokens": 0,
                           "total_tokens": 0, "cost": 0}})
+
+        if p == "/v1/reason":
+            msgs = _as_messages(body.get("messages", []))
+            if not msgs:
+                return self._send({"error": "messages required"}, 400)
+            try:
+                from .reason import reason as _reason
+                res = _reason(msgs,
+                              max_tokens=body.get("max_tokens", 1024),
+                              temperature=body.get("temperature", 0.6))
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                return self._send(res)
+            except Exception as e:
+                return self._send({"error": str(e)[:300]}, 503)
+
+        if p == "/v1/research":
+            query = body.get("query", body.get("prompt", ""))
+            if not query:
+                return self._send({"error": "query required"}, 400)
+            try:
+                from .tools import research as _research
+                res = _research(query, depth=int(body.get("depth", 3)))
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                return self._send(res)
+            except Exception as e:
+                return self._send({"error": str(e)[:300]}, 502)
 
         if p == "/agent":
             from . import sessions as _sess
