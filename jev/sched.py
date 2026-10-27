@@ -1,24 +1,168 @@
 #!/usr/bin/env python3
-"""Scheduler: cron-style background agent jobs (stdlib only).
+"""Scheduler: cron-style background agent jobs + llama-server watchdog (stdlib only).
 
 Jobs live in data/sched_jobs.json:
   [{"id","task","every_s","enabled","last_run","last_status"}]
 Runs append to data/sched_runs/<id>.jsonl. A daemon thread ticks every
 30s inside the API process (started by serve()). OpenClaw-style "cron"
 plugin hook fires on every job run so plugins can react.
+
+Watchdog (self-healing serve):
+  A second daemon thread monitors llama-server every WATCHDOG_INTERVAL_S.
+  If the /health probe fails WATCHDOG_FAIL_THRESH times consecutively,
+  it restarts llama-server using the same command from serve_ctl.py.
+  Restart attempts are rate-limited (WATCHDOG_RESTART_COOLDOWN_S).
+  All events logged to data/watchdog.log.
 """
 import json
+import os
+import subprocess
 import threading
 import time
+import urllib.request
 import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 JOBS_FILE = ROOT / "data" / "sched_jobs.json"
 RUNS_DIR = ROOT / "data" / "sched_runs"
+WATCHDOG_LOG = ROOT / "data" / "watchdog.log"
 TICK_S = 30
-_started = False
 
+# Watchdog tuning (all overridable via env)
+WATCHDOG_INTERVAL_S = int(os.environ.get("URAI_WATCHDOG_INTERVAL", "20"))
+WATCHDOG_FAIL_THRESH = int(os.environ.get("URAI_WATCHDOG_FAILS", "3"))
+WATCHDOG_RESTART_COOLDOWN_S = int(os.environ.get("URAI_WATCHDOG_COOLDOWN", "60"))
+LLAMA_URL = os.environ.get("JEV_LLAMA_URL", "http://127.0.0.1:8080")
+
+_started = False
+_watchdog_started = False
+_watchdog_lock = threading.Lock()
+_last_restart: float = 0.0
+_fail_count: int = 0
+
+
+# ── Watchdog helpers ──────────────────────────────────────────────────────────
+
+def _wlog(msg: str):
+    """Append timestamped line to watchdog.log (best-effort)."""
+    try:
+        WATCHDOG_LOG.parent.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        with open(WATCHDOG_LOG, "a") as f:
+            f.write(f"{ts}  {msg}\n")
+    except Exception:
+        pass
+
+
+def _llama_healthy() -> bool:
+    try:
+        urllib.request.urlopen(LLAMA_URL + "/health", timeout=5).read()
+        return True
+    except Exception:
+        return False
+
+
+def _llama_pid() -> int | None:
+    """Return PID of running llama-server process, or None."""
+    try:
+        out = subprocess.check_output(
+            ["pgrep", "-f", "llama-server"], text=True).strip()
+        pids = [int(p) for p in out.splitlines() if p.strip().isdigit()]
+        return pids[0] if pids else None
+    except Exception:
+        return None
+
+
+def _start_llama() -> bool:
+    """Restart llama-server using serve_ctl.py logic. Returns True if launched."""
+    try:
+        from . import serve_ctl as _ctl
+        result = _ctl.start()
+        return result.get("ok", False)
+    except Exception as e:
+        _wlog(f"serve_ctl.start() failed: {e}")
+        # Fallback: try direct subprocess using env hints
+        try:
+            llama_bin = os.environ.get(
+                "URAI_LLAMA_BIN",
+                str(ROOT / "third_party" / "llama.cpp" / "build" / "bin" / "llama-server"))
+            model_path = os.environ.get("URAI_LLAMA_MODEL_PATH", "")
+            if not model_path:
+                # Infer from registry
+                reg_path = ROOT / "model" / "registry.json"
+                reg = json.loads(reg_path.read_text())
+                active = reg.get("active", "")
+                model_path = str(ROOT / reg["models"][active]["path"])
+            cmd = [llama_bin, "--model", model_path,
+                   "--port", "8080", "--host", "127.0.0.1",
+                   "--ctx-size", "4096", "--threads", "4", "-ngl", "99"]
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+            return True
+        except Exception as e2:
+            _wlog(f"direct llama restart failed: {e2}")
+            return False
+
+
+def watchdog_status() -> dict:
+    """Return current watchdog state for /metrics and /health."""
+    global _fail_count, _last_restart
+    return {
+        "healthy": _llama_healthy(),
+        "consecutive_fails": _fail_count,
+        "last_restart": int(_last_restart) if _last_restart else None,
+        "watchdog_interval_s": WATCHDOG_INTERVAL_S,
+        "watchdog_fail_thresh": WATCHDOG_FAIL_THRESH,
+    }
+
+
+def _watchdog_loop():
+    global _fail_count, _last_restart
+    _wlog("watchdog started")
+    while True:
+        try:
+            if _llama_healthy():
+                if _fail_count > 0:
+                    _wlog(f"llama-server recovered after {_fail_count} fails")
+                _fail_count = 0
+            else:
+                _fail_count += 1
+                _wlog(f"llama-server unhealthy (fail {_fail_count}/{WATCHDOG_FAIL_THRESH})")
+                if _fail_count >= WATCHDOG_FAIL_THRESH:
+                    now = time.time()
+                    with _watchdog_lock:
+                        since_last = now - _last_restart
+                        if since_last < WATCHDOG_RESTART_COOLDOWN_S:
+                            _wlog(f"restart skipped — cooldown {int(WATCHDOG_RESTART_COOLDOWN_S - since_last)}s remaining")
+                        else:
+                            pid = _llama_pid()
+                            if pid:
+                                try:
+                                    os.kill(pid, 9)
+                                    _wlog(f"killed stale llama-server pid={pid}")
+                                    time.sleep(1)
+                                except Exception:
+                                    pass
+                            _wlog("attempting llama-server restart...")
+                            ok = _start_llama()
+                            _last_restart = time.time()
+                            _fail_count = 0
+                            _wlog(f"restart {'succeeded' if ok else 'FAILED'}")
+                            # Notify plugins
+                            try:
+                                from . import plugins as _pl
+                                _pl.emit("watchdog_restart",
+                                         {"ok": ok, "ts": int(_last_restart)})
+                            except Exception:
+                                pass
+        except Exception as e:
+            _wlog(f"watchdog tick error: {e}")
+        time.sleep(WATCHDOG_INTERVAL_S)
+
+
+# ── Scheduler ─────────────────────────────────────────────────────────────────
 
 def _load() -> list:
     try:
@@ -104,7 +248,8 @@ def _tick():
         try:
             now = time.time()
             for job in _load():
-                if job.get("enabled") and now - job.get("last_run", 0) >= job.get("every_s", 3600):
+                if job.get("enabled") and \
+                        now - job.get("last_run", 0) >= job.get("every_s", 3600):
                     run_job(job)
         except Exception:
             pass
@@ -112,8 +257,12 @@ def _tick():
 
 
 def start():
-    global _started
-    if _started:
-        return
-    _started = True
-    threading.Thread(target=_tick, daemon=True).start()
+    """Start scheduler tick + llama-server watchdog (idempotent)."""
+    global _started, _watchdog_started
+    if not _started:
+        _started = True
+        threading.Thread(target=_tick, daemon=True, name="urai-sched").start()
+    if not _watchdog_started:
+        _watchdog_started = True
+        threading.Thread(target=_watchdog_loop, daemon=True,
+                         name="urai-watchdog").start()

@@ -494,6 +494,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p = self._path()
         q = self._query()
+        if p == "/v1/cloud/usage":
+            days = int(urllib.parse.parse_qs(
+                urllib.parse.urlparse(self.path).query).get("days", ["7"])[0])
+            try:
+                from .cloud_budget import usage_report as _ur
+                return self._send(_ur(days=min(days, 90)))
+            except Exception as e:
+                return self._send({"error": str(e)[:200]}, 500)
+
         if p == "/metrics":
             from .router import routing_scores as _rs
             local = LlamaServerBackend()
@@ -506,6 +515,16 @@ class Handler(BaseHTTPRequestHandler):
             m['cloud_backend'] = getattr(cloud, '_model_id', None)
             m['cloud_healthy'] = cloud.healthy() if cloud.available else False
             m['routing_scores'] = _rs()
+            try:
+                from .sched import watchdog_status as _wd
+                m['watchdog'] = _wd()
+            except Exception:
+                pass
+            try:
+                from .cloud_budget import usage_report as _ur
+                m['cloud_budget'] = _ur(days=1)
+            except Exception:
+                pass
             return self._send(m)
 
         if p == "/health":
@@ -514,8 +533,20 @@ class Handler(BaseHTTPRequestHandler):
                 voice_status = _voice_module.healthy()
             except Exception:
                 voice_status = {}
+            try:
+                from .sched import watchdog_status as _wd
+                wd = _wd()
+            except Exception:
+                wd = {}
+            try:
+                from .cloud_budget import day_total_usd as _dtu
+                cloud_spend = _dtu()
+            except Exception:
+                cloud_spend = None
             self._send({"status": "ok", "local_llama": local.healthy(),
                         "voice": voice_status,
+                        "watchdog": wd,
+                        "cloud_spend_today_usd": cloud_spend,
                         "identity": "Urai, developed by Tynio LTD",
                         "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
             return

@@ -378,6 +378,13 @@ class CloudAPIBackend(Backend):
             raise RuntimeError("No cloud backend configured "
                                "(set MOONSHOT_API_KEY / DEEPSEEK_API_KEY / "
                                "ANTHROPIC_API_KEY / OPENAI_API_KEY)")
+        # Budget guard — raises BudgetExceeded if daily limit hit
+        try:
+            from .cloud_budget import check_budget as _cb
+            _provider = (self._reg_entry or {}).get('provider', '')
+            _cb(_provider)
+        except ImportError:
+            pass
         url = self._base + self._chat_path
         payload = self._build_payload(messages, max_tokens, temperature, stream=False)
         req = urllib.request.Request(url, json.dumps(payload).encode(), self._headers())
@@ -391,18 +398,25 @@ class CloudAPIBackend(Backend):
                 detail = ""
             raise RuntimeError(f"Cloud {self.name} HTTP {e.code}: {detail}")
 
+        provider = (self._reg_entry or {}).get('provider', '')
         if self._auth_style == "x-api-key":
             # Anthropic response shape
             content_blocks = data.get("content", [])
             text = " ".join(b.get("text", "") for b in content_blocks
                             if b.get("type") == "text")
             usage = data.get("usage", {})
+            pt = usage.get("input_tokens", 0)
+            ct = usage.get("output_tokens", 0)
+            try:
+                from .cloud_budget import record_usage as _ru
+                _ru(provider, pt, ct, self._model_id or '')
+            except Exception:
+                pass
             return {"content": text, "backend": self.name,
                     "model": self._model_id,
-                    "usage": {"prompt_tokens": usage.get("input_tokens", 0),
-                              "completion_tokens": usage.get("output_tokens", 0),
-                              "total_tokens": (usage.get("input_tokens", 0)
-                                               + usage.get("output_tokens", 0))}}
+                    "usage": {"prompt_tokens": pt,
+                              "completion_tokens": ct,
+                              "total_tokens": pt + ct}}
         _msg = data["choices"][0]["message"]
         content = _msg.get("content") or ""
         if not content.strip() and _msg.get("reasoning_content"):
@@ -410,6 +424,14 @@ class CloudAPIBackend(Backend):
         out = {"content": content, "backend": self.name, "model": self._model_id}
         if isinstance(data.get("usage"), dict):
             out["usage"] = data["usage"]
+            try:
+                from .cloud_budget import record_usage as _ru
+                _ru(provider,
+                    data['usage'].get('prompt_tokens', 0),
+                    data['usage'].get('completion_tokens', 0),
+                    self._model_id or '')
+            except Exception:
+                pass
         return out
 
     def stream_complete(self, messages, max_tokens=256, temperature=0.2):
