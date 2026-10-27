@@ -10,7 +10,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Voice input for /v1/audio/transcriptions -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <!-- cleartext for LAN servers (https still recommended via Caddy) -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
