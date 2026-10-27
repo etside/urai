@@ -38,13 +38,6 @@ from .agent import run_agent
 from .backends import LlamaServerBackend, MockBackend, CloudAPIBackend
 from .router import route
 
-def _get_aws_health() -> dict:
-    try:
-        from .aws import aws_health as _ah
-        return _ah()
-    except Exception:
-        return {"ok": False}
-
 # ── Response cache (LRU, in-process) ──────────────────────────────────────
 import collections, hashlib as _hs
 _CACHE_MAX = int(os.environ.get('URAI_CACHE_MAX', '256'))
@@ -151,17 +144,7 @@ def _log(kind, ip="", device="", preview="", extra=None):
             _save_state()
     except Exception:
         pass
-    # Mirror to CloudWatch async (best-effort)
-    try:
-        from .aws import cw_log_server as _cw
-        import threading as _thr
-        _thr.Thread(target=_cw,
-                    args=(json.dumps({"kind": kind, "ip": ip,
-                                      "preview": str(preview)[:200],
-                                      **(extra or {})}),),
-                    daemon=True).start()
-    except Exception:
-        pass
+
 
 def _client_ip(handler):
     try:
@@ -511,20 +494,6 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p = self._path()
         q = self._query()
-        if p == "/v1/aws/health":
-            try:
-                from .aws import aws_health as _ah
-                return self._send(_ah())
-            except Exception as e:
-                return self._send({"ok": False, "error": str(e)[:200]}, 500)
-
-        if p == "/v1/aws/backup":
-            try:
-                from .aws import s3_backup_data as _sb
-                return self._send(_sb())
-            except Exception as e:
-                return self._send({"ok": False, "error": str(e)[:200]}, 500)
-
         if p == "/v1/cloud/usage":
             days = int(urllib.parse.parse_qs(
                 urllib.parse.urlparse(self.path).query).get("days", ["7"])[0])
@@ -578,7 +547,6 @@ class Handler(BaseHTTPRequestHandler):
                         "voice": voice_status,
                         "watchdog": wd,
                         "cloud_spend_today_usd": cloud_spend,
-                        "aws": _get_aws_health(),
                         "identity": "Urai, developed by Tynio LTD",
                         "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
             return
@@ -873,6 +841,8 @@ class Handler(BaseHTTPRequestHandler):
                     msgs, body.get("max_tokens", 256),
                     body.get("temperature", 0.2))
                 content = res["content"]
+            except RuntimeError as e:
+                return self._send({"error": str(e)[:300], "code": "urai_starting", "retry_after": 5}, 503)
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
@@ -946,6 +916,14 @@ class Handler(BaseHTTPRequestHandler):
                     content = res["content"]
                     backend_used = res.get('backend', 'unknown')
                     usage_out = res.get('usage') or {}
+                except RuntimeError as e:
+                    # llama-server temporarily down — watchdog is restarting it
+                    _m_inc('errors')
+                    return self._send({
+                        "error": str(e)[:300],
+                        "code": "urai_starting",
+                        "retry_after": 5,
+                    }, 503)
                 except Exception as e:
                     _m_inc('errors')
                     return self._send({"error": str(e)[:300]}, 502)
@@ -1034,6 +1012,8 @@ class Handler(BaseHTTPRequestHandler):
                                   502)
             try:
                 vecs = be.embed(body.get("input", ""))
+            except RuntimeError as e:
+                return self._send({"error": str(e)[:300], "code": "urai_starting", "retry_after": 5}, 503)
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
@@ -1058,6 +1038,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 audio_bytes = _voice_module.tts(text, voice=voice, speed=speed,
                                                 format=fmt, language=language)
+            except RuntimeError as e:
+                return self._send({"error": str(e)[:300], "code": "urai_starting", "retry_after": 5}, 503)
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
