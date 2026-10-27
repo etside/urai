@@ -251,6 +251,18 @@ def _tick():
                 if job.get("enabled") and \
                         now - job.get("last_run", 0) >= job.get("every_s", 3600):
                     run_job(job)
+            # Run due routines (PersonalJarvis-style scheduled tasks)
+            try:
+                from .routines import run_due_routines as _rdr
+                _rdr()
+            except Exception:
+                pass
+            # Run due named agents
+            try:
+                from .jarvis_agents import run_due_agents as _rda
+                _rda()
+            except Exception:
+                pass
         except Exception:
             pass
         time.sleep(TICK_S)

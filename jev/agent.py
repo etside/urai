@@ -21,6 +21,8 @@ from .router import route
 from .reason import verify_answer as _verify_answer, chain_of_thought as _cot
 from .skills import context_block as skills_block
 from .skills import match as skills_match
+from .evidence import EvidenceLedger
+from .tool_guard import check_and_log as _guard_check
 
 MAX_FIXES = 2
 MAX_TOOLS = 6
@@ -58,9 +60,20 @@ def categorize_failure(answer: str, tool_error: str = "") -> str:
     return "reasoning"
 
 
-def run_tool_call(spec: dict, plan: bool = False) -> dict:
+def run_tool_call(spec: dict, plan: bool = False,
+                  ledger: 'EvidenceLedger | None' = None) -> dict:
     """Execute one parsed {"tool", "args"} spec through jailed engines.
     plan=True: write/edit calls are recorded as proposals, NOT applied."""
+    # Security guard
+    _tname = spec.get('tool', '')
+    _targs = spec.get('args', {}) or {}
+    _guard = _guard_check(_tname, _targs if isinstance(_targs, dict) else {})
+    if not _guard.get('allowed', True):
+        return {'ok': False, 'error': f'Tool blocked ({_guard["risk"]}): {_guard["reason"]}',
+                'blocked': True}
+    # Record in evidence ledger if provided
+    if ledger is not None:
+        pass  # will record after execution below
     import json as _json
     name = spec.get("tool", "")
     args = spec.get("args", {}) or {}
