@@ -1,208 +1,213 @@
-# Urai — agent harness + local AI runtime
+# 🧠 Urai
 
-Urai is an OpenCode/OpenClaw-class **agent harness** (verify-first agent loop,
-parallel swarm, jailed tools, browser, skills, memory, scheduler, sessions,
-plan-mode editing) served with an OpenAI-compatible API — plus the program to
-grow its own weights: distill → eval-gate → LoRA. See `docs/HARNESS.md` and
-`docs/API.md`.
+**Production AI runtime — local + cloud, CLI + API + Web + Android.**
 
-- Live: `https://urai.daddyai.online` (TLS) · master key `856777` = unlimited,
-  guests = 5 free responses per device.
-- Active model: **Qwen3-4B Q4_K_M** (primary) · 1.7B teacher · embed + vision.
-- Distill set: **245 verified rows** (dual-teacher CPU grind, exec+judge gated).
-- GPU: one-hour H100 / Kaggle T4 / Modal A100 paths armed
-  (`docs/GPU_COMBINED_STRATEGY.md`); DO account GPU limit is 0 — ticket filed
-  per `docs/GPU_LIMIT_REQUEST.md`.
+Urai is a single, self-contained AI runtime that runs on the cheapest VPS you can find. One model file, all capabilities: chat, vision, image generation, video generation, voice (TTS + STT), vibe coding, embeddings, agents, and MCP. Fully OpenAI API compatible — drop-in replacement. GPU unlocks full capability.
 
-## Quickstart
+---
 
-Requirements: Python 3.12+, `cmake`, a C++ compiler, ~2 GB free disk
-(per 0.5B GGUF). GPU optional (CPU works, CUDA auto-used when present).
+## ✨ Capabilities
 
-```bash
-# 1. Fetch a base student weight (public Qwen GGUFs)
-./bin/urai model download coder05-fast
-#  - qwen05-fast / coder05-fast / coder15-primary (see model/registry.json)
+| Capability | Local (CPU) | Local (GPU) | Cloud API |
+|-----------|-------------|-------------|----------|
+| Chat / LLM | qwen3-4b (Q4_K_M) | qwen3-8b (Q4_K_M) | GPT-4o, Claude Haiku, Kimi K2, DeepSeek R2, Muse Wonder |
+| Vision | qwen25vl-3b | qwen25vl-7b | GPT-4o-mini, Gemini |
+| Image Gen | sd-turbo (2-step, 512px) | HyperFlux-1 (1-step SDXL) | DALL-E 3, Stability |
+| Video Gen | ❌ (needs 16GB+ VRAM) | HunyuanVideo | Veo 3, Wan 3.0 |
+| Voice TTS | kokoro-onnx (80MB, CPU) | kokoro-onnx | ElevenLabs, OpenAI TTS |
+| Voice STT | whisper-small (int8) | whisper-medium | OpenAI Whisper |
+| Transcribe | Bengali + English | Bengali + English | All languages |
+| Vibe Coding | local + tools | local + tools | Any cloud model |
+| Embeddings | nomic-embed (768d) | nomic-embed | OpenAI ada-002 |
+| Agent | plan → tool → verify | plan → tool → verify | Any backend |
+| MCP | stdio server | stdio server | stdio server |
 
-# 2. Build the llama.cpp runner (first time only, takes a while on small boxes)
-git clone --depth 1 https://github.com/ggerganov/llama.cpp.git third_party/llama.cpp
-cmake -S third_party/llama.cpp -B third_party/llama.cpp/build \
-  -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=ON
-cmake --build third_party/llama.cpp/build -j$(nproc) \
-  --target llama-cli llama-bench llama-quantize llama-server
+---
 
-# 3. Start the local model server (GPU-aware, :8080) and use it
-./bin/urai serve start
-./bin/urai chat                       # streaming REPL (empty line quits)
-./bin/urai agent "Write clamp(v,lo,hi) with a test"   # plan/tool/verify loop
-./bin/urai api                        # OpenAI-compatible API on :8777
-```
+## 💻 Hardware Requirements
 
-Add `./bin` to `PATH` to call `urai` from anywhere.
+| Tier | Specs | What Works |
+|------|-------|-----------|
+| **Minimum** (VPS/CPU) | 2 vCPU, 4GB RAM | Chat (qwen3-4b), embeddings, sd-turbo, whisper-small |
+| **Recommended** (GPU 6-8GB) | 4 vCPU, 8GB RAM, 6GB VRAM (RTX 3060/A2000) | All local models up to 8B, fast image gen, medium STT |
+| **Production** (GPU 16GB+) | 8+ vCPU, 16GB+ RAM, 16GB VRAM (A100/RTX 4090) | All models, real-time video gen, multi-modal |
 
-## Automated build (no manual downloads)
+---
 
-`.github/workflows/build.yml` does the whole upgrade on a GitHub runner:
-builds llama.cpp (pinned commit) + stable-diffusion.cpp from source,
-downloads every pinned weight, runs the smoke test, regenerates the distill
-datasets, and bundles runners + weights (+ SHA256SUMS) as artifacts — and as
-a **GitHub Release** when you push a version tag:
+## 🚀 Quick Install
 
 ```bash
-git tag v1.1 && git push origin v1.1
-# -> Release holds the full bundle; files over ~1.9GB are split
-#    (2GB Release cap) — rejoin with:
-python3 scripts/assemble_release.py <download-dir>
+curl -fsSL https://raw.githubusercontent.com/etside/urai/main/install.sh | bash
 ```
 
-Every push also runs fast CI (`ci.yml`: compile + offline smoke test).
-
-## CLI reference
-
-```
-urai chat                          interactive REPL, streams tokens
-urai ask "question"                 one-shot answer
-urai agent "multi-step task"        plan/tool/verify loop
-urai model list                     registry + availability + bench numbers
-urai model download <id>            fetch GGUF from HF into model/base
-urai model use <id>                 set active model (restarts server)
-urai model bench [--id ID]          llama-bench row for a model
-urai serve start|stop|status        llama-server lifecycle (GPU-aware)
-urai gpu                            detect GPU + offload policy
-urai teacher status|test            external teacher backend (env) check
-urai see <image> [question]          ask about a picture (vision model)
-urai imagine <prompt> [-o out.png]   text-to-image (stable-diffusion.cpp)
-urai evaluate "task" --expect a,b   scored check via running server
-urai api [--port 8777]              start Urai OpenAI-compatible API
-                                    (/v1/chat/completions, /v1/images/generations, ...)
-urai version                        runtime version + active model
+Or clone and run:
+```bash
+git clone https://github.com/etside/urai.git
+cd urai
+pip install -r requirements.txt
+urai model download qwen3-4b
+urai serve start
 ```
 
-## Models
+---
 
-| id | kind | params | role | status |
-|---|---|---|---|---|
-| `qwen05-fast` | chat | 0.5B Q4_K_M | fast | benched 28.6/6.9 tok/s |
-| `coder05-fast` | chat | 0.5B Q4_K_M | fast-coding, **active** | benched 23.2/6.35 tok/s |
-| `coder15-primary` | chat | 1.5B Q4_K_M | primary | needs bigger box |
-| `qwen25vl-3b` | vision | 3B Q4_K_M + Q8_0 mmproj | see pictures | `urai model download qwen25vl-3b` |
-| `sd-turbo` | generate | SD-Turbo fp16 | make pictures | `urai model download sd-turbo` |
-| `embed-small` | embedding | 137M Q4_K_M | vectors (`urai embed`) | `urai model download embed-small` |
-| `qwen3-06b` | chat | 0.6B Q8_0 | fast, newer than 0.5B | `urai model download qwen3-06b` |
-| `qwen3-17b` | chat | 1.7B Q4_K_M | primary pick | `urai model download qwen3-17b` |
-
-Train your own (Unsloth QLoRA on the distill set, R1-style reasoning
-traces, MergeKit merges) + speed levers (KV quant default, ngram
-speculative, EAGLE-3): [docs/TRAINING.md](docs/TRAINING.md).
-
-Vision: [Qwen2.5-VL-3B GGUF](https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF)
-via [llama.cpp](https://github.com/ggml-org/llama.cpp).
-Generation: [SD-Turbo](https://huggingface.co/stabilityai/sd-turbo) via
-[stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp).
-Details + remaining work: [docs/VISION_UPGRADE.md](docs/VISION_UPGRADE.md).
-
-## Hosting (API + web playground, DeepSeek-style)
-
-`urai api` serves **both** the OpenAI-compatible API and a zero-dependency
-web playground (chat / see / imagine with streaming) at `/`:
-
-```
-./bin/urai api                              # localhost only, no key
-URAI_API_KEY=$(openssl rand -hex 24) \
-  ./bin/urai api --host 0.0.0.0             # LAN/VPS, key required
-```
-
-Webapp: http://localhost:8777 — set endpoint + key in the header, pick a
-model, chat with streaming, upload pictures, generate images. Keys live only
-in your browser's localStorage.
-
-### Options
-
-| Where | How | Notes |
-|---|---|---|
-| Localhost | `./bin/urai api` | default, no key, safest |
-| LAN | `--host 0.0.0.0` + `URAI_API_KEY` | every `/v1/*` + tool route needs `Bearer` |
-| VPS (systemd) | `deploy/urai-api.service` → `/etc/systemd/system/` | create `urai` user, put repo in `/opt/urai` |
-| VPS + HTTPS | Caddy: `deploy/Caddyfile` | automatic TLS, `reverse_proxy 127.0.0.1:8777` |
-| Docker | `docker build -t urai .` + `docker/docker-compose.yml` | `cp docker/.env.example docker/.env`, set key |
-| Railway/similar | Dockerfile deploys as-is | set `URAI_API_KEY`, `URAI_MODEL` vars; add volume for `model/` |
-
-### Sizing (measured where noted, rest estimated)
-
-| Model | RAM needed | Notes |
-|---|---|---|
-| `coder05-fast` 0.5B | ~0.6 GB | measured 569 MB; smallest VPS (1 GB) OK |
-| `qwen05-fast` 0.5B | ~0.6 GB | measured 592 MB |
-| `coder15-primary` 1.5B | ~1.5 GB | needs 2 GB+ box (3 GB box OOM'd) |
-| `qwen25vl-3b` vision | ~3 GB | 3B Q4_K_M + Q8_0 projector |
-| `sd-turbo` generate | ~4 GB | fp16 UNet on CPU; slow but works |
-
-Rule of thumb: 2 vCPU + model RAM + 1 GB headroom. CPU-only is fine;
-CUDA (`--n-gpu-layers`, `SD_CUDA`) just makes it faster.
-
-### Security checklist
-
-- Never bind `0.0.0.0` without `URAI_API_KEY` (the CLI prints `auth=off` as a reminder).
-- `/health` and the web UI stay public by design; all data routes need the key when set.
-- CORS defaults to `*` for local dev; lock down with `URAI_CORS_ORIGIN=https://your.domain` in production.
-- Put Caddy/nginx in front for TLS; never expose bare HTTP to the internet.
-- `urai model download` URLs are pinned in `model/registry.json`; weights are the only large pieces and live outside git.
-
-Teacher (distillation source) is any OpenAI-compatible endpoint:
+## 🖥️ CLI Commands
 
 ```bash
-export TEACHER_BASE_URL="https://opencode.ai/zen/v1"   # or OpenRouter, etc.
-export TEACHER_API_KEY="..."
-export TEACHER_MODEL="opencode/muse-spark-1.3-contributor-free"
-./bin/urai teacher test
+urai chat                    # Interactive chat REPL
+urai ask "question"           # One-shot question
+urai agent "task"             # Plan → tool → verify agent loop
+urai vibe "build a todo app"  # Vibe coding: NL → code → run → iterate
+urai see image.jpg "describe" # Vision: analyze image
+urai imagine "a sunset"       # Image generation (sd-turbo)
+urai video "prompt"           # Video generation (cloud API)
+urai speak "hello world"      # TTS — text to speech
+urai transcribe audio.wav     # STT — speech to text
+urai embed "text"             # Generate embeddings
+urai mcp                      # Start MCP stdio server
+urai api                      # Start OpenAI-compatible API server (:8777)
+urai model list               # List available models
+urai model download <name>    # Download a model
+urai model add <name> <path>  # Register a local model
+urai serve start              # Start local llama-server
+urai gpu                      # Show GPU info
 ```
 
-## Distillation pipeline
+---
 
-```
-scripts/distill/generate_tasks.py  -> data/raw_tasks/expanded   (task gen)
-scripts/distill/teacher_client.py  -> data/teacher_out          (teacher answers)
-scripts/distill/verifier.py        -> exec + judge checks       (exec_check, judge)
-scripts/distill/filter.py          -> data/verified/*.jsonl     (keep/drop + why)
-scripts/distill/run_distill.py     -> one-shot orchestration + report
-scripts/hw_baseline.py             -> machine capability record
-```
+## 🔌 API Compatibility
+
+Urai speaks the **OpenAI API protocol**. It's a drop-in replacement:
 
 ```bash
-python3 scripts/hw_baseline.py --matmul-n 512 --matmul-iters 5
-python3 scripts/distill/generate_tasks.py --out data/raw_tasks/expanded --seed 7
-python3 scripts/distill/run_distill.py --tasks data/raw_tasks/expanded \
-  --out data/verified/distill-v0.3.jsonl \
-  --report eval/reports/distill-v0.3-summary.json --exec --judge
+# Point any OpenAI-compatible client at Urai
+export OPENAI_API_KEY=any-value      # Urai ignores it for local
+export OPENAI_BASE_URL=http://localhost:8777/v1
 ```
 
-`data/raw_tasks/sample_tasks.jsonl` is the checked-in seed set. Full
-`teacher_out` / `verified` sets regenerate via the commands above.
+### Endpoints
 
-## Layout
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | Chat completions (streaming supported) |
+| `/v1/completions` | POST | Text completions |
+| `/v1/models` | GET | List available models |
+| `/v1/images/generations` | POST | Image generation |
+| `/v1/audio/speech` | POST | Text-to-speech (TTS) |
+| `/v1/audio/transcriptions` | POST | Speech-to-text (STT) |
+| `/v1/embeddings` | POST | Text embeddings |
+| `/v1/videos/generations` | POST | Video generation |
+| `/health` | GET | Health check (includes voice status) |
 
+---
+
+## ☁️ Cloud Model Integrations
+
+| Provider | Model | Role | Env Variable |
+|----------|-------|------|-------------|
+| Anthropic | Claude Haiku 4.5 | Chat (fast, cheap) | `ANTHROPIC_API_KEY` |
+| OpenAI | GPT-4o Mini | Vision + fast chat | `OPENAI_API_KEY` |
+| Google | Gemini / Veo 3 | Vision + Video gen | `GEMINI_API_KEY` |
+| DeepSeek | DeepSeek R2 | Reasoning + coding | `DEEPSEEK_API_KEY` |
+| Moonshot | Kimi K2 (1T MoE) | Coding + reasoning | `MOONSHOT_API_KEY` |
+| OpenCode | Muse Wonder | Free-tier chat | `OPENCODE_API_KEY` |
+| ElevenLabs | eleven_multilingual_v2 | TTS (cloud) | `ELEVENLABS_API_KEY` |
+| FAL | HyperFlux-1 | Fast image gen | `FAL_API_KEY` |
+| Wan | Wan Video 3.0 | Video gen | `WAN_API_KEY` |
+
+---
+
+## 📦 Local Models
+
+| Model | Size | Role | Quant |
+|-------|------|------|-------|
+| qwen3-0.6b | 0.6B | Fast chat | Q8_0 |
+| qwen3-1.7b | 1.7B | Primary chat | Q4_K_M |
+| qwen3-4b | 4B | Primary chat (active) | Q4_K_M |
+| qwen3-8b | 8B | Primary chat (GPU) | Q4_K_M |
+| qwen25vl-3b | 3B | Vision | Q4_K_M |
+| coder05-fast | 0.5B | Fast coding | Q4_K_M |
+| deepseek-r1-1.5b | 1.5B | Reasoning | Q4_K_M |
+| mimo25-3b | 3B | Primary chat | Q4_K_M |
+| nemotron-mini-4b | 4B | Primary chat | Q4_K_M |
+| embed-small | 137M | Embeddings (768d) | Q4_K_M |
+| sd-turbo | 0.86B | Image gen (2-step) | fp16 |
+| whisper-small | 244M | STT (Bengali+English) | int8 |
+| whisper-medium | 769M | STT (higher accuracy) | int8 |
+| kokoro-tts | 82M | TTS (ElevenLabs-quality) | fp32 |
+
+---
+
+## 🔧 Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `URAI_PORT` | 8777 | API server port |
+| `URAI_API_KEY` | (empty) | API key for remote access (empty = localhost only) |
+| `URAI_MASTER_KEY` | 856777 | Master key (unlimited access) |
+| `URAI_VOICE_BACKEND` | auto | Voice backend: auto, local, elevenlabs, openai |
+| `URAI_WHISPER_MODEL` | small | Whisper model size: tiny, base, small, medium |
+| `URAI_KOKORO_VOICE` | af_heart | Kokoro TTS voice ID |
+| `ELEVENLABS_API_KEY` | (empty) | ElevenLabs API key for cloud TTS |
+| `OPENAI_API_KEY` | (empty) | OpenAI API key for cloud TTS/STT/vision |
+| `OPENAI_BASE_URL` | https://api.openai.com/v1 | OpenAI-compatible base URL |
+| `GEMINI_API_KEY` | (empty) | Google Gemini / Veo 3 API key |
+| `DEEPSEEK_API_KEY` | (empty) | DeepSeek API key |
+| `MOONSHOT_API_KEY` | (empty) | Moonshot / Kimi K2 API key |
+| `ANTHROPIC_API_KEY` | (empty) | Anthropic / Claude API key |
+| `FAL_API_KEY` | (empty) | FAL API key for HyperFlux |
+| `WAN_API_KEY` | (empty) | Wan Video API key |
+
+---
+
+## 🌐 Web UI
+
+```bash
+urai api                    # Starts server on http://localhost:8777
 ```
-jev/      runtime package (router/context/tools/agent/server/backends/registry)
-bin/      urai + jev launchers
-docs/     architecture, baselines, dataset pipeline
-scripts/  hw baseline + distillation pipeline (teacher → verifier → filter)
-data/     raw_tasks seeds (generated/verified sets are reproducible artifacts)
-eval/     benchmarks + reports (all measured, nothing invented)
-model/    registry.json + GGUF slots (binaries live here, NOT in git)
-```
 
-## Headline finding
+Open `http://localhost:8777/app` for the full web interface, or `http://localhost:8777/welcome` for the landing page.
 
-The dev box (2-core Intel m3, ~3.2 GB RAM, no GPU) runs the runtime, data
-pipeline and eval harness — but cannot train weights or bench 1.5B models.
-Training/benching needs a GPU elsewhere; artifacts come back here as GGUF and
-slot into `model/registry.json` via `urai model download`.
+---
 
-## Recovery note
+## 📱 Android APK
 
-This repo was reconstructed from the `ownai-distill-jev` build session after
-the original `x3` work disk became unavailable. Source, docs, scripts, seed
-data and registry are byte-faithful to the session's final state
-(`urai v2`, active `qwen3-4b`). Regenerable artifacts (GGUF weights,
-`third_party/llama.cpp` build, `teacher_out`/`verified` sets, bench logs)
-are intentionally excluded — reproduce them with the commands above.
+Urai ships with an Android WebView shell:
+- Points at your Urai API server
+- Privacy guard: `PrivacyMonitorService` blocks trackers
+- Configurable server URL + API key in settings
+- Build: GitHub Actions → [etside/urai/releases](https://github.com/etside/urai/releases)
+
+---
+
+## 🎓 Training Your Own Model
+
+Urai includes a distillation pipeline for custom models:
+
+1. **Distillation**: `scripts/distill/` — generate → verify → filter training data
+2. **QLoRA fine-tune**: Kaggle free GPU (`urai_kaggle_setup.txt`) or Modal cloud
+3. **Base**: Qwen3-0.6B → your student model
+4. **Gate**: must beat previous model on the benchmark suite
+5. **Deploy**: download GGUF → `model/base/` → `urai model add`
+
+See [docs/TRAINING_INFRA.md](docs/TRAINING_INFRA.md) for details.
+
+---
+
+## 📚 Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) — Full system architecture
+- [Runtime Setup](deploy/RUNTIME.md) — VPS deployment guide
+- [Separate VPS](deploy/vps-separate.md) — Multi-VPS setup
+- [Clawd Audit](docs/CLAWD_AUDIT.md) — Code audit results
+- [Training Infra](docs/TRAINING_INFRA.md) — Model training pipeline
+
+---
+
+## 📄 License
+
+MIT
+
+---
+
+**Urai, developed by Tynio LTD**
