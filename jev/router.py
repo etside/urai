@@ -24,7 +24,7 @@ import os
 import re
 import time
 
-from .backends import (LlamaServerBackend, CloudAPIBackend,
+from .backends import (LlamaServerBackend, CloudAPIBackend, BedrockBackend,
                        MockBackend, TeacherAPIBackend, _gpu_available)
 
 # ── Classifiers ────────────────────────────────────────────────────────────────
@@ -109,6 +109,14 @@ def pick_backend(level: int, stream: bool = False):
         if api.healthy():
             return api, True, True
     except (KeyError, Exception):
+        pass
+
+    # AWS Bedrock fallback (Nova Micro, cheapest)
+    try:
+        bedrock = BedrockBackend()
+        if bedrock.healthy():
+            return bedrock, level >= 2, True
+    except Exception:
         pass
 
     # Nothing available

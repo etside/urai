@@ -270,6 +270,7 @@ class CloudAPIBackend(Backend):
 
     # Preferred order (best reasoning → cheapest)
     _PRIORITY = ["kimi-k2", "deepseek-r2", "claude-haiku", "gpt-4o-mini", "muse-wonder"]
+    _BEDROCK_FALLBACK = True  # use BedrockBackend if all registry cloud unavailable
 
     def __init__(self, model_id: str | None = None):
         """model_id: registry key like 'kimi-k2'.  None = auto-select best available."""
@@ -519,3 +520,58 @@ class TeacherAPIBackend(Backend):
             "model": self.model, "messages": messages,
             "max_tokens": max_tokens, "temperature": temperature,
         }, key=self.key)
+
+
+# ── AWS Bedrock backend ────────────────────────────────────────────────────────
+
+class BedrockBackend(Backend):
+    """AWS Bedrock — Nova Micro (cheapest) or Claude Haiku.
+    Requires model access enabled in AWS Console → Bedrock → Model access.
+    Skipped silently if IAM not configured or model access not granted.
+    """
+
+    # Preference order: cheapest first
+    _MODEL_PRIORITY = [
+        "amazon.nova-micro-v1:0",
+        "amazon.nova-lite-v1:0",
+        "anthropic.claude-3-haiku-20240307-v1:0",
+    ]
+
+    def __init__(self, model_id: str | None = None):
+        self._model_id = model_id or self._MODEL_PRIORITY[0]
+        self.name = f"bedrock:{self._model_id}"
+
+    def healthy(self) -> bool:
+        return _probe_cached(
+            "bedrock",
+            self._probe_fn,
+            ttl=300)
+
+    def _probe_fn(self):
+        from .aws import bedrock_available as _ba
+        if not _ba():
+            raise RuntimeError("Bedrock not accessible")
+
+    def complete(self, messages, max_tokens=256, temperature=0.2) -> dict:
+        try:
+            from .aws import bedrock_complete as _bc
+            return _bc(messages, model_id=self._model_id,
+                       max_tokens=max_tokens, temperature=temperature)
+        except Exception as e:
+            raise RuntimeError(f"BedrockBackend: {e}")
+
+    def stream_complete(self, messages, max_tokens=256, temperature=0.2):
+        # Bedrock Converse streaming requires AWS SDK; buffer for now
+        res = self.complete(messages, max_tokens, temperature)
+        content = res.get("content", "")
+        for i in range(0, max(len(content), 1), 64):
+            yield json.dumps({
+                "id": "chatcmpl-urai", "object": "chat.completion.chunk",
+                "model": self._model_id,
+                "choices": [{"index": 0,
+                              "delta": {"content": content[i:i+64]},
+                              "finish_reason": None}]})
+        yield json.dumps({
+            "id": "chatcmpl-urai", "object": "chat.completion.chunk",
+            "model": self._model_id,
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
