@@ -35,8 +35,46 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .agent import run_agent
-from .backends import LlamaServerBackend, MockBackend
+from .backends import LlamaServerBackend, MockBackend, CloudAPIBackend
 from .router import route
+
+# ── Response cache (LRU, in-process) ──────────────────────────────────────
+import collections, hashlib as _hs
+_CACHE_MAX = int(os.environ.get('URAI_CACHE_MAX', '256'))
+_CACHE_TTL = int(os.environ.get('URAI_CACHE_TTL', '60'))  # seconds
+_cache: collections.OrderedDict = collections.OrderedDict()  # key -> (value, expires)
+_cache_lock = threading.RLock()
+
+def _cache_get(key):
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry and time.time() < entry[1]:
+            _cache.move_to_end(key)
+            return entry[0]
+        if entry:
+            del _cache[key]
+        return None
+
+def _cache_put(key, value):
+    with _cache_lock:
+        _cache[key] = (value, time.time() + _CACHE_TTL)
+        _cache.move_to_end(key)
+        while len(_cache) > _CACHE_MAX:
+            _cache.popitem(last=False)
+
+def _cache_key(msgs, model, max_tokens, temp):
+    raw = json.dumps([msgs, model, max_tokens, round(temp, 2)], sort_keys=True)
+    return _hs.md5(raw.encode()).hexdigest()
+
+# ── Metrics ────────────────────────────────────────────────────────────────
+_metrics = {'requests': 0, 'cache_hits': 0, 'errors': 0,
+            'stream_requests': 0, 'started_at': int(time.time())}
+_metrics_lock = threading.Lock()
+
+def _m_inc(k, n=1):
+    with _metrics_lock:
+        _metrics[k] = _metrics.get(k, 0) + n
+
 from . import tools as tool_engine
 from . import voice as _voice_module
 
@@ -456,6 +494,20 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p = self._path()
         q = self._query()
+        if p == "/metrics":
+            from .router import routing_scores as _rs
+            local = LlamaServerBackend()
+            cloud = CloudAPIBackend()
+            with _metrics_lock:
+                m = dict(_metrics)
+            m['uptime_s'] = int(time.time()) - m.pop('started_at', int(time.time()))
+            m['cache_size'] = len(_cache)
+            m['local_healthy'] = local.healthy()
+            m['cloud_backend'] = getattr(cloud, '_model_id', None)
+            m['cloud_healthy'] = cloud.healthy() if cloud.available else False
+            m['routing_scores'] = _rs()
+            return self._send(m)
+
         if p == "/health":
             local = LlamaServerBackend()
             try:
@@ -779,44 +831,81 @@ class Handler(BaseHTTPRequestHandler):
                 "jev": {"level": r["level"], "backend": r["backend"].name}})
 
         if p == "/v1/chat/completions":
+            _m_inc('requests')
             msgs = _as_messages(body.get("messages", []))
+            want_stream = bool(body.get("stream"))
+            max_tokens = body.get("max_tokens", 256)
+            temperature = float(body.get("temperature", 0.2))
+            req_model = body.get("model", "urai")
+
             if _has_image(msgs):
                 from . import vision as _vision
                 img, question = _split_image(msgs)
                 if img is None:
                     return self._send({"error": "no image found in messages"}, 400)
                 res = _vision.see(img, question or "Describe this image.",
-                                  body.get("max_tokens", 512),
-                                  body.get("temperature", 0.2))
+                                  max_tokens, temperature)
                 if not res["ok"]:
+                    _m_inc('errors')
                     return self._send({"error": res["error"]}, 502)
                 content = res["answer"]
+                backend_used = "vision"
+                usage_out = {}
             else:
                 try:
                     from .brand import tier_of_brand as _tier_of
-                    r = route(_text_of(msgs), tier=_tier_of(body.get("model", "urai")))
-                    res = r["backend"].complete(
-                        msgs, body.get("max_tokens", 256),
-                        body.get("temperature", 0.2))
+                    tier = _tier_of(req_model)
+
+                    # Check cache (skip for streaming — cache only non-stream)
+                    ck = None
+                    if not want_stream:
+                        ck = _cache_key(msgs, req_model, max_tokens, temperature)
+                        cached = _cache_get(ck)
+                        if cached is not None:
+                            _m_inc('cache_hits')
+                            _record_use(ip, device, bool(body.get("_urai_authed")))
+                            cached['urai']['cached'] = True
+                            return self._send(cached)
+
+                    r = route(_text_of(msgs), tier=tier,
+                              stream=want_stream)
+                    backend = r['backend']
+
+                    if want_stream:
+                        _m_inc('stream_requests')
+                        _record_use(ip, device, bool(body.get("_urai_authed")))
+                        model = __import__('jev.brand', fromlist=['brand_id']).brand_id(req_model)
+                        _log('chat_stream', ip, device, _text_of(msgs)[:160],
+                             {'master': bool(body.get('_urai_authed')), 'model': model})
+                        return self._stream_backend(backend, msgs, max_tokens, temperature, model)
+
+                    res = backend.complete(msgs, max_tokens, temperature)
                     content = res["content"]
+                    backend_used = res.get('backend', 'unknown')
+                    usage_out = res.get('usage') or {}
                 except Exception as e:
+                    _m_inc('errors')
                     return self._send({"error": str(e)[:300]}, 502)
-            model = body.get("model", __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")))
+
+            from jev.brand import brand_id as _bid
+            model = _bid(req_model)
             _record_use(ip, device, bool(body.get("_urai_authed")))
             _log("chat", ip, device, _text_of(msgs)[:160] + " -> " + str(content)[:120],
                  {"master": bool(body.get("_urai_authed")), "model": model})
-            if body.get("stream"):
-                return self._stream(content, model)
-            return self._send({
+            resp_obj = {
                 "id": "chatcmpl-urai", "object": "chat.completion",
                 "created": int(time.time()), "model": model,
-                "choices": [{"index": 0, "message": {"role": "assistant",
-                                                     "content": content},
-                             "finish_reason": "stop"}],
-                "usage": res.get("usage") or {"prompt_tokens": 0, "completion_tokens": 0,
-                          "total_tokens": 0, "cost": 0},
+                "choices": [{"index": 0,
+                              "message": {"role": "assistant", "content": content},
+                              "finish_reason": "stop"}],
+                "usage": usage_out or {"prompt_tokens": 0, "completion_tokens": 0,
+                                       "total_tokens": 0, "cost": 0},
                 "urai": {"tokens_remaining": body.get("_urai_remaining", 0),
-                         "auth": body.get("_urai_reason", "free")}})
+                          "auth": body.get("_urai_reason", "free"),
+                          "cached": False}}
+            if ck:
+                _cache_put(ck, dict(resp_obj))
+            return self._send(resp_obj)
 
         if p in ("/imagine", "/v1/images/generations"):
             from . import imagine as _imagine
@@ -1212,12 +1301,13 @@ class Handler(BaseHTTPRequestHandler):
         return self._send({"error": "not found"}, 404)
 
     def _stream(self, content, model):
+        """Buffer-then-stream (legacy path for non-backend callers)."""
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
         self._cors()
         self.end_headers()
-        for i in range(0, len(content), 64):
+        for i in range(0, max(len(content), 1), 64):
             piece = json.dumps({
                 "id": "chatcmpl-urai", "object": "chat.completion.chunk",
                 "model": model,
@@ -1226,6 +1316,27 @@ class Handler(BaseHTTPRequestHandler):
                              "finish_reason": None}]})
             self.wfile.write(f"data: {piece}\n\n".encode())
         self.wfile.write(b"data: [DONE]\n\n")
+
+    def _stream_backend(self, backend, msgs, max_tokens, temperature, model):
+        """True SSE streaming — yields chunks from backend.stream_complete()."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Accel-Buffering", "no")
+        self._cors()
+        self._sec_headers()
+        self.end_headers()
+        try:
+            for chunk in backend.stream_complete(msgs, max_tokens, temperature):
+                if chunk and chunk != '[DONE]':
+                    self.wfile.write(f'data: {chunk}\n\n'.encode())
+                    self.wfile.flush()
+        except Exception as e:
+            err = json.dumps({'error': str(e)[:200]})
+            self.wfile.write(f'data: {err}\n\n'.encode())
+        finally:
+            self.wfile.write(b'data: [DONE]\n\n')
+            self.wfile.flush()
 
 
     def _status_page(self):
