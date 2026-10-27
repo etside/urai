@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Urai API — OpenAI-compatible + token gate (master 856777) + superadmin + repo sync.
+"""Urai API — OpenAI-compatible + token gate + superadmin + repo sync.
 
   Token policy:
-    - Master key 856777 -> unlimited, cost 0 (usage.total_tokens = 0).
+    - Master key (URAI_MASTER_KEY env) -> unlimited, cost 0.
     - Guest (no/wrong key) -> 5 free responses, then blocked per IP/device
       with "Free Token Expired / 0 available Token".
-    - Unblock by POST /auth/unlock {master_key:"856777"} or via superadmin.
+    - Unblock by POST /auth/unlock {master_key:"<URAI_MASTER_KEY>"} or via superadmin.
     - Approval flow: POST /auth/request {device_id, whatsapp, gmail}
       -> appears in /superadmin/messages for manual approve.
 
-  Superadmin (hidden, key=856777):
-    GET  /superadmin/messages?key=856777
+  Superadmin (hidden, key=URAI_MASTER_KEY):
+    GET  /superadmin/messages?key=<URAI_MASTER_KEY>
     POST /superadmin/approve  {key, device_id|ip, whatsapp, gmail}
     POST /superadmin/unblock  {key, ip|device_id}
 
@@ -81,9 +81,16 @@ from . import voice as _voice_module
 PORT = int(os.environ.get("URAI_PORT", "8777"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 API_KEY = os.environ.get("URAI_API_KEY", "")
+# WARNING: "*" allows all origins. Set URAI_CORS_ORIGIN=https://yourdomain.com in prod
 CORS_ORIGIN = os.environ.get("URAI_CORS_ORIGIN", "*")
 
-MASTER_API_KEY = os.environ.get("URAI_MASTER_KEY", "856777")
+# SECURITY: URAI_MASTER_KEY must be set via environment. No default in production.
+_raw_master = os.environ.get("URAI_MASTER_KEY", "")
+if not _raw_master:
+    import warnings
+    warnings.warn("URAI_MASTER_KEY not set — using insecure default. Set it in .env!", stacklevel=1)
+    _raw_master = "856777-dev-only-not-secure"
+MASTER_API_KEY = _raw_master
 FREE_LIMIT = int(os.environ.get("URAI_FREE_LIMIT", "5"))
 BLOCK_SECONDS = int(os.environ.get("URAI_BLOCK_SECONDS", "1800"))
 
@@ -144,7 +151,19 @@ def _log(kind, ip="", device="", preview="", extra=None):
             _save_state()
     except Exception:
         pass
-
+    # File logging (URAI_LOG_FILE env)
+    _log_file = os.environ.get("URAI_LOG_FILE", "")
+    if _log_file:
+        try:
+            import datetime as _dt
+            entry = json.dumps({"ts": _dt.datetime.utcnow().isoformat()+"Z",
+                                "kind": kind, "ip": ip, "device": device,
+                                "preview": str(preview)[:200],
+                                **(extra or {})})
+            with open(_log_file, "a") as _lf:
+                _lf.write(entry + "\n")
+        except Exception:
+            pass
 
 def _client_ip(handler):
     try:
@@ -278,8 +297,8 @@ def _expired_payload(blocked_until=0):
     return {
         "status": "error",
         "code": "free_token_expired",
-        "message": "Free Token Expired / 0 available Token. Submit master key 856777 as request fund message to restore access.",
-        "master_hint": "POST /auth/unlock {\"master_key\":\"856777\",\"device_id\":\"...\"}",
+        "message": "Free Token Expired / 0 available Token. Contact admin to restore access.",
+        "master_hint": "POST /auth/unlock {\"master_key\":\"<your-key>\",\"device_id\":\"...\"}",
         "approval_hint": "POST /auth/request {\"device_id\":\"...\",\"whatsapp\":\"...\",\"gmail\":\"...\"}",
         "blocked_until": int(blocked_until) if blocked_until else 0,
         "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0},
@@ -578,7 +597,7 @@ class Handler(BaseHTTPRequestHandler):
                         "remaining": max(0, FREE_LIMIT - used),
                         "blocked_until": int(blk) if blk > time.time() else 0,
                         "approved": appr,
-                        "master_required": "856777"})
+                        "master_required": "set URAI_MASTER_KEY env"})
             return
         if p == "/v1/repo/status":
             self._send(_repo_status())
@@ -742,7 +761,7 @@ class Handler(BaseHTTPRequestHandler):
                                              "total_tokens": 0, "cost": 0}})
             _log("unlock_fail", ip, device, str((body or {}).get("master_key", ""))[:20])
             return self._send({"ok": False, "authenticated": False,
-                               "message": "Invalid master key. Expected 856777."}, 401)
+                               "message": "Invalid master key."}, 401)
 
         if p == "/auth/request":
             wa = str((body or {}).get("whatsapp", ""))[:40]
@@ -1536,13 +1555,26 @@ padding:6px 10px;font-size:.85rem}}.ok{{color:#10a37f}}a{{color:#10a37f}}</style
         self.wfile.write(data)
 
 
+# Per-request timeout (kills slow llama calls)
+_REQUEST_TIMEOUT = int(os.environ.get("URAI_REQUEST_TIMEOUT", "120"))
+
+
+class _TimeoutHandler(ThreadingHTTPServer):
+    """ThreadingHTTPServer with per-socket timeout."""
+    timeout = _REQUEST_TIMEOUT
+
+    def process_request(self, request, client_address):
+        request.settimeout(_REQUEST_TIMEOUT)
+        super().process_request(request, client_address)
+
+
 def serve(port=PORT, host="127.0.0.1"):
     try:
         from .sched import start as _sched_start
         _sched_start()
     except Exception:
         pass
-    srv = ThreadingHTTPServer((host, port), Handler)
+    srv = _TimeoutHandler((host, port), Handler)
     from . import VERSION
     print(f"Urai {VERSION} API+web on http://{host}:{port}  "
           f"(/health /v1/* /app)  auth={'on' if API_KEY else 'off (localhost only)'}")

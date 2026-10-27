@@ -198,16 +198,26 @@ def _build_system_prompt(agent: UAgent) -> str:
 
 
 def _simple_llm_stub(system: str, history: list[dict], message: str) -> str:
-    """
-    Stub LLM call — replace with actual Urai LLM integration.
-    Returns a placeholder response that includes context for testing.
-    """
-    return (
-        f"[Agent response stub]\n"
-        f"System context length: {len(system)} chars\n"
-        f"History turns: {len(history)}\n"
-        f"User said: {message[:100]}"
-    )
+    """Call Urai's local LlamaServerBackend for agent responses."""
+    try:
+        import sys, os
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from jev.backends import LlamaServerBackend
+        backend = LlamaServerBackend()
+        if not backend.healthy():
+            return "[Urai model starting up — retry in a few seconds]"
+        messages = [{"role": "system", "content": system}]
+        # Convert history to OpenAI format
+        for h in history[-10:]:
+            role = h.get("role", "user")
+            content = h.get("content", "")
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": message})
+        res = backend.complete(messages, max_tokens=512, temperature=0.3)
+        return res.get("content", "").strip()
+    except Exception as e:
+        return f"[Agent error: {e}]"
 
 
 # ---------------------------------------------------------------------------

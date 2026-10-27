@@ -668,3 +668,86 @@ if _TOOLPACK_DIR.is_dir():
                 TOOL_SCHEMAS.extend(_mod.TOOL_SCHEMAS)
         except Exception:
             pass
+
+
+# ── New module integrations ────────────────────────────────────────────────────
+
+def _wiki_search(query: str, top: int = 5) -> list:
+    from .wiki import wiki_search as _ws
+    return _ws(query, top=top)
+
+def _wiki_add(title: str, content: str, category: str = "concepts") -> dict:
+    from .wiki import wiki_add as _wa
+    return _wa(title, content, category)
+
+def _wiki_get(title: str) -> dict | None:
+    from .wiki import wiki_get as _wg
+    return _wg(title)
+
+def _wiki_update(title: str, new_facts: list) -> dict:
+    from .wiki import wiki_update as _wu
+    return _wu(title, new_facts)
+
+def _deep_research(query: str, depth: int = 3) -> dict:
+    from .research import deep_research as _dr
+    return _dr(query, depth=depth)
+
+def _chart_gen(data, kind: str = "bar", title: str = "", xlabel: str = "", ylabel: str = "") -> dict:
+    from .chart import chart as _ch
+    return _ch(data, kind=kind, title=title, xlabel=xlabel, ylabel=ylabel)
+
+def _appshot(question: str = "What do you see on screen?", region: list | None = None) -> dict:
+    from .appshots import capture_and_ask as _caa
+    return _caa(question, tuple(region) if region else None)
+
+def _evidence_new() -> object:
+    from .evidence import new_ledger as _el
+    return _el()
+
+def _guard_check(tool_name: str, args: dict) -> dict:
+    from .tool_guard import check_and_log as _cal
+    return _cal(tool_name, args)
+
+def _run_routine(routine_id: str) -> dict:
+    from .routines import run_routine as _rr
+    return _rr(routine_id)
+
+def _list_routines() -> list:
+    from .routines import list_routines as _lr
+    return _lr()
+
+def _agent_run_turn(agent_id: str, message: str, session_id: str = "") -> dict:
+    from .jarvis_agents import run_agent_turn as _rat
+    return _rat(agent_id, message, session_id)
+
+def _plan_and_execute(task: str, budget_tokens: int = 2048) -> dict:
+    from .conductor import create_plan, execute_plan
+    plan = create_plan(task, budget_tokens=budget_tokens)
+    return execute_plan(plan, budget_tokens=budget_tokens)
+
+TOOLS.update({
+    "wiki_search":       _wiki_search,
+    "wiki_add":          _wiki_add,
+    "wiki_get":          _wiki_get,
+    "wiki_update":       _wiki_update,
+    "deep_research":     _deep_research,
+    "chart":             _chart_gen,
+    "appshot":           _appshot,
+    "guard_check":       _guard_check,
+    "run_routine":       _run_routine,
+    "list_routines":     _list_routines,
+    "agent_run":         _agent_run_turn,
+    "plan":              _plan_and_execute,
+})
+
+# Update TOOL_SCHEMAS with new entries
+TOOL_SCHEMAS += [
+    {"type":"function","function":{"name":"wiki_search","description":"Search Urai's knowledge wiki","parameters":{"type":"object","properties":{"query":{"type":"string"},"top":{"type":"integer","default":5}},"required":["query"]}}},
+    {"type":"function","function":{"name":"wiki_add","description":"Add a page to Urai's knowledge wiki","parameters":{"type":"object","properties":{"title":{"type":"string"},"content":{"type":"string"},"category":{"type":"string","default":"concepts"}},"required":["title","content"]}}},
+    {"type":"function","function":{"name":"wiki_get","description":"Get a wiki page by title","parameters":{"type":"object","properties":{"title":{"type":"string"}},"required":["title"]}}},
+    {"type":"function","function":{"name":"deep_research","description":"Multi-hop web research: search->fetch->synthesize","parameters":{"type":"object","properties":{"query":{"type":"string"},"depth":{"type":"integer","default":3}},"required":["query"]}}},
+    {"type":"function","function":{"name":"chart","description":"Generate a chart from data","parameters":{"type":"object","properties":{"data":{},"kind":{"type":"string","enum":["bar","line","pie","scatter","histogram"],"default":"bar"},"title":{"type":"string","default":""},"xlabel":{"type":"string","default":""},"ylabel":{"type":"string","default":""}},"required":["data"]}}},
+    {"type":"function","function":{"name":"appshot","description":"Capture screen and ask Urai to describe it","parameters":{"type":"object","properties":{"question":{"type":"string","default":"What do you see?"},"region":{"type":"array","items":{"type":"integer"}}}}}},
+    {"type":"function","function":{"name":"plan","description":"Create and execute a structured multi-step plan for complex tasks","parameters":{"type":"object","properties":{"task":{"type":"string"},"budget_tokens":{"type":"integer","default":2048}},"required":["task"]}}},
+]
+

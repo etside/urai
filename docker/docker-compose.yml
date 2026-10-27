@@ -1,38 +1,68 @@
-# Urai compose: API+web (+ optional Caddy TLS front).
-#   cp .env.example .env   # set URAI_API_KEY + domain
+# Urai v3 — Production Docker Compose
+# Usage:
+#   cp .env.example .env && nano .env   # set URAI_MASTER_KEY + URAI_API_KEY
 #   docker compose up -d --build
-#   open http://localhost:8777   (or https://<domain> via caddy)
+#   docker compose logs -f urai
+#
+# With HTTPS (recommended):
+#   Uncomment the caddy service, set DOMAIN in .env, point DNS to VPS.
+
 services:
   urai:
-    build: ..
-    image: urai:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: urai:v3
+    container_name: urai
+    restart: unless-stopped
     ports:
-      - "8777:8777"
+      - "127.0.0.1:8777:8777"   # only expose to localhost; Caddy proxies externally
+    env_file:
+      - ../.env
     environment:
-      URAI_MODEL: ${URAI_MODEL:-coder05-fast}
-      URAI_API_KEY: ${URAI_API_KEY:-}
-      URAI_PORT: 8777
-      TEACHER_BASE_URL: ${TEACHER_BASE_URL:-}
-      TEACHER_API_KEY: ${TEACHER_API_KEY:-}
-      TEACHER_MODEL: ${TEACHER_MODEL:-}
+      URAI_HOST: "0.0.0.0"
+      URAI_PORT: "8777"
     volumes:
       - urai-model:/app/model
       - urai-out:/app/out
       - urai-data:/app/data
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8777/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 3G
 
-  # Uncomment for https://<domain> with automatic TLS:
-  # caddy:
-  #   image: caddy:2-alpine
-  #   ports: ["80:80", "443:443"]
-  #   volumes:
-  #     - ./Caddyfile:/etc/caddy/Caddyfile
-  #     - caddy-data:/data
-  #   depends_on: [urai]
-  #   restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    container_name: urai-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      urai:
+        condition: service_healthy
+    profiles: ["https"]   # enable with: docker compose --profile https up -d
 
 volumes:
   urai-model:
   urai-out:
   urai-data:
-  # caddy-data:
+  caddy-data:
+  caddy-config:

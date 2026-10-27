@@ -1,9 +1,60 @@
-# Caddy front for Urai: automatic HTTPS + API key stays server-side.
-#   1. point DNS ai.example.com -> VPS
-#   2. cp deploy/Caddyfile /etc/caddy/Caddyfile (edit domain)
-#   3. systemctl reload caddy
-ai.example.com {
-	reverse_proxy 127.0.0.1:8777
-	# optional: rate-limit the expensive endpoints
-	# rate_limit { zone imagine { key {remote_host} events 10 window 1m } }
+# Urai v3 — Caddy reverse proxy with automatic HTTPS
+# 1. Set your domain: replace urai.example.com
+# 2. Point DNS A record to this VPS IP
+# 3. systemctl reload caddy   (or docker compose --profile https up -d)
+
+{
+    # Global options
+    email admin@example.com    # for Let's Encrypt notifications
+    admin off                  # disable Caddy admin API in production
+}
+
+urai.example.com {
+    # Reverse proxy to Urai API
+    reverse_proxy 127.0.0.1:8777 {
+        # Health check
+        health_uri      /health
+        health_interval 30s
+        health_timeout  10s
+
+        # Pass real client IP
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+    }
+
+    # Rate limiting (requires caddy-ratelimit module or use basic):
+    # Limit expensive endpoints — 20 req/min per IP
+    @expensive {
+        path /v1/chat/completions /v1/audio/* /v1/images/* /v1/videos/* /agent /v1/research
+    }
+    # Uncomment after: xcaddy build --with github.com/mholt/caddy-ratelimit
+    # rate_limit @expensive {
+    #     zone chat_zone {
+    #         key {remote_host}
+    #         events 20
+    #         window 1m
+    #     }
+    # }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+
+    # Compression
+    encode gzip zstd
+
+    # Logs
+    log {
+        output file /var/log/caddy/urai.log {
+            roll_size 50mb
+            roll_keep 5
+        }
+        format json
+    }
 }

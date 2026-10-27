@@ -25,7 +25,9 @@ from typing import Optional
 # Paths
 # ---------------------------------------------------------------------------
 
-BASE_DIR = Path(os.environ.get("URAI_DATA", "data/workspace"))
+# Use repo root for reliable absolute paths
+_ROOT = Path(__file__).resolve().parents[1]
+BASE_DIR = Path(os.environ.get("URAI_DATA", str(_ROOT / "data" / "workspace")))
 SESSIONS_DIR = BASE_DIR / "sessions"
 ENTITIES_DIR = BASE_DIR / "entities"
 CONCEPTS_DIR = BASE_DIR / "concepts"
