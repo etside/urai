@@ -38,6 +38,7 @@ from .agent import run_agent
 from .backends import LlamaServerBackend, MockBackend
 from .router import route
 from . import tools as tool_engine
+from . import voice as _voice_module
 
 PORT = int(os.environ.get("URAI_PORT", "8777"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -457,7 +458,12 @@ class Handler(BaseHTTPRequestHandler):
         q = self._query()
         if p == "/health":
             local = LlamaServerBackend()
+            try:
+                voice_status = _voice_module.healthy()
+            except Exception:
+                voice_status = {}
             self._send({"status": "ok", "local_llama": local.healthy(),
+                        "voice": voice_status,
                         "identity": "Urai, developed by Tynio LTD",
                         "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
             return
@@ -885,6 +891,91 @@ class Handler(BaseHTTPRequestHandler):
                           "embedding": v} for i, v in enumerate(vecs)],
                 "model": body.get("model", "local-embed"),
                 "usage": {"prompt_tokens": 0, "total_tokens": 0, "cost": 0}})
+
+
+        if p == "/v1/audio/speech":
+            # POST /v1/audio/speech — OpenAI-compatible TTS
+            # Body: {model, input, voice, speed, response_format}
+            text = body.get("input", body.get("text", ""))
+            if not text:
+                return self._send({"error": "input is required"}, 400)
+            voice = body.get("voice", "alloy")
+            speed = float(body.get("speed", 1.0))
+            fmt = body.get("response_format", "mp3")
+            language = body.get("language", "en")
+            try:
+                audio_bytes = _voice_module.tts(text, voice=voice, speed=speed,
+                                                format=fmt, language=language)
+            except Exception as e:
+                return self._send({"error": str(e)[:300]}, 502)
+            _record_use(ip, device, bool(body.get("_urai_authed")))
+            _log("tts", ip, device, text[:120], {"voice": voice, "fmt": fmt})
+            ctype = "audio/mpeg" if fmt in ("mp3", "mpeg") else "audio/wav"
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(audio_bytes)))
+            self._cors()
+            self._sec_headers()
+            self.end_headers()
+            self.wfile.write(audio_bytes)
+            return
+
+        if p == "/v1/audio/transcriptions":
+            # POST /v1/audio/transcriptions — OpenAI-compatible STT
+            # Expects multipart/form-data with file field, or JSON with {audio_b64, language}
+            ctype_hdr = self.headers.get("Content-Type", "")
+            language = None
+            audio_bytes = b""
+            filename = "audio.wav"
+            if "multipart/form-data" in ctype_hdr:
+                # Parse multipart manually (avoid deps)
+                import cgi, io as _io
+                n = int(self.headers.get("Content-Length", 0) or 0)
+                raw = self.rfile.read(n)
+                # Use cgi.FieldStorage for multipart parsing
+                environ = {
+                    "REQUEST_METHOD": "POST",
+                    "CONTENT_TYPE": ctype_hdr,
+                    "CONTENT_LENGTH": str(n),
+                }
+                form = cgi.FieldStorage(fp=_io.BytesIO(raw), environ=environ,
+                                        keep_blank_values=True)
+                if "file" in form:
+                    item = form["file"]
+                    audio_bytes = item.file.read()
+                    filename = item.filename or "audio.wav"
+                if "language" in form:
+                    language = form.getvalue("language")
+                # model field ignored (we pick based on URAI_WHISPER_MODEL)
+            else:
+                # JSON body already read — expect base64 audio
+                import base64 as _b64
+                b64 = body.get("audio_b64", "") or body.get("file", "")
+                if not b64:
+                    return self._send({"error": "file or audio_b64 required"}, 400)
+                try:
+                    audio_bytes = _b64.b64decode(b64)
+                except Exception:
+                    return self._send({"error": "invalid base64 audio"}, 400)
+                language = body.get("language")
+                filename = body.get("filename", "audio.wav")
+            if not audio_bytes:
+                return self._send({"error": "empty audio"}, 400)
+            try:
+                result = _voice_module.transcribe(audio_bytes, language=language,
+                                                  filename=filename)
+            except Exception as e:
+                return self._send({"error": str(e)[:300]}, 502)
+            _record_use(ip, device, bool(body.get("_urai_authed")))
+            _log("stt", ip, device, f"lang={language or 'auto'} backend={result.get('backend')}",
+                 {"duration_s": result.get("duration_s")})
+            return self._send({
+                "text": result.get("text", ""),
+                "language": result.get("language", language or "auto"),
+                "duration": result.get("duration_s"),
+                "backend": result.get("backend"),
+                "task": "transcribe",
+            })
 
         if p == "/generate":
             msgs = [{"role": "user", "content": body.get("prompt", "")}]
