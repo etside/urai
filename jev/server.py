@@ -622,7 +622,7 @@ class Handler(BaseHTTPRequestHandler):
                 "strengths": ["local-first zero-cost chat", "agent + swarm + tools",
                               "vision + image + video-animatic", "OpenAI-compatible API + MCP",
                               "human-like browser with approval safety"],
-                "endpoints": ["/health", "/v1/models", "/v1/chat/completions",
+                "endpoints": ["/health", "/v1/models", "/v1/chat/completions", "/v1/plan", "/v1/chart", "/v1/wiki/search", "/v1/wiki/add", "/v1/agents/list", "/v1/agents/create", "/v1/agents/run", "/v1/routines/list", "/v1/appshot", "/v1/research",
                               "/v1/completions", "/v1/embeddings", "/agent", "/agent/swarm",
                               "/tools", "/evaluate", "/see", "/imagine",
                               "/v1/images/generations", "/video", "/v1/videos/generations",
@@ -1198,6 +1198,70 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(res)
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
+
+        if p == "/v1/wiki/search":
+            q = body.get("query","")
+            if not q: return self._send({"error":"query required"},400)
+            from .wiki import wiki_search as _ws
+            return self._send({"results":_ws(q,top=body.get("top",5))})
+
+        if p == "/v1/wiki/add":
+            from .wiki import wiki_add as _wa
+            r=_wa(body.get("title",""),body.get("content",""),body.get("category","concepts"))
+            return self._send(r)
+
+        if p == "/v1/wiki/get":
+            from .wiki import wiki_get as _wg
+            r=_wg(body.get("title",""))
+            return self._send(r or {"error":"not found"},404 if not r else 200)
+
+        if p == "/v1/agents/list":
+            from .jarvis_agents import list_agents as _la
+            return self._send({"agents":_la()})
+
+        if p == "/v1/agents/create":
+            from .jarvis_agents import create_agent as _ca
+            a=_ca(body.get("name",""),body.get("instructions",""),
+                  body.get("tools",[]),body.get("schedule",""))
+            return self._send(a.to_dict())
+
+        if p == "/v1/agents/run":
+            from .jarvis_agents import run_agent_turn as _rat
+            return self._send(_rat(body.get("agent_id",""),
+                                   body.get("message",""),
+                                   body.get("session_id","")))
+
+        if p == "/v1/routines/list":
+            from .routines import list_routines as _lr
+            return self._send({"routines":_lr()})
+
+        if p == "/v1/routines/create":
+            from .routines import create_routine as _cr
+            return self._send(_cr(body.get("name",""),body.get("prompt",""),
+                                  body.get("schedule","manual"),body.get("tools",[])))
+
+        if p == "/v1/routines/run":
+            from .routines import run_routine as _rr
+            return self._send(_rr(body.get("id","")))
+
+        if p == "/v1/chart":
+            from .chart import chart as _ch
+            r=_ch(body.get("data",[]),body.get("kind","bar"),
+                  body.get("title",""),body.get("xlabel",""),body.get("ylabel",""))
+            return self._send(r)
+
+        if p == "/v1/appshot":
+            region=body.get("region") # [x,y,w,h] or null
+            question=body.get("question","What do you see on screen?")
+            from .appshots import capture_and_ask as _caa
+            return self._send(_caa(question,tuple(region) if region else None))
+
+        if p == "/v1/plan":
+            from .conductor import create_plan,execute_plan
+            plan=create_plan(body.get("task",""),body.get("budget_tokens",2048))
+            result=execute_plan(plan,budget_tokens=body.get("budget_tokens",2048))
+            _record_use(ip,device,bool(body.get("_urai_authed")))
+            return self._send(result)
 
         if p == "/agent":
             from . import sessions as _sess
