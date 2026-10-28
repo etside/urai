@@ -1,27 +1,285 @@
 {
   "active": "qwen3-4b",
   "models": {
-    "qwen3-06b": {"path": "model/base/Qwen3-0.6B-Q8_0.gguf", "params": "0.6B", "quant": "Q8_0", "role": "fast", "kind": "chat", "hf": "https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf"},
-    "qwen3-17b": {"path": "model/base/Qwen3-1.7B-Q4_K_M.gguf", "params": "1.7B", "quant": "Q4_K_M", "role": "primary", "kind": "chat", "hf": "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"},
-    "qwen3-4b": {"path": "model/base/Qwen3-4B-Q4_K_M.gguf", "params": "4B", "quant": "Q4_K_M", "role": "primary", "kind": "chat", "hf": "https://huggingface.co/ggml-org/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"},
-    "qwen3-8b": {"path": "model/base/Qwen3-8B-Q4_K_M.gguf", "params": "8B", "quant": "Q4_K_M", "role": "primary", "kind": "chat", "gpu_min_gb": 6, "hf": "https://huggingface.co/ggml-org/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf"},
-    "qwen25vl-3b": {"path": "model/base/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf", "params": "3B", "quant": "Q4_K_M", "role": "vision", "kind": "vision", "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf", "files": [{"path": "model/base/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf", "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"}, {"path": "model/base/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf", "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf"}]},
-    "coder05-fast": {"path": "model/base/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf", "params": "0.5B", "quant": "Q4_K_M", "role": "fast-coding", "kind": "chat", "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"},
-    "deepseek-r1-15b": {"path": "model/base/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf", "params": "1.5B", "quant": "Q4_K_M", "role": "reasoning", "kind": "chat", "reasoning": true, "hf": "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-IQ4_XS.gguf"},
-    "mimo25-3b": {"path": "model/base/MiMo-2.5-3B-Instruct-Q4_K_M.gguf", "params": "3B", "quant": "Q4_K_M", "role": "primary", "kind": "chat", "hf": "https://huggingface.co/bartowski/MiMo-2.5-3B-Instruct-GGUF/resolve/main/MiMo-2.5-3B-Instruct-Q4_K_M.gguf"},
-    "nemotron-mini-4b": {"path": "model/base/Nemotron-Mini-4B-Instruct-Q4_K_M.gguf", "params": "4B", "quant": "Q4_K_M", "role": "primary", "kind": "chat", "hf": "https://huggingface.co/bartowski/Llama-3.2-Nemotron-Mini-4B-Instruct-GGUF/resolve/main/Llama-3.2-Nemotron-Mini-4B-Instruct-Q4_K_M.gguf"},
-    "embed-small": {"path": "model/base/nomic-embed-text-v1.5.Q4_K_M.gguf", "params": "137M", "quant": "Q4_K_M", "role": "embed", "kind": "embedding", "hf": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf", "port": 8081},
-    "sd-turbo": {"path": "model/generate/sd_turbo.safetensors", "params": "0.86B-unet", "quant": "fp16", "role": "generate", "kind": "generate", "hf": "https://huggingface.co/stabilityai/sd-turbo/resolve/main/sd_turbo.safetensors", "steps": 2, "size": [512, 512], "note": "Stop llama-server first — needs ~3.4GB free RAM"},
-    "whisper-small": {"path": "model/audio/whisper-small", "params": "244M", "quant": "int8", "role": "stt", "kind": "stt", "languages": ["en", "bn", "auto"], "install": "pip install faster-whisper", "note": "Local STT — Bengali+English, CPU-optimized int8"},
-    "whisper-medium": {"path": "model/audio/whisper-medium", "params": "769M", "quant": "int8", "role": "stt", "kind": "stt", "gpu_min_gb": 2, "languages": ["en", "bn", "auto"], "install": "pip install faster-whisper", "note": "Higher accuracy Bengali STT"},
-    "kokoro-tts": {"path": "model/audio/kokoro-v1.0.onnx", "params": "82M", "quant": "fp32", "role": "tts", "kind": "tts", "install": "pip install kokoro-onnx", "voices": ["af_heart", "af_bella", "am_adam", "bf_emma"], "note": "Local TTS — ElevenLabs-quality, CPU, 80MB"},
-    "kimi-k2": {"api_only": true, "provider": "moonshot", "endpoint": "https://api.moonshot.cn/v1", "model_id": "kimi-k2-0711-preview", "role": "reasoning", "kind": "chat", "env": "MOONSHOT_API_KEY", "context_window": 262144, "note": "Kimi K2 — 1T MoE, best open coding+reasoning"},
-    "deepseek-r2": {"api_only": true, "provider": "deepseek", "endpoint": "https://api.deepseek.com/v1", "model_id": "deepseek-reasoner", "role": "reasoning", "kind": "chat", "env": "DEEPSEEK_API_KEY", "context_window": 128000, "note": "DeepSeek R2 — best open reasoning"},
-    "hyper-flux-1": {"api_only": true, "provider": "fal", "endpoint": "https://fal.run/fal-ai/hyper-sdxl", "role": "generate", "kind": "generate", "env": "FAL_API_KEY", "note": "HyperFlux-1 — 1-step SDXL, fastest image gen"},
-    "wan3-video": {"api_only": true, "provider": "wan", "endpoint": "https://api.wan-ai.com/v1", "role": "generate", "kind": "video", "env": "WAN_API_KEY", "note": "Wan Video 3.0 — best open video gen"},
-    "veo3-video": {"api_only": true, "provider": "gemini", "endpoint": "https://generativelanguage.googleapis.com/v1beta", "role": "generate", "kind": "video", "env": "GEMINI_API_KEY", "note": "Google Veo 3 — best video gen overall"},
-    "muse-wonder": {"api_only": true, "provider": "opencode", "endpoint": "https://opencode.ai/zen/v1", "model_id": "muse-spark-1.3-contributor-free", "role": "primary", "kind": "chat", "env": "OPENCODE_API_KEY", "note": "Muse Wonder — OpenCode Zen, free tier"},
-    "gpt-4o-mini": {"api_only": true, "provider": "openai", "endpoint": "https://api.openai.com/v1", "model_id": "gpt-4o-mini", "role": "vision", "kind": "vision", "env": "OPENAI_API_KEY", "note": "OpenAI GPT-4o Mini — vision + fast"},
-    "claude-haiku": {"api_only": true, "provider": "anthropic", "endpoint": "https://api.anthropic.com/v1", "model_id": "claude-haiku-4-5", "role": "primary", "kind": "chat", "env": "ANTHROPIC_API_KEY", "note": "Anthropic Claude Haiku 4.5 — fast, cheap"}
+    "qwen3-06b": {
+      "path": "model/base/Qwen3-0.6B-Q8_0.gguf",
+      "params": "0.6B",
+      "quant": "Q8_0",
+      "role": "fast",
+      "kind": "chat",
+      "hf": "https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf",
+      "ollama_name": "qwen3:0.6b",
+      "ollama_template": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
+      "ollama_stop": [
+        "<|im_end|>",
+        "<|im_start|>"
+      ]
+    },
+    "qwen3-17b": {
+      "path": "model/base/Qwen3-1.7B-Q4_K_M.gguf",
+      "params": "1.7B",
+      "quant": "Q4_K_M",
+      "role": "primary",
+      "kind": "chat",
+      "hf": "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf",
+      "ollama_name": "qwen3:1.7b",
+      "ollama_template": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
+      "ollama_stop": [
+        "<|im_end|>",
+        "<|im_start|>"
+      ]
+    },
+    "qwen3-4b": {
+      "path": "model/base/Qwen3-4B-Q4_K_M.gguf",
+      "params": "4B",
+      "quant": "Q4_K_M",
+      "role": "primary",
+      "kind": "chat",
+      "hf": "https://huggingface.co/ggml-org/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
+      "ollama_name": "qwen3:4b",
+      "ollama_template": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
+      "ollama_stop": [
+        "<|im_end|>",
+        "<|im_start|>"
+      ]
+    },
+    "qwen3-8b": {
+      "path": "model/base/Qwen3-8B-Q4_K_M.gguf",
+      "params": "8B",
+      "quant": "Q4_K_M",
+      "role": "primary",
+      "kind": "chat",
+      "gpu_min_gb": 6,
+      "hf": "https://huggingface.co/ggml-org/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf",
+      "ollama_name": "qwen3:8b",
+      "ollama_template": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
+      "ollama_stop": [
+        "<|im_end|>",
+        "<|im_start|>"
+      ]
+    },
+    "qwen25vl-3b": {
+      "path": "model/base/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+      "params": "3B",
+      "quant": "Q4_K_M",
+      "role": "vision",
+      "kind": "vision",
+      "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+      "files": [
+        {
+          "path": "model/base/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+          "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"
+        },
+        {
+          "path": "model/base/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf",
+          "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf"
+        }
+      ],
+      "ollama_name": "qwen2.5vl:3b",
+      "ollama_template": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
+      "ollama_stop": [
+        "<|im_end|>",
+        "<|im_start|>"
+      ]
+    },
+    "coder05-fast": {
+      "path": "model/base/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+      "params": "0.5B",
+      "quant": "Q4_K_M",
+      "role": "fast-coding",
+      "kind": "chat",
+      "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+      "ollama_name": "qwen2.5-coder:0.5b"
+    },
+    "deepseek-r1-15b": {
+      "path": "model/base/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
+      "params": "1.5B",
+      "quant": "Q4_K_M",
+      "role": "reasoning",
+      "kind": "chat",
+      "reasoning": true,
+      "hf": "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-IQ4_XS.gguf",
+      "ollama_name": "deepseek-r1:1.5b",
+      "ollama_template": "<|begin_of_sentence|>System: {system}\n\nUser: {prompt}\n\nAssistant:",
+      "ollama_stop": [
+        "<|end_of_sentence|>",
+        "User:"
+      ]
+    },
+    "mimo25-3b": {
+      "path": "model/base/MiMo-2.5-3B-Instruct-Q4_K_M.gguf",
+      "params": "3B",
+      "quant": "Q4_K_M",
+      "role": "primary",
+      "kind": "chat",
+      "hf": "https://huggingface.co/bartowski/MiMo-2.5-3B-Instruct-GGUF/resolve/main/MiMo-2.5-3B-Instruct-Q4_K_M.gguf",
+      "ollama_name": "mimo:3b",
+      "ollama_template": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
+      "ollama_stop": [
+        "<|im_end|>",
+        "<|im_start|>"
+      ]
+    },
+    "nemotron-mini-4b": {
+      "path": "model/base/Nemotron-Mini-4B-Instruct-Q4_K_M.gguf",
+      "params": "4B",
+      "quant": "Q4_K_M",
+      "role": "primary",
+      "kind": "chat",
+      "hf": "https://huggingface.co/bartowski/Llama-3.2-Nemotron-Mini-4B-Instruct-GGUF/resolve/main/Llama-3.2-Nemotron-Mini-4B-Instruct-Q4_K_M.gguf",
+      "ollama_name": "nemotron-mini:4b",
+      "ollama_template": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
+      "ollama_stop": [
+        "<|im_end|>",
+        "<|im_start|>"
+      ]
+    },
+    "embed-small": {
+      "path": "model/base/nomic-embed-text-v1.5.Q4_K_M.gguf",
+      "params": "137M",
+      "quant": "Q4_K_M",
+      "role": "embed",
+      "kind": "embedding",
+      "hf": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf",
+      "port": 8081,
+      "ollama_name": "nomic-embed-text"
+    },
+    "sd-turbo": {
+      "path": "model/generate/sd_turbo.safetensors",
+      "params": "0.86B-unet",
+      "quant": "fp16",
+      "role": "generate",
+      "kind": "generate",
+      "hf": "https://huggingface.co/stabilityai/sd-turbo/resolve/main/sd_turbo.safetensors",
+      "steps": 2,
+      "size": [
+        512,
+        512
+      ],
+      "note": "Stop llama-server first \u2014 needs ~3.4GB free RAM"
+    },
+    "whisper-small": {
+      "path": "model/audio/whisper-small",
+      "params": "244M",
+      "quant": "int8",
+      "role": "stt",
+      "kind": "stt",
+      "languages": [
+        "en",
+        "bn",
+        "auto"
+      ],
+      "install": "pip install faster-whisper",
+      "note": "Local STT \u2014 Bengali+English, CPU-optimized int8"
+    },
+    "whisper-medium": {
+      "path": "model/audio/whisper-medium",
+      "params": "769M",
+      "quant": "int8",
+      "role": "stt",
+      "kind": "stt",
+      "gpu_min_gb": 2,
+      "languages": [
+        "en",
+        "bn",
+        "auto"
+      ],
+      "install": "pip install faster-whisper",
+      "note": "Higher accuracy Bengali STT"
+    },
+    "kokoro-tts": {
+      "path": "model/audio/kokoro-v1.0.onnx",
+      "params": "82M",
+      "quant": "fp32",
+      "role": "tts",
+      "kind": "tts",
+      "install": "pip install kokoro-onnx",
+      "voices": [
+        "af_heart",
+        "af_bella",
+        "am_adam",
+        "bf_emma"
+      ],
+      "note": "Local TTS \u2014 ElevenLabs-quality, CPU, 80MB"
+    },
+    "kimi-k2": {
+      "api_only": true,
+      "provider": "moonshot",
+      "endpoint": "https://api.moonshot.cn/v1",
+      "model_id": "kimi-k2-0711-preview",
+      "role": "reasoning",
+      "kind": "chat",
+      "env": "MOONSHOT_API_KEY",
+      "context_window": 262144,
+      "note": "Kimi K2 \u2014 1T MoE, best open coding+reasoning"
+    },
+    "deepseek-r2": {
+      "api_only": true,
+      "provider": "deepseek",
+      "endpoint": "https://api.deepseek.com/v1",
+      "model_id": "deepseek-reasoner",
+      "role": "reasoning",
+      "kind": "chat",
+      "env": "DEEPSEEK_API_KEY",
+      "context_window": 128000,
+      "note": "DeepSeek R2 \u2014 best open reasoning"
+    },
+    "hyper-flux-1": {
+      "api_only": true,
+      "provider": "fal",
+      "endpoint": "https://fal.run/fal-ai/hyper-sdxl",
+      "role": "generate",
+      "kind": "generate",
+      "env": "FAL_API_KEY",
+      "note": "HyperFlux-1 \u2014 1-step SDXL, fastest image gen"
+    },
+    "wan3-video": {
+      "api_only": true,
+      "provider": "wan",
+      "endpoint": "https://api.wan-ai.com/v1",
+      "role": "generate",
+      "kind": "video",
+      "env": "WAN_API_KEY",
+      "note": "Wan Video 3.0 \u2014 best open video gen"
+    },
+    "veo3-video": {
+      "api_only": true,
+      "provider": "gemini",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta",
+      "role": "generate",
+      "kind": "video",
+      "env": "GEMINI_API_KEY",
+      "note": "Google Veo 3 \u2014 best video gen overall"
+    },
+    "muse-wonder": {
+      "api_only": true,
+      "provider": "opencode",
+      "endpoint": "https://opencode.ai/zen/v1",
+      "model_id": "muse-spark-1.3-contributor-free",
+      "role": "primary",
+      "kind": "chat",
+      "env": "OPENCODE_API_KEY",
+      "note": "Muse Wonder \u2014 OpenCode Zen, free tier"
+    },
+    "gpt-4o-mini": {
+      "api_only": true,
+      "provider": "openai",
+      "endpoint": "https://api.openai.com/v1",
+      "model_id": "gpt-4o-mini",
+      "role": "vision",
+      "kind": "vision",
+      "env": "OPENAI_API_KEY",
+      "note": "OpenAI GPT-4o Mini \u2014 vision + fast"
+    },
+    "claude-haiku": {
+      "api_only": true,
+      "provider": "anthropic",
+      "endpoint": "https://api.anthropic.com/v1",
+      "model_id": "claude-haiku-4-5",
+      "role": "primary",
+      "kind": "chat",
+      "env": "ANTHROPIC_API_KEY",
+      "note": "Anthropic Claude Haiku 4.5 \u2014 fast, cheap"
+    }
   }
 }

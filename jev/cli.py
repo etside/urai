@@ -513,8 +513,9 @@ def main(argv=None):
         help="use VPS /agent instead of local run (needs: urai login)")
 
     p = sub.add_parser("model")
-    p.add_argument("action", choices=["list", "download", "use", "bench"])
+    p.add_argument("action", choices=["list", "download", "use", "bench", "add", "info"])
     p.add_argument("id", nargs="?")
+    p.add_argument("value", nargs="?", help="path for 'add', unused for others")
     p.add_argument("--ctx", type=int, default=2048)
 
     p = sub.add_parser("serve")
@@ -703,12 +704,15 @@ def main(argv=None):
                 from pathlib import Path as P
                 root = P(__file__).resolve().parents[1]
                 paths = [f["path"] for f in m.get("files", [])] or [m["path"]]
-                here = all((root / p).exists() for p in paths)
+                here = all((root / p).exists() for p in paths) if not m.get("api_only") else False
                 mark = " [active]" if mid == r["active"] else ""
-                bench = f" pp={m.get('pp_toks')}/tg={m.get('tg_toks')}" if m.get("tg_toks") else " (unbenchmarked)"
-                print(f"{mid}{mark}: {m['params']} {m['quant']} role={m['role']} "
-                      f"kind={m.get('kind', 'chat')} "
-                      f"{'on-disk' if here else 'not-downloaded'}{bench}")
+                bench = f" pp={m.get('pp_toks')}/tg={m.get('tg_toks')}" if m.get("tg_toks") else ""
+                ollama = f" ollama={m['ollama_name']}" if m.get("ollama_name") else ""
+                api_mark = " [api-only]" if m.get("api_only") else ""
+                disk_mark = "on-disk" if here else ("api-only" if m.get("api_only") else "not-downloaded")
+                print(f"{mid}{mark}{api_mark}: {m['params']} {m['quant']} "
+                      f"role={m['role']} kind={m.get('kind','chat')} "
+                      f"{disk_mark}{bench}{ollama}")
             return
         if args.action == "download":
             if not args.id:
@@ -741,6 +745,69 @@ def main(argv=None):
                  "-n", "64", "-t", "2"], capture_output=True, text=True,
                 timeout=900, env=env)
             print(out.stdout[-1500:] or out.stderr[-1500:])
+            return
+        if args.action == "add":
+            # urai model add <id> <path>  — register a local GGUF in the registry
+            if not args.id or not args.value:
+                sys.exit("usage: urai model add <id> <path-to.gguf>")
+            from pathlib import Path as P
+            gguf = P(args.value).expanduser().resolve()
+            if not gguf.exists():
+                sys.exit(f"file not found: {gguf}")
+            if not gguf.suffix.lower() == ".gguf":
+                sys.exit(f"expected a .gguf file, got: {gguf.suffix}")
+            # Make path relative to repo root if inside it
+            root = P(__file__).resolve().parents[1]
+            try: rel = str(gguf.relative_to(root))
+            except ValueError: rel = str(gguf)
+            entry = {"path": rel, "params": "?", "quant": "custom",
+                     "role": "primary", "kind": "chat",
+                     "ollama_name": args.id.lower().replace("_", "-"),
+                     "note": "locally added via urai model add"}
+            r["models"][args.id] = entry
+            reg.save(r)
+            print(f"registered: {args.id} -> {rel}")
+            print(f"  run:  urai model use {args.id}")
+            print(f"  ollama import:  urai model info {args.id}")
+            return
+        if args.action == "info":
+            # urai model info <id>  — show details + Ollama import commands
+            mid = args.id or r["active"]
+            if mid not in r["models"]:
+                sys.exit(f"unknown model id: {mid}  choices: {list(r['models'])}")
+            m = r["models"][mid]
+            from pathlib import Path as P
+            root = P(__file__).resolve().parents[1]
+            mp = root / m["path"]
+            ollama_name = m.get("ollama_name", mid.lower().replace("_", "-"))
+            print(f"id:          {mid}")
+            print(f"params:      {m.get('params','?')}  quant: {m.get('quant','?')}")
+            print(f"kind:        {m.get('kind','chat')}  role: {m.get('role','?')}")
+            print(f"on-disk:     {'yes — ' + str(mp) if mp.exists() else 'no (run: urai model download ' + mid + ')'}")
+            if m.get("hf"): print(f"HuggingFace: {m['hf']}")
+            if m.get("api_only"): print(f"API-only:    provider={m.get('provider')}  env={m.get('env')}")
+            if not m.get("api_only"):
+                print()
+                print("── Ollama import ──────────────────────────────────────────")
+                print(f"# 1. Make sure the GGUF is on disk:")
+                print(f"urai model download {mid}")
+                print()
+                print(f"# 2. Create a Modelfile (adjust template_param for your model family):")
+                print(f"cat > Modelfile <<'EOF'")
+                print(f"FROM {mp}")
+                print(f"PARAMETER num_ctx 4096")
+                print(f'PARAMETER stop "<|im_end|>"')
+                print(f'SYSTEM "You are a helpful assistant."')
+                print(f"EOF")
+                print()
+                print(f"# 3. Import:")
+                print(f"ollama create {ollama_name} -f Modelfile")
+                print()
+                print(f"# 4. Run:")
+                print(f"ollama run {ollama_name}")
+                print()
+                print(f"# Android (Ollama app via Termux):")
+                print(f"# Transfer the GGUF to device storage, then run the same steps in Termux.")
             return
 
     if args.cmd == "serve":
@@ -932,3 +999,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
+

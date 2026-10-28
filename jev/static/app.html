@@ -406,6 +406,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
 .rate-bar{height:8px;border-radius:4px;background:var(--bg3);overflow:hidden;margin-top:8px}
 .rate-fill{height:100%;border-radius:4px;background:var(--accent);transition:width 500ms var(--ease)}
 .rate-fill.warn{background:var(--orange)}
+/* compat / openai block */
+.compat-block{background:var(--bg2);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.compat-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.compat-label{font-size:.78rem;color:var(--text3);width:72px;flex-shrink:0;font-weight:600}
+.compat-val{font-size:.82rem;background:var(--bg3);padding:3px 8px;border-radius:6px;font-family:monospace;word-break:break-all}
+.copy-btn{padding:2px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--card);font-size:.75rem;cursor:pointer;color:var(--text2);white-space:nowrap}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent)}
+.compat-code{font-size:.77rem;background:var(--bg3);border-radius:8px;padding:12px;overflow-x:auto;white-space:pre;margin-top:8px;color:var(--text2);line-height:1.5;border:1px solid var(--border)}
+/* models list */
+.model-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.model-row:last-child{border-bottom:none}
+.model-badge{padding:2px 8px;border-radius:6px;font-size:.7rem;font-weight:700;background:var(--accent-bg);color:var(--accent);white-space:nowrap}
+.model-badge.api-only{background:var(--bg3);color:var(--text3)}
+.model-badge.active{background:var(--accent);color:#fff}
+.model-name{font-size:.86rem;font-weight:600;flex:1;min-width:100px}
+.model-meta{font-size:.75rem;color:var(--text3)}
+.model-dl-btn{padding:3px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--card);font-size:.75rem;cursor:pointer;color:var(--accent);white-space:nowrap;text-decoration:none;display:inline-block}
+.model-dl-btn:hover{background:var(--accent-bg)}
+/* mobile pills in settings */
+.mobile-pills-row{display:none;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+@media(max-width:640px){.mobile-pills-row{display:flex}}
 .rate-fill.over{background:var(--red)}
 
 /* ── Modals ─────────────────────────────────────────────────────────────── */
@@ -625,6 +646,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
   <div class="panel" id="panel-settings">
     <div id="settings-panel">
       <div class="panel-header">Settings</div>
+
+      <!-- Connection -->
       <div class="settings-section">
         <h3>Connection</h3>
         <div class="setting-row">
@@ -635,29 +658,82 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
           <div><div class="setting-label">API Key</div><div class="setting-desc">Your urai_… token</div></div>
           <input type="password" class="setting-input" id="s-key" placeholder="urai_…"/>
         </div>
-        <div style="margin-top:12px;display:flex;gap:8px">
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-primary" onclick="saveSettings()">Save</button>
           <button class="btn-ghost" onclick="testConnection()">Test connection</button>
         </div>
+        <div id="conn-status" style="margin-top:10px;font-size:.83rem;color:var(--text3)"></div>
       </div>
+
+      <!-- OpenAI-compatible integration -->
       <div class="settings-section">
-        <h3>Rate limit status</h3>
-        <div id="rate-status">
-          <div style="color:var(--text3);font-size:.85rem">Loading…</div>
+        <h3>OpenAI-compatible API</h3>
+        <div class="setting-desc" style="margin-bottom:12px">Point any OpenAI client at Urai — no cloud required.</div>
+        <div class="compat-block" id="compat-block">
+          <div class="compat-row"><span class="compat-label">Base URL</span><code id="compat-url" class="compat-val"></code><button class="copy-btn" onclick="copyCompat('url')">Copy</button></div>
+          <div class="compat-row"><span class="compat-label">API Key</span><code class="compat-val">your urai_… key (or master key)</code></div>
+          <div class="compat-row"><span class="compat-label">Model</span><code class="compat-val">urai</code> &nbsp;<span style="color:var(--text3);font-size:.8rem">or urai-fast · urai-ultra · urai-cyber</span></div>
+        </div>
+        <details style="margin-top:12px">
+          <summary style="cursor:pointer;font-size:.83rem;color:var(--text3)">Code examples</summary>
+          <pre class="compat-code" id="compat-python"></pre>
+          <pre class="compat-code" id="compat-curl"></pre>
+        </details>
+      </div>
+
+      <!-- Models -->
+      <div class="settings-section">
+        <h3>Models</h3>
+        <div class="setting-desc" style="margin-bottom:12px">Local GGUF models served via llama.cpp. API-only models use your cloud keys.</div>
+        <div id="models-list"><div style="color:var(--text3);font-size:.84rem">Loading…</div></div>
+        <button class="btn-ghost" style="margin-top:10px" onclick="loadModels()">↻ Refresh</button>
+      </div>
+
+      <!-- Ollama integration -->
+      <div class="settings-section">
+        <h3>Ollama / GGUF import</h3>
+        <div class="setting-desc" style="margin-bottom:10px">Import any Urai GGUF into <a href="https://ollama.com" target="_blank" style="color:var(--accent)">Ollama</a> (Android app or desktop) for fully offline use.</div>
+        <div id="ollama-list"><div style="color:var(--text3);font-size:.84rem">Loading…</div></div>
+        <div style="margin-top:14px;background:var(--bg3);border-radius:10px;padding:14px">
+          <div style="font-size:.83rem;font-weight:600;margin-bottom:8px">Import a custom GGUF into Ollama</div>
+          <pre class="compat-code"># 1. Download any GGUF from the models list above
+# 2. Create a Modelfile:
+echo 'FROM ./your-model.gguf' > Modelfile
+echo 'PARAMETER num_ctx 4096' >> Modelfile
+# 3. Import:
+ollama create my-model -f Modelfile
+# 4. Run:
+ollama run my-model</pre>
+          <div style="font-size:.82rem;color:var(--text3);margin-top:8px">On Android: use the <strong>Ollama Android</strong> app → import GGUF from storage → same Modelfile approach via termux or adb.</div>
         </div>
       </div>
+
+      <!-- Context window -->
       <div class="settings-section">
-        <h3>Context window</h3>
+        <h3>Generation</h3>
         <div class="setting-row">
-          <div><div class="setting-label">Max tokens</div><div class="setting-desc">Default: 512. No-limit mode: 8192</div></div>
+          <div><div class="setting-label">Max tokens</div><div class="setting-desc">Default 512 · No-limit 8192</div></div>
           <select class="setting-input" id="s-max-tokens">
-            <option value="256">256 (fast)</option>
-            <option value="512" selected>512 (default)</option>
-            <option value="2048">2048 (large)</option>
-            <option value="8192">8192 (no limit)</option>
+            <option value="256">256 — fast</option>
+            <option value="512" selected>512 — default</option>
+            <option value="2048">2048 — long</option>
+            <option value="8192">8192 — no limit</option>
           </select>
         </div>
+        <!-- mobile-only pills row (hidden on desktop by CSS) -->
+        <div class="mobile-pills-row">
+          <button class="toggle-pill" id="pill-think-m" onclick="syncPill('think',this)">💭 Think</button>
+          <button class="toggle-pill on" id="pill-stream-m" onclick="syncPill('stream',this)">⚡ Stream</button>
+          <button class="toggle-pill" id="pill-nolimit-m" onclick="syncPill('nolimit',this)">∞ No limit</button>
+        </div>
       </div>
+
+      <!-- Rate limit -->
+      <div class="settings-section">
+        <h3>Rate limit status</h3>
+        <div id="rate-status"><div style="color:var(--text3);font-size:.85rem">Loading…</div></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -707,6 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('s-key').value = S.key;
   renderHistory();
   loadRateStatus();
+  updateCompatBlock();
   if (document.getElementById('pill-stream').classList.contains('on')) S.streaming = true;
   hljs?.configure({ignoreUnescapedHTML:true});
   // auto-collapse sidebar on mobile so main area is not blocked on load
@@ -741,7 +818,7 @@ function showPanel(name, btn) {
   document.getElementById('panel-title').textContent = titles[name] || name;
   if (name === 'keys') loadKeys();
   if (name === 'agents') loadAgents();
-  if (name === 'settings') loadRateStatus();
+  if (name === 'settings') { loadRateStatus(); loadModels(); updateCompatBlock(); }
   // close drawer on mobile after selecting a panel
   if (_isMobile()) closeSidebarMobile();
 }
@@ -768,14 +845,142 @@ function saveSettings() {
   S.maxTokens = parseInt(document.getElementById('s-max-tokens').value);
   localStorage.setItem('urai_url', S.url);
   localStorage.setItem('urai_key', S.key);
+  updateCompatBlock();
   showToast('Settings saved');
 }
 
 async function testConnection() {
+  const el = document.getElementById('conn-status');
+  if (el) el.textContent = 'Testing…';
   try {
     const r = await api('/health');
-    showToast('✓ Connected: ' + (r.identity || 'Urai'));
-  } catch(e) { showToast('✗ Connection failed: ' + e.message, true); }
+    const msg = '✓ Connected — ' + (r.identity || 'Urai') + (r.active_model ? ' · model: ' + r.active_model : '');
+    showToast(msg);
+    if (el) { el.textContent = msg; el.style.color = 'var(--accent)'; }
+  } catch(e) {
+    showToast('✗ ' + e.message, true);
+    if (el) { el.textContent = '✗ ' + e.message; el.style.color = 'var(--orange,#f90)'; }
+  }
+}
+
+function updateCompatBlock() {
+  const base = S.url || 'http://127.0.0.1:8777';
+  const urlEl = document.getElementById('compat-url');
+  if (urlEl) urlEl.textContent = base + '/v1';
+  const pyEl = document.getElementById('compat-python');
+  if (pyEl) pyEl.textContent =
+`from openai import OpenAI
+client = OpenAI(
+    base_url="${base}/v1",
+    api_key="your-urai-key"   # or master key
+)
+resp = client.chat.completions.create(
+    model="urai",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+print(resp.choices[0].message.content)`;
+  const curlEl = document.getElementById('compat-curl');
+  if (curlEl) curlEl.textContent =
+`curl ${base}/v1/chat/completions \\
+  -H "Authorization: Bearer YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model":"urai","messages":[{"role":"user","content":"Hello!"}]}'`;
+}
+
+function copyCompat(field) {
+  const base = S.url || 'http://127.0.0.1:8777';
+  const val = field === 'url' ? base + '/v1' : base;
+  navigator.clipboard?.writeText(val).then(() => showToast('Copied!')).catch(() => {});
+}
+
+async function loadModels() {
+  const el = document.getElementById('models-list');
+  const olEl = document.getElementById('ollama-list');
+  if (!el) return;
+  try {
+    const r = await api('/v1/models');
+    const models = r.data || [];
+    if (!models.length) { el.innerHTML = '<div style="color:var(--text3);font-size:.84rem">No models returned — is the server running?</div>'; return; }
+    // Fetch info endpoint for richer data
+    let info = {};
+    try { const iv = await api('/v1/info'); (iv.endpoints||[]); info = iv; } catch {}
+    el.innerHTML = models.map(m => {
+      const mid = m.id || m.name || '';
+      const isActive = info.active_model === mid;
+      const isApi = mid.startsWith('gpt') || mid.startsWith('claude') || mid.startsWith('gemini') || mid.startsWith('kimi') || mid.startsWith('deepseek-r') || mid.startsWith('muse');
+      const badge = isActive ? '<span class="model-badge active">active</span>' :
+                   isApi    ? '<span class="model-badge api-only">API</span>' :
+                              '<span class="model-badge">local</span>';
+      return `<div class="model-row">${badge}<span class="model-name">${mid}</span></div>`;
+    }).join('');
+    // Ollama section: local GGUF models only
+    const local = models.filter(m => {
+      const mid = m.id||'';
+      return !mid.startsWith('gpt')&&!mid.startsWith('claude')&&!mid.startsWith('gemini')&&
+             !mid.startsWith('kimi')&&!mid.startsWith('deepseek-r')&&!mid.startsWith('muse')&&
+             !mid.includes('embed')&&!mid.includes('whisper')&&!mid.includes('kokoro')&&!mid.includes('sd-');
+    });
+    if (olEl) olEl.innerHTML = local.length ? local.map(m => {
+      const mid = m.id||'';
+      // Ollama modelfile instructions per model
+      const ollamaName = mid.replace(/[^a-z0-9-]/gi,'-').toLowerCase();
+      return `<div class="model-row">
+        <span class="model-name">${mid}</span>
+        <span class="model-meta">${ollamaName}</span>
+        <button class="model-dl-btn" onclick="showOllamaImport('${mid}','${ollamaName}')">Ollama import</button>
+      </div>`;
+    }).join('') : '<div style="color:var(--text3);font-size:.84rem">No local models on server yet.</div>';
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--text3);font-size:.84rem">Could not load: ${e.message}</div>`;
+  }
+}
+
+function showOllamaImport(mid, ollamaName) {
+  const base = S.url || 'http://127.0.0.1:8777';
+  // Provide a ready-to-use Modelfile + import command
+  const modelfile = `FROM ${mid}.gguf\nPARAMETER num_ctx 4096\nPARAMETER stop "<|im_end|>"\nSYSTEM "You are a helpful assistant."`;
+  const steps = `# 1. Download the GGUF from the server
+curl -L "${base}/v1/models/${mid}/download" -o ${mid}.gguf
+# (or download manually from HuggingFace — see urai model list)
+
+# 2. Create a Modelfile
+cat > Modelfile <<'EOF'
+${modelfile}
+EOF
+
+# 3. Import into Ollama
+ollama create ${ollamaName} -f Modelfile
+
+# 4. Run it
+ollama run ${ollamaName}
+
+# Android (Ollama app via Termux or ADB):
+# Copy ${mid}.gguf to device storage, then run the same commands in Termux`;
+  const existing = document.getElementById('ollama-import-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'ollama-import-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = `<div style="background:var(--bg);border-radius:16px;padding:24px;max-width:600px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:var(--shadow-lg)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <strong>Ollama import: ${mid}</strong>
+      <button onclick="this.closest('#ollama-import-modal').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text2)">✕</button>
+    </div>
+    <pre class="compat-code">${steps}</pre>
+    <button class="btn-ghost" style="margin-top:12px" onclick="navigator.clipboard?.writeText(document.querySelector('#ollama-import-modal pre').textContent).then(()=>showToast('Copied!'))">Copy all</button>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+// sync mobile pills (in Settings) with the topbar pills
+function syncPill(kind, btn) {
+  btn.classList.toggle('on');
+  const on = btn.classList.contains('on');
+  if (kind === 'think')   { S.thinking = on;  const tb = document.getElementById('pill-think');  if(tb) tb.classList.toggle('on',on); }
+  if (kind === 'stream')  { S.streaming = on; const tb = document.getElementById('pill-stream'); if(tb) tb.classList.toggle('on',on); }
+  if (kind === 'nolimit') { S.noLimit = on;   const tb = document.getElementById('pill-nolimit');if(tb) tb.classList.toggle('on',on);
+    S.maxTokens = on ? 8192 : parseInt(document.getElementById('s-max-tokens').value)||512; }
 }
 
 // ── API helper ──────────────────────────────────────────────────────────────
@@ -1289,4 +1494,5 @@ window.addEventListener('appinstalled', () => {
 </script>
 </body>
 </html>
+
 
