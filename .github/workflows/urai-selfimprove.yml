@@ -41,7 +41,7 @@ jobs:
       - name: Commit data-only results
         run: |
           git config user.name "urai-selfimprove"
-          git config user.email "urai-selfimprove@daddyai.online"
+          git config user.email "urai-bot@users.noreply.github.com"
           git add data/raw_tasks/selfimprove/ eval/reports/selfimprove-*.json
           git diff --cached --quiet && echo "no new tasks" || \
             git commit -m "Self-improve ${{ inputs.tag || 'weekly' }}: failure-mined distill tasks (data only)" && \

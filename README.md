@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-34C759)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 
-**[🌐 Live Demo](https://etside.github.io/urai/) · [📖 API Docs](docs/API.md) · [🚀 Quick Start](#install) · [📦 Releases](https://github.com/etside/urai/releases) · [📝 Changelog](CHANGELOG.md)**
+**[🌐 Live Demo](https://etside.github.io/urai/) · [📖 API Docs](docs/API.md) · [📚 All Docs](docs/README.md) · [🚀 Quick Start](#install) · [📦 Releases](https://github.com/etside/urai/releases) · [📝 Changelog](CHANGELOG.md)**
 
 *Local LLM · Voice · Browser · Wiki · Multi-agent · One install · No cloud required*
 

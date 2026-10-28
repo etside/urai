@@ -89,7 +89,7 @@ jobs:
       - name: Commit report + docs
         run: |
           git config user.name "urai-bench"
-          git config user.email "urai-bench@daddyai.online"
+          git config user.email "urai-bot@users.noreply.github.com"
           git add eval/reports/bench-*.json docs/BENCHMARKS.md
           git diff --cached --quiet && echo "nothing new" || \
             git commit -m "Bench ${{ inputs.tag }}: measured knowledge/math/code scores" && \
