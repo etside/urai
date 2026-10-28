@@ -55,7 +55,10 @@ jobs:
 
       - name: Build stable-diffusion.cpp
         run: |
-          git clone --depth 1 https://github.com/leejet/stable-diffusion.cpp.git \
+          # --recurse-submodules is required: ggml/ lives in a submodule and
+          # a bare --depth 1 clone leaves cmake without it.
+          git clone --depth 1 --recurse-submodules --shallow-submodules \
+            https://github.com/leejet/stable-diffusion.cpp.git \
             third_party/stable-diffusion.cpp
           cmake -S third_party/stable-diffusion.cpp \
             -B third_party/stable-diffusion.cpp/build \
