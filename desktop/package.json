@@ -49,7 +49,7 @@
         "deb"
       ],
       "category": "Development",
-      "icon": "build/icon.png",
+      "icon": "build/icons",
       "synopsis": "Local-first AI studio",
       "description": "Urai AI Studio: chat, agents, wiki, voice, vibe coding and computer use on your own hardware.",
       "maintainer": "Tynio LTD <whotjms@gmail.com>"

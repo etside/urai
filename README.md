@@ -87,8 +87,8 @@ Download from [Releases](https://github.com/etside/urai/releases):
 
 | Platform | Files |
 |---|---|
-| Windows | NSIS installer (`*-win-x64.exe`) · portable (`*-win-x64-portable.exe`) |
-| Linux | AppImage (`*-linux-*.AppImage`) · Debian package (`*.deb`) |
+| Windows | `urai-3.0.0-win-x64.exe` (installer) · `urai-3.0.0-win-x64-portable.exe` |
+| Linux | `urai-3.0.0-linux-x86_64.AppImage` · `urai-3.0.0-linux-amd64.deb` |
 
 The desktop shell starts the local API for you, shows the Studio in its own
 window and stops the backend on exit. It is a shell, not a Python bundle: install
