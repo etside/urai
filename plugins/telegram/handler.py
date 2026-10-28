@@ -5,7 +5,7 @@ session (memory across turns), allowlist-gated, typing indicator,
 >4096-char message splitting, /new + /help commands.
 
 Daemon: serve_forever() (run: urai plugin serve telegram).
-Env: TELEGRAM_BOT_TOKEN (required), URAI_REMOTE_URL (default https://urai.daddyai.online),
+Env: TELEGRAM_BOT_TOKEN (required), URAI_REMOTE_URL (default http://127.0.0.1:8777),
      URAI_MASTER_KEY (required), TELEGRAM_ALLOW_CHAT_IDS (comma list, empty = deny all),
      URAI_DEVICE_ID (default telegram-plugin).
 """
@@ -48,7 +48,7 @@ def _send_split(chat_id, text):
 
 
 def _urai(path, body):
-    base = (os.environ.get("URAI_REMOTE_URL", "https://urai.daddyai.online")).rstrip("/")
+    base = (os.environ.get("URAI_REMOTE_URL", "http://127.0.0.1:8777")).rstrip("/")
     key = os.environ.get("URAI_MASTER_KEY", "")
     dev = os.environ.get("URAI_DEVICE_ID", "telegram-plugin")
     req = urllib.request.Request(
@@ -67,7 +67,7 @@ def _sess_clear(session_id):
 
 
 def _ask_urai(text, session_id):
-    base = (os.environ.get("URAI_REMOTE_URL", "https://urai.daddyai.online")).rstrip("/")
+    base = (os.environ.get("URAI_REMOTE_URL", "http://127.0.0.1:8777")).rstrip("/")
     key = os.environ.get("URAI_MASTER_KEY", "")
     dev = os.environ.get("URAI_DEVICE_ID", "telegram-plugin")
     body = {"task": text, "session_id": session_id, "budget_tokens": 2048}

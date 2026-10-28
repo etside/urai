@@ -4,7 +4,8 @@ name: Urai Bench - Honest Benchmarks via Actions
 # no VPS changes). Dispatch manually; the job commits the JSON report and
 # the regenerated docs/BENCHMARKS.md table back to main.
 #
-# Required repo secret: URAI_MASTER_KEY (master key 856777 = unlimited cost 0).
+# Required: repo secret URAI_MASTER_KEY and repo variable URAI_BASE_URL
+# (e.g. https://your-urai-host). Both are read at run time.
 
 on:
   workflow_dispatch:
@@ -35,7 +36,7 @@ jobs:
           URAI_MASTER_KEY: ${{ secrets.URAI_MASTER_KEY }}
         run: |
           test -n "$URAI_MASTER_KEY" || { echo "::error::URAI_MASTER_KEY secret missing"; exit 1; }
-          python3 jev/bench.py --base https://urai.daddyai.online \
+          python3 jev/bench.py --base "${{ vars.URAI_BASE_URL }}" \
             --tag "${{ inputs.tag }}" --key "$URAI_MASTER_KEY"
 
       - name: Regenerate docs/BENCHMARKS.md
@@ -46,7 +47,7 @@ jobs:
           lines = ["# Urai benchmarks — measured, reproducible",
                    "",
                    "Every row below is produced by `jev/bench.py` against the **live**",
-                   "system (`--base https://urai.daddyai.online`, master key = cost 0).",
+                   "system (`--base $URAI_BASE_URL`, master key = cost 0).",
                    "Method: knowledge = substring match (12 Qs); math = exact numeric",
                    "match with 3-sample majority vote (12 Qs); code = generated `solve()`",
                    "EXECUTED against tests, best-of-3 by pass (6 tasks). No cherry-picking:",

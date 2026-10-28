@@ -35,7 +35,7 @@ jobs:
           URAI_MASTER_KEY: ${{ secrets.URAI_MASTER_KEY }}
         run: |
           test -n "$URAI_MASTER_KEY" || { echo "::error::URAI_MASTER_KEY secret missing"; exit 1; }
-          python3 jev/selfimprove.py --base https://urai.daddyai.online \
+          python3 jev/selfimprove.py --base "${{ vars.URAI_BASE_URL }}" \
             --tag "${{ inputs.tag || 'weekly' }}"
 
       - name: Commit data-only results

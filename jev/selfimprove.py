@@ -12,7 +12,7 @@ What it deliberately does NOT do (safety):
   * never persists PII (previews scrubbed) or secret values
 
 Run:
-  python3 jev/selfimprove.py --base https://urai.daddyai.online --tag weekly
+  python3 jev/selfimprove.py --base http://127.0.0.1:8777 --tag weekly
   => data/raw_tasks/selfimprove/<tag>.jsonl  (new training tasks)
      eval/reports/selfimprove-<tag>.json     (summary + regression note)
 
@@ -153,7 +153,7 @@ def latest_bench():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--base", default="https://urai.daddyai.online")
+    ap.add_argument("--base", default="http://127.0.0.1:8777")
     ap.add_argument("--tag", default="weekly")
     ap.add_argument("--key", default="")
     args = ap.parse_args()

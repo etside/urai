@@ -12,7 +12,7 @@ Modes per task:
   consistent temp 0.7, 3 samples, majority vote (math) / exec-pass pick (code)
 
 Run (needs a live Urai API + master key for unlimited tokens):
-  python3 jev/bench.py --base http://127.0.0.1:8777 --tag local --key 856777
+  python3 jev/bench.py --base http://127.0.0.1:8777 --tag local --key $URAI_MASTER_KEY
   => eval/reports/bench-<tag>.json
 
 Designed for GH workflow urai-bench.yml (dispatch) which commits the report
@@ -135,7 +135,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:8777")
     ap.add_argument("--tag", default="local")
-    ap.add_argument("--key", default="856777")
+    ap.add_argument("--key", default="")
     ap.add_argument("--modes", default="direct,consistent",
                     help="comma list: direct, consistent")
     ap.add_argument("--categories", default="knowledge,math,code",

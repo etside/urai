@@ -82,7 +82,7 @@ echo "phases: $N (headroom $FREE)"
 # shard + push so droplets clone the shard files
 python3 scripts/distill/shard_dataset.py "data/verified/${TAG}.jsonl" "$N"
 git add "data/verified/${TAG}-p"*.jsonl
-git -c user.name="urai-gpu" -c user.email="urai@daddyai.online" commit -m "GPU phases: shard $TAG into $N" >/dev/null 2>&1 || true
+git -c user.name="urai-gpu" -c user.email="urai-gpu@users.noreply.github.com" commit -m "GPU phases: shard $TAG into $N" >/dev/null 2>&1 || true
 git push origin HEAD 2>&1 | tail -n 1 || echo "WARN: shard push failed (droplets may miss shards)"
 
 if [ -z "$SSH_KEY_ID" ]; then

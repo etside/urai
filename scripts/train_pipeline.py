@@ -14,7 +14,7 @@ continues. No step modifies serving code or restarts services.
 
 Usage (GitHub Actions / cron / manual):
     python3 scripts/train_pipeline.py \\
-        --base https://urai.daddyai.online \\
+        --base http://127.0.0.1:8777 \\
         --tag weekly-2026-10-27 \\
         --key $URAI_MASTER_KEY
 
@@ -92,7 +92,7 @@ def s3_backup():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--base", default="https://urai.daddyai.online")
+    ap.add_argument("--base", default="http://127.0.0.1:8777")
     ap.add_argument("--tag", default=time.strftime("auto-%Y-%m-%d"))
     ap.add_argument("--key", default="")
     ap.add_argument("--skip-train", action="store_true",

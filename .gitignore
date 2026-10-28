@@ -20,3 +20,22 @@ data/token_state.json
 data/api_tokens.json
 data/sessions/
 data/sched_runs/
+
+# Runtime state written by the Studio / CLI (not project content)
+data/agents/
+data/routines.json
+data/workspace/
+
+# Desktop build output
+desktop/node_modules/
+desktop/dist/
+
+# Python / test caches
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+
+# Tool-guard audit log
+jev/data/
