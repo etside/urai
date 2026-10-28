@@ -1,0 +1,61 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'jev/static/**'
+      - 'docs/**'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Pages site
+        run: |
+          mkdir -p _site
+          # Landing page → index
+          cp jev/static/landing.html _site/index.html
+          # App → /app
+          cp jev/static/app.html _site/app.html
+          # 404 redirect
+          cat > _site/404.html << 'EOF'
+          <!DOCTYPE html>
+          <html><head><meta charset="UTF-8"/>
+          <meta http-equiv="refresh" content="0;url=/urai/"/>
+          <title>Urai</title></head>
+          <body><a href="/urai/">Click here</a></body></html>
+          EOF
+          # Copy docs
+          cp README.md _site/README.md 2>/dev/null || true
+          # Generate pages config
+          echo '{"version":1}' > _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
