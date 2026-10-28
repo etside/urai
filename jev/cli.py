@@ -489,6 +489,12 @@ def cmd_tui(args):
 
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if "-V" in argv or "--version" in argv:
+        # handle before argparse: the subcommand group is required
+        from . import VERSION
+        print(f"urai {VERSION}")
+        return 0
     ap = argparse.ArgumentParser(prog="urai")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
