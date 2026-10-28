@@ -8,7 +8,12 @@
 <meta property="og:description" content="Local LLM + voice + browser + wiki + multi-agent. One install. No cloud required."/>
 <meta name="theme-color" content="#FAF9F7"/>
 <title>Urai — AI That Runs on Your Hardware</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✦</text></svg>"/>
+<link rel="manifest" href="./manifest.webmanifest"/>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml"/>
+<link rel="icon" href="./favicon.ico" sizes="any"/>
+<link rel="apple-touch-icon" href="./apple-touch-icon.png"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="Urai"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -213,7 +218,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:40px 0}
       <a href="https://github.com/etside/urai" class="nav-link" target="_blank">GitHub</a>
       <a href="https://github.com/etside/urai/blob/main/docs/API.md" class="nav-link" target="_blank">API Docs</a>
     </div>
-    <a href="https://urai.daddyai.online/app" class="btn btn-primary" target="_blank">Try Demo →</a>
+    <a href="./app.html" class="btn btn-primary">Open Studio →</a>
   </div>
 </nav>
 
@@ -227,8 +232,9 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:40px 0}
     <h1>The AI that runs<br><span class="grad">on your hardware</span></h1>
     <p class="hero-sub">Local LLM + voice + browser + wiki + multi-agent. One install. No cloud required. OpenAI-compatible API.</p>
     <div class="hero-cta">
-      <a href="https://urai.daddyai.online/app" class="btn btn-primary" target="_blank">✦ Open Live Demo</a>
-      <a href="https://github.com/etside/urai" class="btn btn-ghost" target="_blank">GitHub ↗</a>
+      <a href="./app.html" class="btn btn-primary">✦ Open Studio</a>
+      <button class="btn btn-ghost" id="install-btn" onclick="installApp()" style="display:none">⤓ Install app</button>
+      <a href="https://github.com/etside/urai" class="btn btn-ghost" target="_blank" rel="noopener">GitHub ↗</a>
       <a href="#install" class="btn btn-ghost">Install →</a>
     </div>
 
@@ -361,7 +367,7 @@ footer{background:var(--bg2);border-top:1px solid var(--border);padding:40px 0}
         <a href="https://github.com/etside/urai" target="_blank">GitHub</a>
         <a href="https://github.com/etside/urai/blob/main/docs/API.md" target="_blank">API Docs</a>
         <a href="https://github.com/etside/urai/blob/main/README.md" target="_blank">README</a>
-        <a href="https://urai.daddyai.online/app" target="_blank">Live Demo</a>
+        <a href="./app.html">Live Studio</a>
       </div>
       <div class="footer-copy">© 2026 Tynio LTD · Apache 2.0</div>
     </div>
@@ -403,6 +409,26 @@ function copyInstall(btn, text) {
   navigator.clipboard.writeText(text);
   btn.textContent = 'Copied!'; btn.classList.add('copied');
   setTimeout(() => { btn.textContent='Copy'; btn.classList.remove('copied'); }, 2000);
+}
+
+// ── PWA ──────────────────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+let _installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _installEvt = e;
+  const b = document.getElementById('install-btn');
+  if (b) b.style.display = '';
+});
+async function installApp() {
+  if (!_installEvt) return;
+  _installEvt.prompt();
+  await _installEvt.userChoice.catch(() => {});
+  _installEvt = null;
+  const b = document.getElementById('install-btn');
+  if (b) b.style.display = 'none';
 }
 </script>
 </body>

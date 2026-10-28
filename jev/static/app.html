@@ -4,7 +4,15 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <meta name="theme-color" content="#FAF9F7"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Urai"/>
+<meta name="description" content="Urai AI Studio — local-first chat, agents, wiki, voice and vibe coding."/>
 <title>Urai — AI Studio</title>
+<link rel="manifest" href="./manifest.webmanifest"/>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml"/>
+<link rel="icon" href="./favicon.ico" sizes="any"/>
+<link rel="apple-touch-icon" href="./apple-touch-icon.png"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" defer></script>
 <style>
@@ -482,6 +490,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
       <option value="urai-cyber">urai-cyber</option>
     </select>
     <div class="topbar-pills">
+      <button class="toggle-pill" id="pill-install" style="display:none" onclick="installApp()">⤓ Install</button>
       <button class="toggle-pill" id="pill-think" onclick="togglePill(this)">💭 Think</button>
       <button class="toggle-pill on" id="pill-stream" onclick="togglePill(this)">⚡ Stream</button>
       <button class="toggle-pill" id="pill-nolimit" onclick="togglePill(this)">∞ No limit</button>
@@ -654,8 +663,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
 
 <script>
 // ── State ───────────────────────────────────────────────────────────────────
+// When the Studio is served from GitHub Pages (or opened from disk) there is
+// no API on that origin — point at a local Urai server instead.
+const DEFAULT_API = (() => {
+  const h = location.hostname;
+  if (location.protocol === 'file:' || !h || /\.github\.io$/i.test(h)) return 'http://127.0.0.1:8777';
+  return location.origin;
+})();
+
 let S = {
-  url: localStorage.getItem('urai_url') || location.origin,
+  url: localStorage.getItem('urai_url') || DEFAULT_API,
   key: localStorage.getItem('urai_key') || '',
   sessions: JSON.parse(localStorage.getItem('urai_sessions') || '[]'),
   currentSession: null,
@@ -1204,10 +1221,37 @@ function showToast(msg, isErr = false) {
 // Close agent modal on overlay click
 document.getElementById('agent-modal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
 
-// PWA
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('data:text/javascript,self.addEventListener("fetch",e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))))').catch(()=>{});
+// ── PWA: service worker + install prompt + deep links ───────────────────────
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
+
+let _installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _installEvt = e;
+  const b = document.getElementById('pill-install');
+  if (b) b.style.display = '';
+});
+async function installApp() {
+  if (!_installEvt) { showToast('Use your browser menu → “Install app”'); return; }
+  _installEvt.prompt();
+  await _installEvt.userChoice.catch(() => {});
+  _installEvt = null;
+  const b = document.getElementById('pill-install');
+  if (b) b.style.display = 'none';
+}
+window.addEventListener('appinstalled', () => {
+  const b = document.getElementById('pill-install');
+  if (b) b.style.display = 'none';
+  showToast('Urai installed');
+});
+
+// ?panel=keys / ?panel=wiki … (manifest shortcuts)
+(function deepLink() {
+  const want = new URLSearchParams(location.search).get('panel');
+  if (want && document.getElementById('panel-' + want)) showPanel(want);
+})();
 </script>
 </body>
 </html>

@@ -1,0 +1,26 @@
+{
+  "name": "Urai AI Studio",
+  "short_name": "Urai",
+  "description": "Local-first AI studio: chat, agents, wiki, voice, vibe coding and computer use — running on your own hardware.",
+  "id": "./",
+  "start_url": "./app.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "orientation": "any",
+  "background_color": "#FAF9F7",
+  "theme_color": "#FAF9F7",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["productivity", "developer", "utilities"],
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "New chat", "short_name": "Chat", "url": "./app.html", "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }] },
+    { "name": "API keys", "short_name": "Keys", "url": "./app.html?panel=keys", "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }] }
+  ]
+}

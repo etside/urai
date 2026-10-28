@@ -29,8 +29,19 @@ jobs:
           mkdir -p _site
           # Landing page → index
           cp jev/static/landing.html _site/index.html
-          # App → /app
+          # App → /app.html
           cp jev/static/app.html _site/app.html
+          # PWA shell assets (manifest, service worker, icons)
+          cp jev/static/manifest.webmanifest \
+             jev/static/sw.js \
+             jev/static/icon.svg \
+             jev/static/favicon.svg \
+             jev/static/favicon.ico \
+             jev/static/icon-192.png \
+             jev/static/icon-512.png \
+             jev/static/icon-maskable-512.png \
+             jev/static/apple-touch-icon.png \
+             _site/
           # 404 redirect
           cat > _site/404.html << 'EOF'
           <!DOCTYPE html>
