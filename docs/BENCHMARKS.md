@@ -1,7 +1,7 @@
 # Urai benchmarks — measured, reproducible
 
 Every row below is produced by `jev/bench.py` against the **live**
-system (`--base https://urai.daddyai.online`, master key = cost 0).
+system (`--base $URAI_BASE_URL`, master key = cost 0).
 Method: knowledge = substring match (12 Qs); math = exact numeric
 match with 3-sample majority vote (12 Qs); code = generated `solve()`
 EXECUTED against tests, best-of-3 by pass (6 tasks). No cherry-picking:

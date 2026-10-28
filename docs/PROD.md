@@ -1,5 +1,8 @@
 # Urai production readiness — 2026-10-15
 
+> Historical snapshot of one deployment. The public hostname mentioned below
+> has since been retired; use `deploy/` and your own domain.
+
 ## Process supervision (Overmind pattern: Procfile + supervisor)
 - `Procfile` declares every process: web API, 2 llama teachers, embed server, 2 grind workers.
 - `deploy/urai-llama-4b.service` + `deploy/urai-llama-17b.service`: systemd units with

@@ -34,19 +34,21 @@ fake video.
 
 ```bash
 # Local animatic on the VPS (needs ffmpeg + checkpoint there)
-curl -s https://urai.daddyai.online/v1/videos/generations \
-  -H 'Content-Type: application/json' -H 'Authorization: Bearer 856777' \
+curl -s http://127.0.0.1:8777/v1/videos/generations \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $URAI_MASTER_KEY" \
   -d '{"prompt":"a lighthouse at dusk","duration":4,"fps":4}'
 
 # Job lookup
-curl -s "https://urai.daddyai.online/v1/videos/VID- Camille Dubois-155233?key=856777"
+curl -s "http://127.0.0.1:8777/v1/videos/<job-id>" \
+  -H "Authorization: Bearer $URAI_MASTER_KEY"
 
 # Small clips straight back as base64
 # ... -d '{"prompt":"...","response_format":"b64_json"}'
 ```
 
-Token policy is the same as chat: master key = unlimited cost 0,
-guests = 5 free then `Free Token Expired`.
+Token policy is the same as chat: the master key is unlimited; guests get
+`URAI_FREE_LIMIT` free requests (default 5) before the device is blocked.
 
 ## Higgsfield / studio integration
 
@@ -55,8 +57,8 @@ Studios get three integration surfaces — use any or all:
 **A. Chat/direction model (OpenAI-compatible).**
 Point the studio’s “custom model” fields at Urai exactly like
 [ide-integration](ide-integration.md): base
-`https://urai.daddyai.online/v1`, key `856777`, model
-`jev-local-student`. Use it for prompt expansion, shot lists, and direction
+`http://127.0.0.1:8777/v1`, key `$URAI_MASTER_KEY` (or a `urai_…` key),
+model `urai`. Use it for prompt expansion, shot lists, and direction
 notes; send the final render prompt to the video endpoint or the studio’s
 native pipeline.
 
@@ -72,9 +74,9 @@ direct provider call — with Urai auth and audit logging in front.
 `urai_ask` / `urai_agent` / `urai_imagine`, over stdio:
 `python3 /path/to/urai/jev/mcp_server.py`.
 
-## Recommended production setup
+## Recommended setup
 
 1. Keep Urai as director + audit layer (auth, logging, approvals).
-2. Set `HIGGSFIELD_API_KEY` (or Runway) in the VPS env for SOTA renders.
+2. Set `HIGGSFIELD_API_KEY` (or Runway) in the server env for SOTA renders.
 3. Use the local path only for previz/animatics.
 4. Track every render in `/superadmin` → live log (`kind: video`).

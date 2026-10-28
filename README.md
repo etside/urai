@@ -4,11 +4,13 @@
 
 [![CI](https://github.com/etside/urai/actions/workflows/ci.yml/badge.svg)](https://github.com/etside/urai/actions/workflows/ci.yml)
 [![CI v2](https://github.com/etside/urai/actions/workflows/urai-ci.yml/badge.svg)](https://github.com/etside/urai/actions/workflows/urai-ci.yml)
+[![Desktop](https://github.com/etside/urai/actions/workflows/desktop.yml/badge.svg)](https://github.com/etside/urai/actions/workflows/desktop.yml)
+[![Pages](https://github.com/etside/urai/actions/workflows/pages.yml/badge.svg)](https://etside.github.io/urai/)
 [![Version](https://img.shields.io/badge/version-v3-0A84FF)](https://github.com/etside/urai/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-34C759)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 
-**[🌐 Live Demo](https://etside.github.io/urai) · [📖 API Docs](docs/API.md) · [🚀 Quick Start](#install) · [📦 Releases](https://github.com/etside/urai/releases)**
+**[🌐 Live Demo](https://etside.github.io/urai/) · [📖 API Docs](docs/API.md) · [🚀 Quick Start](#install) · [📦 Releases](https://github.com/etside/urai/releases) · [📝 Changelog](CHANGELOG.md)**
 
 *Local LLM · Voice · Browser · Wiki · Multi-agent · One install · No cloud required*
 
@@ -79,25 +81,56 @@ urai serve start --model qwen3-4b
 urai api --port 8777
 ```
 
-### Windows / Linux binary
+### Desktop app (Windows / Linux)
 
-Download from [Releases](https://github.com/etside/urai/releases) — standalone executable, no Python needed.
+Download from [Releases](https://github.com/etside/urai/releases):
+
+| Platform | Files |
+|---|---|
+| Windows | NSIS installer (`*-win-x64.exe`) · portable (`*-win-x64-portable.exe`) |
+| Linux | AppImage (`*-linux-*.AppImage`) · Debian package (`*.deb`) |
+
+The desktop shell starts the local API for you, shows the Studio in its own
+window and stops the backend on exit. It is a shell, not a Python bundle: install
+Urai first with the one-liner above (or `pip install -e .` from a checkout).
+Build from source: [desktop/README.md](desktop/README.md).
+
+### Runners + weights bundle
+
+`build.yml` produces `urai-bundle-linux-x64` — pinned llama.cpp + sd-cli
+binaries and the registry weights, split at 1.9 GB for release hosting.
+Reassemble with `python3 scripts/assemble_release.py <dir>`.
+
+### PWA
+
+The Studio is installable from Chromium (desktop or Android): open `/app` and
+use **Install** in the toolbar, or the browser's *Install app* menu. The
+service worker caches the shell only — API traffic is always live.
 
 ---
 
 ## Web Studio
 
-Open [http://localhost:8777/app](http://localhost:8777/app) after starting the API.
+Open [http://localhost:8777/app](http://localhost:8777/app) after starting the API,
+or try the shell-only demo at **[etside.github.io/urai](https://etside.github.io/urai/)**
+(the demo points at your local API on `127.0.0.1:8777`).
 
-![Urai Studio](assets/screenshots/home-2026-09-09.webp)
+![Urai Studio](assets/banner.svg)
 
 Features:
-- **Chat** — streaming, vision, thinking mode, large context toggle
+- **Chat** — streaming, vision, thinking mode, `∞ No limit` (8192 tokens)
 - **Vibe Code** — describe → write → run loop in the browser
 - **Wiki** — search, add, browse knowledge pages
 - **Agents** — create and talk to named persistent agents
-- **API Keys** — generate, copy, revoke keys with one click
+- **API Keys** — generate, copy, revoke keys with one click (unlimited quota)
 - **Settings** — server URL, API key, rate limit status
+- **Installable** — PWA manifest + service worker; desktop installers below
+
+```bash
+urai studio            # start the API if needed + open the Studio
+urai key create laptop # unlimited key, printed once
+urai tui               # terminal UI over the same API
+```
 
 ---
 
@@ -106,31 +139,42 @@ Features:
 ```bash
 # Chat
 urai ask "explain async/await"
-urai chat                          # interactive REPL
-urai chat --no-limit               # 8192 token context
+urai chat                          # interactive REPL (local llama-server)
+urai chat --remote                 # use a remote Urai API (urai login first)
+
+# Studio + terminal UI
+urai studio                        # start the API if needed + open the Studio
+urai tui                           # interactive text UI over the same API
 
 # Code
-urai vibe "build a FastAPI todo app"
+urai vibe "build a FastAPI todo app" --workspace ./app
+urai vibe "add tests for auth" --plan      # propose writes, do not apply
 urai agent "refactor auth module across 3 files"
 
 # Research
-urai research "latest developments in Rust 2026"
+urai agent "research the latest developments in Rust, cite sources"
 
-# Voice
-urai tts "Hello from Urai"
-urai transcribe audio.wav
+# Vision / image
+urai see screenshot.png "what is wrong with this UI?"
+urai imagine "a brass owl on a rainy rooftop" -o owl.png
 
 # Wiki
 urai wiki search "python async"
 urai wiki add "MyTopic" "Content here" --category concepts
+urai wiki list
 
 # Agents
 urai agents list
-urai agents create "Researcher" --instructions "You research topics deeply"
+urai agents create Researcher --instructions "You research topics deeply" --tools web_search,wiki_search
 urai agents run <id> "What is quantum computing?"
 
+# Routines (scheduled, run by the server scheduler)
+urai routines create Morning --prompt "Summarise my day" --schedule daily@08:00
+urai routines list
+urai routines run <id>
+
 # Keys
-urai key generate --label my-app --unlimited
+urai key create my-app            # unlimited quota; printed once
 urai key list
 urai key revoke urai_xxx
 
@@ -140,7 +184,7 @@ urai model download qwen3-4b
 urai model use qwen3-4b
 
 # Serve
-urai serve start --model qwen3-4b
+urai serve start --model qwen3-4b --ctx 8192
 urai serve stop
 urai api --host 0.0.0.0 --port 8777
 ```
@@ -239,7 +283,7 @@ python3 scripts/smoke_urai.py       # offline smoke test (~6s)
 pytest tests/ -x -q
 
 # Self-improvement pipeline
-python3 scripts/train_pipeline.py --base https://urai.daddyai.online --tag weekly
+python3 scripts/train_pipeline.py --base http://127.0.0.1:8777 --tag weekly
 
 # Distill training data
 python3 scripts/distill/run_distill.py --tasks data/raw_tasks/sample_tasks.jsonl --out data/verified/distill-now.jsonl

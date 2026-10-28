@@ -44,8 +44,8 @@ GPU unlocks full capability.
 
 ```
 nginx :443
-  ├── daddyai.online → :3000 (PM2, Node, daddyai)
-  └── urai.daddyai.online → :8777 (urai-api)
+  ├── app.example.com  → :3000 (your front-end)
+  └── urai.example.com → :8777 (urai-api)
 
 urai-api :8777 (Python, jev/server.py)
   ├── /v1/chat/completions → router → local llama :8080 or cloud
