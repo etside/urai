@@ -19,6 +19,11 @@ if [ -d "$DIR/.git" ]; then
 else
   echo "cloning into $DIR"; git clone --depth 1 https://github.com/etside/urai.git "$DIR"
 fi
+echo "installing Python package..."
+pip install -q -e "$DIR" || pip install -q -e "$DIR[local]" || {
+  echo "NOTE: pip install failed — trying with --user flag"
+  pip install -q --user -e "$DIR" || true
+}
 mkdir -p "$HOME/.local/bin"
 ln -sf "$DIR/bin/urai" "$HOME/.local/bin/urai"
 ln -sf "$DIR/bin/jev" "$HOME/.local/bin/jev"
@@ -38,3 +43,4 @@ echo "OK: $(urai version 2>/dev/null || echo installed)"
 echo "try: urai studio   # starts the API and opens the Studio"
 echo "     urai api      # API only: http://127.0.0.1:8777/app"
 echo "docs: $DIR/README.md and $DIR/docs/"
+

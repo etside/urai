@@ -396,6 +396,7 @@ def run_steps(
     run_id: Optional[str] = None,
     headless: bool = True,
     require_approval: bool = False,
+    goal: str = "",
 ) -> dict:
     """
     Execute a pre-written list of browser steps.
@@ -405,6 +406,9 @@ def run_steps(
 
     If *require_approval* is True the run starts in PENDING state and blocks
     until approve(run_id) is called (or APPROVAL_TTL seconds elapse).
+
+    *goal* is an optional human-readable description stored in the run record
+    for audit/log purposes (e.g. from the /browser/run API endpoint).
     """
     run_id = run_id or str(uuid.uuid4())
 
@@ -413,6 +417,7 @@ def run_steps(
             "run_id": run_id,
             "status": "pending" if require_approval else "running",
             "steps": steps,
+            "goal": goal,
             "results": [],
             "last_state": None,
             "created_at": time.time(),
@@ -439,8 +444,15 @@ def run_steps(
             return {"ok": False, "run_id": run_id, "results": [], "final_state": None,
                     "error": "Approval TTL expired"}
 
+    # Inject approved secrets into fill_secret steps before executing
     with _lock:
-        _runs[run_id]["status"] = "running"
+        _approved_secrets: dict = _runs[run_id].pop("_secrets", {})
+    if _approved_secrets:
+        for step in steps:
+            if step.get("action") in ("fill_secret", "fill") and step.get("field"):
+                field_val = _approved_secrets.get(step["field"])
+                if field_val is not None:
+                    step["_secret_value"] = field_val
 
     try:
         session = _get_or_recover_session(run_id, headless=headless)
@@ -492,26 +504,37 @@ def run_steps(
     }
 
 
-def approve(run_id: str) -> bool:
-    """Approve a pending run so it proceeds past the approval gate."""
+def approve(run_id: str, secrets: Optional[dict] = None) -> dict:
+    """Approve a pending run so it proceeds past the approval gate.
+
+    *secrets* is an optional dict of field-name → value for auth fields that
+    paused waiting for human input (e.g. {"password": "..."}).  Values are
+    stored only in process memory for the duration of the run and never logged.
+    Returns {"ok": bool, "run_id": str}.
+    """
     with _lock:
         if run_id not in _runs:
-            return False
+            return {"ok": False, "run_id": run_id, "error": "unknown run_id"}
         if _runs[run_id]["status"] != "pending":
-            return False
+            return {"ok": False, "run_id": run_id,
+                    "error": f"run not pending (status={_runs[run_id]['status']})"}
         _runs[run_id]["status"] = "approved"
-    log.info("run_id=%s approved", run_id)
-    return True
+        if secrets:
+            # Store secrets in memory only — never in logs or persisted state
+            _runs[run_id]["_secrets"] = {k: v for k, v in secrets.items()}
+    log.info("run_id=%s approved secrets_keys=%s", run_id,
+             list(secrets.keys()) if secrets else [])
+    return {"ok": True, "run_id": run_id}
 
 
-def reject(run_id: str) -> bool:
-    """Reject a pending run."""
+def reject(run_id: str) -> dict:
+    """Reject a pending run. Returns {"ok": bool, "run_id": str}."""
     with _lock:
         if run_id not in _runs:
-            return False
+            return {"ok": False, "run_id": run_id, "error": "unknown run_id"}
         _runs[run_id]["status"] = "rejected"
     log.info("run_id=%s rejected", run_id)
-    return True
+    return {"ok": True, "run_id": run_id}
 
 
 def run_status(run_id: str) -> Optional[dict]:
@@ -865,3 +888,4 @@ if __name__ == "__main__":
     print(f"    ok={auto['ok']}  steps_taken={auto['steps_taken']}")
 
     print("\nAll smoke tests complete.")
+

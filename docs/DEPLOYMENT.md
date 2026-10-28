@@ -242,12 +242,14 @@ LLAMA_ARGS=--n-gpu-layers 40 --flash-attn
 | `URAI_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` for Docker) |
 | `URAI_RATE_LIMIT` | `60` | Requests/minute/IP for free (no-key) traffic |
 | `URAI_RATE_WINDOW` | `60` | Rate-limit window in seconds |
-| `URAI_CACHE_TTL` | `60` | Response cache TTL in seconds |
+| `URAI_CACHE_TTL` | `60` | Response cache TTL in seconds (0 = disabled) |
 | `URAI_REQUEST_TIMEOUT` | `120` | Upstream request timeout in seconds |
 | `URAI_LOG_FILE` | *(stdout)* | Path for structured JSON log file |
 | `URAI_FREE_LIMIT` | `5` | Free requests per device before block |
+| `URAI_BLOCK_SECONDS` | `1800` | How long (seconds) a blocked guest stays blocked |
 | `URAI_CORS_ORIGIN` | `*` | CORS allowed origin for browser clients |
 | `URAI_BROWSER_ALLOW_PRIVATE` | `0` | Set to `1` to allow LAN URLs in browser agent |
+| `URAI_APPROVAL_TTL` | `120` | Seconds before a paused browser-approve request times out |
 | `OPENAI_API_KEY` | *(optional)* | Cloud fallback for L4 tasks |
 | `ANTHROPIC_API_KEY` | *(optional)* | Claude cloud fallback |
 | `AWS_DEFAULT_REGION` | `ap-south-1` | AWS free-tier services (Polly, Transcribe, S3) |
