@@ -22,7 +22,8 @@ jobs:
 
       - name: Compile check (all Python files)
         run: |
-          python3 -m py_compile jev/*.py
+          find . -name '*.py' -not -path './.git/*' -not -path '*/node_modules/*' \
+            -not -path './third_party/*' -print0 | xargs -0 python3 -m py_compile
           echo "✓ All .py files compile"
 
       - name: Import smoke test
@@ -44,6 +45,29 @@ jobs:
           from jev.router import classify, route
           print('✓ All imports OK')
           "
+
+  # ---------------------------------------------------------------------------
+  # Job 1b: lowest supported interpreter (pyproject requires >=3.10)
+  # Catches syntax that only parses on 3.12+ (e.g. PEP 701 f-strings).
+  # ---------------------------------------------------------------------------
+  py310:
+    name: Python 3.10 (minimum)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Compile every Python file
+        run: |
+          find . -name '*.py' -not -path './.git/*' -not -path '*/node_modules/*' \
+            -not -path './third_party/*' -print0 | xargs -0 python3 -m py_compile
+          echo "✓ Every .py file parses on 3.10"
+
+      - name: Offline smoke on 3.10
+        run: python3 scripts/smoke_urai.py --offline
 
   # ---------------------------------------------------------------------------
   # Job 2: Unit / smoke tests
