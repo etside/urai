@@ -165,11 +165,15 @@ Schedule strings: `manual`, `daily@08:00`, `every:3600` (seconds).
 `POST /v1/keys/generate` returns the **full token once**:
 
 ```json
-{ "ok": true, "token": "urai_…", "label": "laptop",
+{ "ok": true, "id": "urai_…", "token": "urai_…", "label": "laptop",
   "quota": 0, "used": 0, "created": 1793151921, "active": true }
 ```
 
 Store it immediately; `GET /v1/keys` only returns a masked form.
+
+`DELETE /v1/keys/<id-or-prefix>` needs at least 8 characters of the id
+(shorter values, including an empty id, are rejected with `400`) and returns
+`404` for an unknown id.
 
 ## Media
 
@@ -225,7 +229,8 @@ Errors are JSON with an `error` string and a meaningful status code:
 ```json
 { "error": "master key required" }        // 401
 { "error": "task required" }              // 400
-{ "error": "unknown token" }              // 200 with {ok:false} for DELETE
+{ "error": "unknown token" }              // 404 for DELETE of an unknown id
+{ "error": "token id required" }          // 400 for DELETE with an empty id
 { "error": "rate_limit_exceeded", "retry_after": 60 }  // 429
 { "error": "not found" }                  // 404
 ```
