@@ -14,7 +14,7 @@
     urai imagine <prompt> [-o out.png]   text-to-image (stable-diffusion.cpp)
     urai embed "text..."                 vectors (embedding server)
     urai video "prompt" [-o out.mp4]     text-to-video (local animatic or provider)
-    urai login [key]                     save VPS master key (856777) for remote use
+    urai login [key]                     save a master key for remote use
     urai logout                          forget saved remote credentials
     urai whoami                          show remote token status
     urai swarm "t1" "t2" [...]            parallel multi-agent fan-out
@@ -23,6 +23,13 @@
     urai mcp                             MCP stdio server (Claude/opencode tools)
     urai evaluate "task" --expect a,b   scored check via running server
     urai api [--host ADDR] [--port P]   start Urai API + web playground (:8777)
+    urai studio [--port P]               start API (if needed) + open the Studio
+    urai tui                            interactive terminal UI via the API
+    urai key list|create|revoke         manage API keys (unlimited quota option)
+    urai wiki search|add|get|list       knowledge wiki
+    urai agents list|create|run|delete  named persistent agents
+    urai routines list|create|run|del   scheduled recurring tasks
+    urai vibe "task" [--workspace DIR]  agentic coding session (plan with --plan)
 """
 
 import argparse
@@ -33,7 +40,7 @@ import sys
 import urllib.request
 
 BASE = "http://127.0.0.1:8777"
-DEFAULT_REMOTE = "https://urai.daddyai.online"
+DEFAULT_REMOTE = os.environ.get("URAI_REMOTE_URL", BASE)
 
 
 def _cfg_path():
@@ -133,7 +140,7 @@ def stream_chat(messages, max_tokens=512):
 def cmd_chat(args):
     remote = bool(getattr(args, "remote", False) or os.environ.get("URAI_REMOTE"))
     if remote:
-        print("urai chat — remote VPS (master key 856777, empty line quits)")
+        print("urai chat — remote API (empty line quits)")
         history = []
         while True:
             try:
@@ -169,6 +176,296 @@ def cmd_chat(args):
             history.append({"role": "assistant", "content": text})
         except Exception as e:
             print(f"[error: {e} — is the model server up? run: urai serve start]")
+
+
+# ── v3 helpers: studio / keys / wiki / agents / routines / vibe / tui ─────────
+
+def _api_base(port=None):
+    return (os.environ.get("URAI_API") or f"http://127.0.0.1:{port or 8777}").rstrip("/")
+
+
+def _api_ok(base, timeout=2):
+    try:
+        with urllib.request.urlopen(base + "/health", timeout=timeout) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def _wait_api(base, seconds=25):
+    import time
+    t0 = time.time()
+    while time.time() - t0 < seconds:
+        if _api_ok(base):
+            return True
+        time.sleep(0.4)
+    return False
+
+
+def _post(base, path, payload, key="", timeout=600):
+    data = json.dumps(payload).encode()
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = "Bearer " + key
+    req = urllib.request.Request(base + path, data, headers, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+
+def _json_out(obj, limit=8000):
+    print(json.dumps(obj, indent=2, default=str)[:limit])
+
+
+def cmd_studio(args):
+    base = _api_base(getattr(args, "port", 8777))
+    if not _api_ok(base):
+        print(f"starting Urai API on {base} …", flush=True)
+        env = dict(os.environ)
+        subprocess.Popen(
+            [sys.executable, "-m", "jev.cli", "api",
+             "--port", str(getattr(args, "port", 8777)),
+             "--host", getattr(args, "host", "127.0.0.1")],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True, env=env,
+        )
+        if not _wait_api(base, 30):
+            sys.exit(f"server did not answer /health on {base} — run `urai api` to see why")
+    url = base + "/app"
+    print("Urai Studio →", url)
+    if not getattr(args, "no_open", False):
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception:
+            pass
+    return 0
+
+
+def cmd_key(args):
+    if args.remote:
+        if args.action == "list":
+            return _json_out(call("GET", "/v1/keys", remote=True))
+        if args.action == "create":
+            return _json_out(call("POST", "/v1/keys/generate",
+                                  {"label": args.value or "cli", "quota": args.quota},
+                                  remote=True))
+        return _json_out(call("DELETE", "/v1/keys/" + args.value, remote=True))
+
+    from . import apitokens
+    if args.action == "list":
+        toks = apitokens.list_tokens()
+        if not toks:
+            print("no keys yet — create one:  urai key create my-laptop")
+            return 0
+        for t in toks:
+            state = "active" if t.get("active", True) else "revoked"
+            print(f"{t.get('token','?'):<18} {t.get('label',''):<22} "
+                  f"quota={'unlimited' if not t.get('quota') else t['quota']:<9} "
+                  f"used={t.get('used',0):<5} {state}")
+            print(f"  id: {t.get('id','')}")
+        return 0
+    if args.action == "create":
+        r = apitokens.issue(args.value or "cli", args.quota)
+        _json_out(r)
+        print("\nStore this token now — it is shown once.", file=sys.stderr)
+        return 0
+    _json_out(apitokens.revoke(args.value))
+    return 0
+
+
+def cmd_vibe(args):
+    if args.remote:
+        return _json_out(call("POST", "/vibe",
+                              {"task": args.task, "workspace": args.workspace,
+                               "plan_only": args.plan, "max_steps": args.max_steps},
+                              remote=True))
+    from .vibe import vibe_session
+    res = vibe_session(args.task, workspace=args.workspace,
+                       plan_only=args.plan, max_steps=args.max_steps)
+    _json_out(res)
+    return 0
+
+
+def cmd_wiki(args):
+    from . import wiki
+    if args.action == "search":
+        if not args.value:
+            sys.exit("usage: urai wiki search <query>")
+        hits = wiki.wiki_search(args.value, top=args.top)
+        for h in hits:
+            print(f"{h.get('title','?'):<32} {h.get('category',''):<12} "
+                  f"{h.get('score','')}")
+            snippet = (h.get("snippet") or "").strip().replace("\n", " ")
+            if snippet:
+                print("   ", snippet[:160])
+        if not hits:
+            print("no matches")
+        return 0
+    if args.action == "add":
+        if not args.value:
+            sys.exit("usage: urai wiki add <title> [--content TEXT] [--category C]")
+        content = args.content or getattr(args, "body", "") or sys.stdin.read()
+        _json_out(wiki.wiki_add(args.value, content, args.category))
+        return 0
+    if args.action == "get":
+        r = wiki.wiki_get(args.value)
+        if not r:
+            sys.exit("not found: " + args.value)
+        print(r.get("content") or json.dumps(r, indent=2)[:6000])
+        return 0
+    rows = wiki.wiki_list(args.category)
+    for e in rows:
+        print(f"{e.get('title','?'):<36} {e.get('category',''):<12} {e.get('updated','')}")
+    if not rows:
+        print("wiki is empty — add one:  urai wiki add \"Title\" --content \"...\"")
+    return 0
+
+
+def cmd_agents(args):
+    from . import jarvis_agents as ja
+    if args.action == "list":
+        rows = ja.list_agents()
+        for a in rows:
+            print(f"{a.get('id','?'):<10} {a.get('name',''):<24} "
+                  f"runs={a.get('run_count',0):<4} sched={a.get('schedule') or '-'}")
+        if not rows:
+            print("no agents — create one:  urai agents create Scout --instructions \"...\"")
+        return 0
+    if args.action == "create":
+        if not args.value:
+            sys.exit("usage: urai agents create <name> [--instructions TEXT]")
+        tools = [t.strip() for t in args.tools.split(",") if t.strip()]
+        a = ja.create_agent(args.value, args.instructions, tools, args.schedule)
+        _json_out(a.to_dict() if hasattr(a, "to_dict") else a)
+        return 0
+    if args.action == "run":
+        if not args.value:
+            sys.exit("usage: urai agents run <agent-id> [message]")
+        msg = (getattr(args, "message", "") or args.instructions
+               or "What is your current focus?")
+        _json_out(ja.run_agent_turn(args.value, msg))
+        return 0
+    _json_out(ja.delete_agent(args.value))
+    return 0
+
+
+def cmd_routines(args):
+    from . import routines as rt
+    if args.action == "list":
+        rows = rt.list_routines()
+        for r in rows:
+            print(f"{r.get('id','?'):<10} {r.get('name',''):<24} "
+                  f"sched={r.get('schedule',''):<12} enabled={r.get('enabled',True)}")
+        if not rows:
+            print("no routines — create one:  urai routines create Morning --prompt \"...\" --schedule daily@09:00")
+        return 0
+    if args.action == "create":
+        if not args.value:
+            sys.exit("usage: urai routines create <name> --prompt TEXT [--schedule SPEC]")
+        _json_out(rt.create_routine(args.value, args.prompt, args.schedule))
+        return 0
+    if args.action == "run":
+        _json_out(rt.run_routine(args.value))
+        return 0
+    _json_out(rt.delete_routine(args.value))
+    return 0
+
+
+_TUI_HELP = """commands:
+  /help              this help
+  /clear             clear the conversation
+  /model <id>        set model (default: urai)
+  /key <token>       use this API token for the session
+  /save <file>       save the transcript as JSON
+  /quit              exit
+anything else is sent to the local Urai API."""
+
+
+def cmd_tui(args):
+    base = _api_base()
+    if not _api_ok(base):
+        print(f"Urai API not reachable at {base}.")
+        print("Start it with:  urai api --port 8777   (or: urai studio)")
+        return 1
+    key = _master_key()
+    model = os.environ.get("URAI_MODEL", "urai")
+    hist: list[dict] = []
+    print("Urai TUI — /help for commands, /quit to exit")
+    while True:
+        try:
+            line = input("\nurai› ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if not line:
+            continue
+        if line in ("/quit", "/exit", "q"):
+            return 0
+        if line == "/help":
+            print(_TUI_HELP)
+            continue
+        if line == "/clear":
+            hist.clear()
+            print("(cleared)")
+            continue
+        if line.startswith("/model "):
+            model = line.split(None, 1)[1].strip()
+            print("(model:", model, ")")
+            continue
+        if line.startswith("/key "):
+            key = line.split(None, 1)[1].strip()
+            print("(key set for this session)")
+            continue
+        if line.startswith("/save "):
+            path = line.split(None, 1)[1].strip()
+            try:
+                with open(path, "w") as f:
+                    json.dump(hist, f, indent=2)
+                print("(saved", path, ")")
+            except Exception as e:
+                print("(save failed:", e, ")")
+            continue
+
+        msgs = hist + [{"role": "user", "content": line}]
+        print()
+        parts: list[str] = []
+        try:
+            payload = json.dumps({"model": model, "messages": msgs,
+                                  "max_tokens": 2048, "stream": True}).encode()
+            headers = {"Content-Type": "application/json"}
+            if key:
+                headers["Authorization"] = "Bearer " + key
+            req = urllib.request.Request(base + "/v1/chat/completions", payload,
+                                         headers, method="POST")
+            with urllib.request.urlopen(req, timeout=900) as resp:
+                for raw in resp:
+                    s = raw.decode("utf-8", errors="replace").strip()
+                    if not s.startswith("data: "):
+                        continue
+                    chunk = s[6:]
+                    if chunk == "[DONE]":
+                        break
+                    try:
+                        obj = json.loads(chunk)
+                        delta = (obj.get("choices", [{}])[0]
+                                 .get("delta", {}).get("content", ""))
+                        if not delta:
+                            delta = obj.get("choices", [{}])[0].get("text", "")
+                    except Exception:
+                        delta = chunk
+                    if delta:
+                        parts.append(delta)
+                        sys.stdout.write(delta)
+                        sys.stdout.flush()
+        except Exception as e:
+            print(f"\n[error: {e}]")
+            continue
+        print()
+        answer = "".join(parts).strip()
+        if answer:
+            hist += [{"role": "user", "content": line},
+                     {"role": "assistant", "content": answer}]
+            hist = hist[-20:]
 
 
 def main(argv=None):
@@ -224,7 +521,7 @@ def main(argv=None):
     p.add_argument("--remote", action="store_true",
         help="render on VPS API instead of locally")
     p = sub.add_parser("login"); p.add_argument("key", nargs="?",
-        help="master key (856777); omit to read URAI_MASTER_KEY env")
+        help="master key; omit to read URAI_MASTER_KEY env")
     p.add_argument("--url", default=None, help="API base URL")
     p = sub.add_parser("logout")
     p = sub.add_parser("whoami")
@@ -243,6 +540,54 @@ def main(argv=None):
     p = sub.add_parser("api"); p.add_argument("--port", type=int, default=8777)
     p.add_argument("--host", default="127.0.0.1",
                    help="bind address (use 0.0.0.0 for LAN/VPS + URAI_API_KEY)")
+
+    # ── v3: studio, keys, wiki, agents, routines, vibe, tui ──────────────
+    p = sub.add_parser("studio", help="start the API (if needed) and open the Studio")
+    p.add_argument("--port", type=int, default=8777)
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--no-open", action="store_true")
+
+    p = sub.add_parser("key", help="manage API keys")
+    p.add_argument("action", nargs="?", default="list",
+                   choices=["list", "create", "revoke"])
+    p.add_argument("value", nargs="?", default="",
+                   help="label (create) or token/prefix (revoke)")
+    p.add_argument("--quota", type=int, default=0, help="0 = unlimited")
+    p.add_argument("--remote", action="store_true")
+
+    p = sub.add_parser("vibe", help="vibe-code a task inside a workspace")
+    p.add_argument("task")
+    p.add_argument("--workspace", default=".")
+    p.add_argument("--plan", action="store_true", help="propose writes only")
+    p.add_argument("--max-steps", type=int, default=20)
+    p.add_argument("--remote", action="store_true")
+
+    p = sub.add_parser("wiki", help="knowledge wiki")
+    p.add_argument("action", nargs="?", default="search",
+                   choices=["search", "add", "get", "list"])
+    p.add_argument("value", nargs="?", default="")
+    p.add_argument("body", nargs="?", default="", help="page body (add)")
+    p.add_argument("--content", default="", help="page body (add); stdin if omitted")
+    p.add_argument("--category", default="concepts")
+    p.add_argument("--top", type=int, default=5)
+
+    p = sub.add_parser("agents", help="named persistent agents")
+    p.add_argument("action", nargs="?", default="list",
+                   choices=["list", "create", "run", "delete"])
+    p.add_argument("value", nargs="?", default="", help="name (create) / id")
+    p.add_argument("message", nargs="?", default="", help="message (run)")
+    p.add_argument("--instructions", default="")
+    p.add_argument("--tools", default="")
+    p.add_argument("--schedule", default="")
+
+    p = sub.add_parser("routines", help="scheduled recurring tasks")
+    p.add_argument("action", nargs="?", default="list",
+                   choices=["list", "create", "run", "delete"])
+    p.add_argument("value", nargs="?", default="", help="name (create) / id")
+    p.add_argument("--prompt", default="")
+    p.add_argument("--schedule", default="manual")
+
+    sub.add_parser("tui", help="interactive terminal UI over the local API")
 
     args = ap.parse_args(argv)
 
@@ -278,7 +623,7 @@ def main(argv=None):
     if args.cmd == "login":
         key = args.key or os.environ.get("URAI_MASTER_KEY", "")
         if not key:
-            sys.exit("usage: urai login <master-key>  (VPS master key is 856777)")
+            sys.exit("usage: urai login <master-key>  [--url https://your-host]")
         cfg = _cfg_load()
         cfg["master_key"] = key
         if args.url:
@@ -538,6 +883,21 @@ def main(argv=None):
     if args.cmd == "mcp":
         from .mcp_server import main as mcp_main
         return mcp_main()
+
+    if args.cmd == "studio":
+        return cmd_studio(args)
+    if args.cmd == "key":
+        return cmd_key(args)
+    if args.cmd == "vibe":
+        return cmd_vibe(args)
+    if args.cmd == "wiki":
+        return cmd_wiki(args)
+    if args.cmd == "agents":
+        return cmd_agents(args)
+    if args.cmd == "routines":
+        return cmd_routines(args)
+    if args.cmd == "tui":
+        return cmd_tui(args)
 
     if args.cmd == "api":
         from .server import serve
