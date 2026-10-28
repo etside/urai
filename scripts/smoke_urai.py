@@ -50,6 +50,8 @@ def main():
     check("vision files", len(r["models"]["qwen25vl-3b"].get("files", [])) == 2)
     check("sd-turbo entry", r["models"]["sd-turbo"]["kind"] == "generate")
     check("embed-small entry", r["models"]["embed-small"]["kind"] == "embedding")
+    missing = [m for m in reg.DEFAULTS["models"] if m not in r["models"]]
+    check("every DEFAULTS id is downloadable", not missing, str(missing))
 
     import jev.vision, jev.imagine, jev.server, jev.agent, jev.router
     from jev.backends import EmbeddingBackend

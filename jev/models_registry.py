@@ -100,7 +100,24 @@ DEFAULTS = {
 
 def load():
     if REGISTRY.exists():
-        return json.loads(REGISTRY.read_text())
+        try:
+            reg = json.loads(REGISTRY.read_text())
+        except (OSError, ValueError):
+            reg = json.loads(json.dumps(DEFAULTS))
+        else:
+            # The on-disk registry predates some ids in DEFAULTS (an existing
+            # install is never rewritten on upgrade). Merge the missing ones
+            # so `urai model download <new-id>` works on old checkouts — this
+            # is what used to break the release build.
+            models = reg.setdefault("models", {})
+            for mid, meta in DEFAULTS["models"].items():
+                if mid not in models:
+                    models[mid] = json.loads(json.dumps(meta))
+            if reg.get("active") not in models:
+                reg["active"] = DEFAULTS["active"]
+            # Deliberately in-memory only: load() must not rewrite a tracked
+            # file just because the process started.
+        return reg
     save(DEFAULTS)
     return json.loads(json.dumps(DEFAULTS))
 
