@@ -41,6 +41,16 @@ jobs:
           cmake --version | head -n 1
           df -h / | tail -n 1
 
+      - name: Free disk space
+        run: |
+          # The weights alone are ~11 GB; drop preinstalled toolchains we do
+          # not use so the runner has room for build trees + bundle.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/share/swift /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+                      /usr/local/share/boost 2>/dev/null || true
+          sudo apt-get clean
+          df -h / | tail -n 1
+
       - name: Build llama.cpp (pinned)
         run: |
           git init third_party/llama.cpp && cd third_party/llama.cpp
@@ -108,6 +118,8 @@ jobs:
           cp /tmp/runners/* bundle/runners/
           find model -type f \( -name '*.gguf' -o -name '*.safetensors' \) \
             -exec cp {} bundle/weights/ \;
+          # checksums for the whole files, recorded *before* splitting so
+          # assemble_release.py can verify the rejoined file
           (cd bundle && sha256sum runners/* weights/* > SHA256SUMS.txt)
           (cd bundle/weights && for f in *; do
              sz=$(stat -c%s "$f")
@@ -116,25 +128,29 @@ jobs:
                split -b 1900M -d "$f" "$f.part" && rm "$f"
              fi
            done)
-          (cd bundle && sha256sum runners/* weights/* > SHA256SUMS.txt)
+          (cd bundle && sha256sum runners/* weights/* >> SHA256SUMS.txt)
           du -sh bundle bundle/runners bundle/weights
           cat bundle/SHA256SUMS.txt
-
-      - name: Upload bundle artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: urai-bundle-linux-x64
-          path: bundle/
-          retention-days: 30
 
       - name: Attach bundle to GitHub Release (tags only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: bundle/**/*
+          # append_body keeps the human-written release notes; `body:` here
+          # would overwrite them.
+          append_body: true
           body: |
-            Urai full bundle: CPU runners (llama.cpp pinned ${{ env.LLAMA_CPP_COMMIT }},
+            **Urai full bundle** — CPU runners (llama.cpp pinned ${{ env.LLAMA_CPP_COMMIT }},
             stable-diffusion.cpp) + all pinned weights + SHA256SUMS.txt.
             Files ending in .partNN: reassemble with
             `python3 scripts/assemble_release.py <download-dir>`
             then verify with `sha256sum -c SHA256SUMS.txt`.
+
+      - name: Upload bundle artifact
+        continue-on-error: true   # the release above already has the files
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-bundle-linux-x64
+          path: bundle/
+          retention-days: 30
