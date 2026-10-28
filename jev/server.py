@@ -101,6 +101,13 @@ from . import voice as _voice_module
 
 PORT = int(os.environ.get("URAI_PORT", "8777"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+# Static shell assets served at the site root (PWA / favicons).
+_STATIC_ASSETS = {
+    "manifest.webmanifest", "sw.js", "favicon.ico", "favicon.svg",
+    "icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png",
+    "apple-touch-icon.png",
+}
 API_KEY = os.environ.get("URAI_API_KEY", "")
 # WARNING: "*" allows all origins. Set URAI_CORS_ORIGIN=https://yourdomain.com in prod
 CORS_ORIGIN = os.environ.get("URAI_CORS_ORIGIN", "*")
@@ -110,7 +117,7 @@ _raw_master = os.environ.get("URAI_MASTER_KEY", "")
 if not _raw_master:
     import warnings
     warnings.warn("URAI_MASTER_KEY not set — using insecure default. Set it in .env!", stacklevel=1)
-    _raw_master = "856777-dev-only-not-secure"
+    _raw_master = "urai-dev-only-not-secure"
 MASTER_API_KEY = _raw_master
 FREE_LIMIT = int(os.environ.get("URAI_FREE_LIMIT", "5"))
 BLOCK_SECONDS = int(os.environ.get("URAI_BLOCK_SECONDS", "1800"))
@@ -435,9 +442,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", CORS_ORIGIN)
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods",
+                         "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers",
-                         "Content-Type, Authorization, X-Device-Id")
+                         "Content-Type, Authorization, X-Api-Key, X-Device-Id")
+        self.send_header("Access-Control-Max-Age", "600")
+        # Chrome Private Network Access: a public HTTPS page (e.g. the GitHub
+        # Pages demo) talking to 127.0.0.1 needs this on the preflight.
+        if (self.headers.get("Access-Control-Request-Private-Network", "")
+                .lower() == "true"):
+            self.send_header("Access-Control-Allow-Private-Network", "true")
 
     def _sec_headers(self):
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -511,9 +525,10 @@ class Handler(BaseHTTPRequestHandler):
     def _static(self):
         p = self._path()
         # hidden superadmin served by same app.html; JS detects path
-        rel = "app.html" if p in ("/", "/app", "/app/", "/superadmin") else \
-              "landing.html" if p in ("/welcome", "/welcome/") else \
-            p[len("/app/"):] if p.startswith("/app/") else None
+        rel = "app.html" if p in ("/", "/app", "/app/", "/app.html", "/superadmin") else \
+              "landing.html" if p in ("/welcome", "/welcome/", "/index.html") else \
+            p[len("/app/"):] if p.startswith("/app/") else \
+            p.lstrip("/") if p.lstrip("/") in _STATIC_ASSETS else None
         if rel is None or ".." in rel:
             return self._send({"error": "not found"}, 404)
         f = STATIC_DIR / rel
@@ -534,6 +549,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p = self._path()
         q = self._query()
+        # Resolve caller identity up-front: several GET routes (keys, rate
+        # limit) need it before the per-route branch below.
+        ip = _client_ip(self)
+        is_master = _extract_master({}, self.headers, q)
         if p == "/v1/cloud/usage":
             days = int(urllib.parse.parse_qs(
                 urllib.parse.urlparse(self.path).query).get("days", ["7"])[0])
@@ -601,6 +620,37 @@ class Handler(BaseHTTPRequestHandler):
             return self._send({"object": "list",
                                "data": TOOL_SCHEMAS,
                                "count": len(TOOL_SCHEMAS)})
+
+        # ── Read-only knowledge / agent routes ────────────────────────────────
+        # GET mirrors of the POST routes so the Studio (and curl) can read
+        # without sending a JSON body.
+        if p == "/v1/wiki/search":
+            term = q.get("query") or q.get("q") or ""
+            if not term:
+                return self._send({"error": "query required"}, 400)
+            from .wiki import wiki_search as _ws
+            try:
+                top = int(q.get("top", 5))
+            except (TypeError, ValueError):
+                top = 5
+            return self._send({"results": _ws(term, top=top)})
+
+        if p == "/v1/wiki/list":
+            from .wiki import wiki_list as _wl
+            return self._send({"entries": _wl(q.get("category", ""))})
+
+        if p == "/v1/wiki/get":
+            from .wiki import wiki_get as _wg
+            _r = _wg(q.get("title", ""))
+            return self._send(_r or {"error": "not found"}, 200 if _r else 404)
+
+        if p == "/v1/agents/list":
+            from .jarvis_agents import list_agents as _la
+            return self._send({"agents": _la()})
+
+        if p == "/v1/routines/list":
+            from .routines import list_routines as _lr
+            return self._send({"routines": _lr()})
 
         if p == "/v1/keys":
             if not is_master:
@@ -738,7 +788,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
             return
-        if p in ("/", "/app", "/app/", "/welcome", "/welcome/") or p.startswith("/app/") or p == "/superadmin":
+        if p in ("/", "/app", "/app/", "/app.html", "/index.html", "/welcome", "/welcome/") or p.startswith("/app/") or p == "/superadmin" or p.lstrip("/") in _STATIC_ASSETS:
             return self._static()
         self._send({"error": "not found"}, 404)
 
@@ -1335,6 +1385,25 @@ class Handler(BaseHTTPRequestHandler):
             prefix=p.split("/v1/keys/",1)[1]
             return self._send(_rev(prefix))
 
+        if p == "/vibe":
+            # Vibe coding writes files inside the workspace — master only.
+            if not is_master:
+                return self._send({"error": "master key required"}, 401)
+            task = str(body.get("task", "")).strip()
+            if not task:
+                return self._send({"error": "task required"}, 400)
+            try:
+                from .vibe import vibe_session as _vs
+                res = _vs(task,
+                          workspace=body.get("workspace") or None,
+                          plan_only=bool(body.get("plan_only")),
+                          max_steps=int(body.get("max_steps", 20)),
+                          verbose=False)
+                _record_use(ip, device, True)
+                return self._send(res)
+            except Exception as e:
+                return self._send({"error": str(e)[:300]}, 500)
+
         if p == "/agent":
             from . import sessions as _sess
             sid = body.get("session_id", "")
@@ -1533,6 +1602,35 @@ class Handler(BaseHTTPRequestHandler):
             _record_use(ip, device, bool(body.get("_urai_authed")))
             return self._send({"score": score, "hits": hits,
                                "expected": expected, **result})
+
+        return self._send({"error": "not found"}, 404)
+
+    # ---------------- DELETE ----------------
+    def do_DELETE(self):
+        p = self._path()
+        q = self._query()
+        if not self._auth_ok():
+            return self._deny()
+        ip = _client_ip(self)
+        _ok, _ = _rate_check(ip)
+        if not _ok:
+            return self._send({"error": "rate_limit_exceeded",
+                               "retry_after": _RATE_WINDOW_S}, 429)
+        is_master = _extract_master({}, self.headers, q)
+
+        if p.startswith("/v1/keys/"):
+            if not is_master:
+                return self._send({"error": "master key required"}, 401)
+            from .apitokens import revoke as _rev
+            return self._send(_rev(p[len("/v1/keys/"):]))
+
+        if p.startswith("/v1/agents/"):
+            from .jarvis_agents import delete_agent as _da
+            return self._send(_da(p[len("/v1/agents/"):]))
+
+        if p.startswith("/v1/routines/"):
+            from .routines import delete_routine as _dr
+            return self._send(_dr(p[len("/v1/routines/"):]))
 
         return self._send({"error": "not found"}, 404)
 
