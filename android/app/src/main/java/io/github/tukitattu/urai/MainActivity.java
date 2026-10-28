@@ -99,9 +99,12 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView v, String url) {
-                String js = "(function(){try{localStorage.urai_ep="
-                        + JSONObject.quote(ep) + ";localStorage.urai_key="
-                        + JSONObject.quote(key) + ";if(window.boot)boot();}catch(e){}})();";
+                // app.html reads urai_url (not urai_ep) — keep both for compat
+                String js = "(function(){try{"
+                        + "localStorage.setItem('urai_url'," + JSONObject.quote(ep) + ");"
+                        + "localStorage.setItem('urai_ep'," + JSONObject.quote(ep) + ");"
+                        + "localStorage.setItem('urai_key'," + JSONObject.quote(key) + ");"
+                        + "if(window.boot)boot();}catch(e){}})();";
                 v.evaluateJavascript(js, null);
             }
         });
@@ -166,3 +169,4 @@ public class MainActivity extends Activity {
         }
     }
 }
+

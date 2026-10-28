@@ -428,14 +428,30 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media(max-width:640px){
-  #sidebar{position:fixed;left:0;top:0;bottom:0;z-index:50}
-  #sidebar.collapsed{width:0}
+  #sidebar{position:fixed;left:0;top:0;bottom:0;z-index:50;width:var(--sidebar-w)}
+  #sidebar.collapsed{width:0;transform:translateX(-100%)}
   .msg-ai .bubble,.msg-user .bubble{max-width:92%}
   .key-form{flex-direction:column}
+  /* hide pills on small screens so toggle button is never pushed off */
+  .topbar-pills{display:none}
+  #model-sel{margin-left:8px}
+  /* keep toggle button always visible at far left */
+  #toggle-sb{flex-shrink:0}
+}
+/* backdrop for mobile sidebar */
+#sb-backdrop{
+  display:none;position:fixed;inset:0;z-index:49;
+  background:rgba(0,0,0,.45);
+}
+@media(max-width:640px){
+  #sb-backdrop.show{display:block}
 }
 </style>
 </head>
 <body>
+
+<!-- Mobile sidebar backdrop -->
+<div id="sb-backdrop" onclick="closeSidebarMobile()"></div>
 
 <!-- Sidebar -->
 <div id="sidebar">
@@ -693,11 +709,27 @@ document.addEventListener('DOMContentLoaded', () => {
   loadRateStatus();
   if (document.getElementById('pill-stream').classList.contains('on')) S.streaming = true;
   hljs?.configure({ignoreUnescapedHTML:true});
+  // auto-collapse sidebar on mobile so main area is not blocked on load
+  if (_isMobile()) {
+    document.getElementById('sidebar').classList.add('collapsed');
+  }
 });
 
 // ── Layout ──────────────────────────────────────────────────────────────────
+function _isMobile() { return window.innerWidth <= 640; }
+
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('collapsed');
+  const sb = document.getElementById('sidebar');
+  const bd = document.getElementById('sb-backdrop');
+  const collapsed = sb.classList.toggle('collapsed');
+  if (_isMobile()) {
+    bd.classList.toggle('show', !collapsed);
+  }
+}
+
+function closeSidebarMobile() {
+  document.getElementById('sidebar').classList.add('collapsed');
+  document.getElementById('sb-backdrop').classList.remove('show');
 }
 
 function showPanel(name, btn) {
@@ -710,6 +742,8 @@ function showPanel(name, btn) {
   if (name === 'keys') loadKeys();
   if (name === 'agents') loadAgents();
   if (name === 'settings') loadRateStatus();
+  // close drawer on mobile after selecting a panel
+  if (_isMobile()) closeSidebarMobile();
 }
 
 function togglePill(btn) {
@@ -1255,3 +1289,4 @@ window.addEventListener('appinstalled', () => {
 </script>
 </body>
 </html>
+
