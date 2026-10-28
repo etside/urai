@@ -1,0 +1,81 @@
+{
+  "name": "urai-desktop",
+  "productName": "Urai",
+  "version": "3.0.0",
+  "description": "Urai AI Studio \u2014 desktop shell (Windows / Linux)",
+  "main": "main.js",
+  "author": "Tynio LTD",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish never",
+    "dist:linux": "electron-builder --linux --publish never",
+    "dist:win": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "dev.urai.studio",
+    "productName": "Urai",
+    "artifactName": "urai-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "setup.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../jev/static",
+        "to": "static",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development",
+      "icon": "build/icon.png",
+      "synopsis": "Local-first AI studio",
+      "description": "Urai AI Studio: chat, agents, wiki, voice, vibe coding and computer use on your own hardware."
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "artifactName": "urai-${version}-win-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "urai-${version}-win-${arch}-portable.${ext}"
+    }
+  }
+}
