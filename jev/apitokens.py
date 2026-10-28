@@ -8,6 +8,7 @@ Store: data/api_tokens.json. Never logged, never committed with values
 (empty file ships; issue via superadmin).
 """
 import json
+import os
 import secrets
 import time
 from pathlib import Path
@@ -16,16 +17,23 @@ ROOT = Path(__file__).resolve().parents[1]
 TOK_FILE = ROOT / "data" / "api_tokens.json"
 
 
+def _tok_file() -> Path:
+    """Token store; follows URAI_DATA_DIR like the rest of the runtime."""
+    d = os.environ.get("URAI_DATA_DIR")
+    return (Path(d) if d else ROOT / "data") / "api_tokens.json"
+
+
 def _load() -> dict:
     try:
-        return json.loads(TOK_FILE.read_text())
+        return json.loads(_tok_file().read_text())
     except Exception:
         return {}
 
 
 def _save(d: dict):
-    TOK_FILE.parent.mkdir(parents=True, exist_ok=True)
-    TOK_FILE.write_text(json.dumps(d, indent=2) + "\n")
+    f = _tok_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(d, indent=2) + "\n")
 
 
 def issue(label: str = "", quota: int = 0) -> dict:
@@ -34,7 +42,7 @@ def issue(label: str = "", quota: int = 0) -> dict:
     d[tok] = {"label": (label or "untitled")[:80], "quota": max(0, int(quota or 0)),
               "used": 0, "created": int(time.time()), "last_used": 0, "active": True}
     _save(d)
-    return {"ok": True, "token": tok, **d[tok]}
+    return {"ok": True, "id": tok, "token": tok, **d[tok]}
 
 
 def list_tokens() -> list:
@@ -43,9 +51,13 @@ def list_tokens() -> list:
 
 
 def revoke(prefix_or_id: str) -> dict:
+    key = (prefix_or_id or "").strip()
+    # An empty/short prefix would match (and revoke) the wrong token.
+    if len(key) < 8:
+        return {"ok": False, "error": "token id or prefix too short (min 8 chars)"}
     d = _load()
     for t in list(d):
-        if t == prefix_or_id or t.startswith(prefix_or_id):
+        if t == key or t.startswith(key):
             d[t]["active"] = False
             _save(d)
             return {"ok": True, "id": t}

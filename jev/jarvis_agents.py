@@ -331,6 +331,9 @@ def delete_agent(agent_id: str) -> dict:
     Delete an agent and all associated files.
     Returns status dict.
     """
+    agent_id = (agent_id or "").strip()
+    if not agent_id:
+        return {"ok": False, "error": "agent id required"}
     removed = []
     for suffix in ["", "_notes", "_history"]:
         ext = ".json" if suffix == "" else (".md" if suffix == "_notes" else ".jsonl")

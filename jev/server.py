@@ -1394,13 +1394,6 @@ class Handler(BaseHTTPRequestHandler):
             r=_issue(body.get("label","untitled"),body.get("quota",0))
             return self._send(r)
 
-        if p.startswith("/v1/keys/") and self.command=="DELETE":
-            if not is_master:
-                return self._send({"error":"master key required"},401)
-            from .apitokens import revoke as _rev
-            prefix=p.split("/v1/keys/",1)[1]
-            return self._send(_rev(prefix))
-
         if p == "/vibe":
             # Vibe coding writes files inside the workspace — master only.
             if not is_master:
@@ -1638,15 +1631,27 @@ class Handler(BaseHTTPRequestHandler):
             if not is_master:
                 return self._send({"error": "master key required"}, 401)
             from .apitokens import revoke as _rev
-            return self._send(_rev(p[len("/v1/keys/"):]))
+            prefix = p[len("/v1/keys/"):].strip()
+            if not prefix:
+                return self._send({"error": "token id required"}, 400)
+            r = _rev(prefix)
+            return self._send(r, 200 if r.get("ok") else 404)
 
         if p.startswith("/v1/agents/"):
+            agent_id = p[len("/v1/agents/"):].strip()
+            if not agent_id:
+                return self._send({"error": "agent id required"}, 400)
             from .jarvis_agents import delete_agent as _da
-            return self._send(_da(p[len("/v1/agents/"):]))
+            r = _da(agent_id)
+            return self._send(r, 200 if r.get("ok") else 404)
 
         if p.startswith("/v1/routines/"):
+            routine_id = p[len("/v1/routines/"):].strip()
+            if not routine_id:
+                return self._send({"error": "routine id required"}, 400)
             from .routines import delete_routine as _dr
-            return self._send(_dr(p[len("/v1/routines/"):]))
+            r = _dr(routine_id)
+            return self._send(r, 200 if r.get("ok") else 404)
 
         return self._send({"error": "not found"}, 404)
 

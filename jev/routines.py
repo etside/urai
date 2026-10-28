@@ -15,6 +15,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ROUTINES_FILE = ROOT / "data" / "routines.json"
 
+
+def _routines_file() -> Path:
+    """Routine store; follows URAI_DATA_DIR like the rest of the runtime."""
+    d = os.environ.get("URAI_DATA_DIR")
+    return (Path(d) if d else ROOT / "data") / "routines.json"
+
 @dataclass
 class Routine:
     id: str
@@ -50,13 +56,14 @@ class Routine:
 
 def _load() -> list[Routine]:
     try:
-        return [Routine(**r) for r in json.loads(ROUTINES_FILE.read_text())]
+        return [Routine(**r) for r in json.loads(_routines_file().read_text())]
     except Exception:
         return []
 
 def _save(routines: list[Routine]):
-    ROUTINES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    ROUTINES_FILE.write_text(json.dumps([r.to_dict() for r in routines], indent=2))
+    f = _routines_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps([r.to_dict() for r in routines], indent=2))
 
 def create_routine(name: str, prompt: str, schedule: str = "manual",
                    tools: list | None = None) -> dict:
@@ -99,6 +106,9 @@ def run_due_routines() -> list[dict]:
     return results
 
 def delete_routine(routine_id: str) -> dict:
+    routine_id = (routine_id or "").strip()
+    if not routine_id:
+        return {"ok": False, "error": "routine id required"}
     routines = [r for r in _load() if r.id != routine_id]
     _save(routines)
     return {"ok": True, "id": routine_id}
