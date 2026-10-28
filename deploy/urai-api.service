@@ -1,23 +1,58 @@
 [Unit]
-Description=Urai API + web playground
+Description=Urai v3 API + web playground
+Documentation=https://github.com/etside/urai
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=urai
+Group=urai
 WorkingDirectory=/opt/urai
-Environment=URAI_API_KEY=
-Environment=URAI_MODEL=coder05-fast
-# Teacher fallback (optional):
-# Environment=TEACHER_BASE_URL=https://opencode.ai/zen/v1
-# Environment=TEACHER_API_KEY=...
-# Environment=TEACHER_MODEL=opencode/muse-spark-1.3-contributor-free
+EnvironmentFile=-/opt/urai/.env
+
+# Core config
+Environment=URAI_PORT=8777
+Environment=URAI_HOST=127.0.0.1
+Environment=URAI_MODEL=qwen3-4b
+
 ExecStartPre=/usr/bin/python3 -m jev.cli model download ${URAI_MODEL}
-ExecStart=/usr/bin/python3 -m jev.cli api --host 127.0.0.1 --port 8777
+ExecStart=/usr/bin/python3 -m jev.cli api --host ${URAI_HOST} --port ${URAI_PORT}
+
+# Restart policy
 Restart=on-failure
 RestartSec=5
+StartLimitInterval=60
+StartLimitBurst=5
+
+# Graceful shutdown — 30s to finish in-flight requests
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Security hardening
 NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/urai/data /opt/urai/model /opt/urai/out /tmp
+CapabilityBoundingSet=
+AmbientCapabilities=
+SecureBits=keep-caps
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=false  # needed for llama.cpp JIT
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=3G
+CPUQuota=200%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=urai
 
 [Install]
 WantedBy=multi-user.target
