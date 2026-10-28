@@ -602,6 +602,12 @@ class Handler(BaseHTTPRequestHandler):
                                "data": TOOL_SCHEMAS,
                                "count": len(TOOL_SCHEMAS)})
 
+        if p == "/v1/keys":
+            if not is_master:
+                return self._send({"error":"master key required"},401)
+            from .apitokens import list_tokens as _lt
+            return self._send({"tokens":_lt()})
+
         if p in ("/models", "/v1/models"):
             self._send({"object": "list",
                         "data": [{"object": "model", **m} for m in _models()]})
@@ -1314,6 +1320,20 @@ class Handler(BaseHTTPRequestHandler):
             result=execute_plan(plan,budget_tokens=body.get("budget_tokens",2048))
             _record_use(ip,device,bool(body.get("_urai_authed")))
             return self._send(result)
+
+        if p == "/v1/keys/generate":
+            if not is_master:
+                return self._send({"error":"master key required"},401)
+            from .apitokens import issue as _issue
+            r=_issue(body.get("label","untitled"),body.get("quota",0))
+            return self._send(r)
+
+        if p.startswith("/v1/keys/") and self.command=="DELETE":
+            if not is_master:
+                return self._send({"error":"master key required"},401)
+            from .apitokens import revoke as _rev
+            prefix=p.split("/v1/keys/",1)[1]
+            return self._send(_rev(prefix))
 
         if p == "/agent":
             from . import sessions as _sess

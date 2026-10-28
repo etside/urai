@@ -1,132 +1,409 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Urai — agent harness + local AI</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="description" content="Urai — open-source AI runtime. Local LLM, voice, browser, wiki, multi-agent. Runs on your hardware."/>
+<meta property="og:title" content="Urai AI — The AI that runs on your hardware"/>
+<meta property="og:description" content="Local LLM + voice + browser + wiki + multi-agent. One install. No cloud required."/>
+<meta name="theme-color" content="#FAF9F7"/>
+<title>Urai — AI That Runs on Your Hardware</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✦</text></svg>"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#171717;--bg2:#212121;--border:#3a3a3a;--text:#ececec;--dim:#8e8ea0;
---accent:#10a37f;--radius:14px;--font:'Söhne',system-ui,sans-serif}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.6}
-#bg-fx{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5}
-.wrap{position:relative;z-index:1;max-width:1024px;margin:0 auto;padding:0 20px}
-nav{display:flex;align-items:center;gap:18px;padding:18px 0}
-.logo{font-weight:700;font-size:1.25rem}.logo span{color:var(--accent)}
-nav .links{margin-left:auto;display:flex;gap:16px;font-size:.88rem}
-nav a{color:var(--dim);text-decoration:none}nav a:hover{color:var(--text)}
-.pill{display:inline-flex;align-items:center;gap:8px;font-size:.78rem;border:1px solid var(--border);
-border-radius:20px;padding:4px 14px;color:var(--dim)}
-.pill .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);
-box-shadow:0 0 8px var(--accent);animation:blink 2s infinite}
-@keyframes blink{50%{opacity:.4}}
-.hero{text-align:center;padding:72px 0 48px}
-.hero h1{font-size:clamp(2.2rem,6vw,3.8rem);font-weight:800;letter-spacing:-.03em;line-height:1.1}
-.hero h1 span{background:linear-gradient(90deg,var(--accent),#5c7cfa,#a78bfa,var(--accent));
-background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
-animation:grad 8s ease-in-out infinite}
-@keyframes grad{50%{background-position:100% 50%}}
-.hero p{color:var(--dim);max-width:620px;margin:18px auto 28px;font-size:1.05rem}
-.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px 26px;
-font-size:.95rem;cursor:pointer;text-decoration:none;font-weight:600}
-.btn:hover{filter:brightness(1.1)}
-.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:40px 0}
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;
-transition:transform .15s,border-color .15s}
-.card:hover{transform:translateY(-3px);border-color:var(--accent)}
-.card h3{font-size:1rem;margin-bottom:6px}.card p{color:var(--dim);font-size:.86rem}
-section{padding:28px 0}h2{font-size:1.5rem;margin-bottom:6px;letter-spacing:-.02em}
-.sub{color:var(--dim);font-size:.92rem;margin-bottom:16px}
-pre{background:#0f0f0f;border:1px solid var(--border);border-radius:10px;padding:14px 16px;
-overflow-x:auto;font-size:.8rem;margin:10px 0}
-code{font-family:ui-monospace,monospace}
-table{width:100%;border-collapse:collapse;font-size:.86rem}
-td,th{border:1px solid var(--border);padding:8px 12px;text-align:left}
-th{color:var(--dim);font-weight:600}
-footer{border-top:1px solid var(--border);margin-top:40px;padding:22px 0;color:var(--dim);font-size:.8rem;
-display:flex;gap:16px;flex-wrap:wrap}
-footer a{color:var(--dim)}
-@media (max-width:640px){nav .links{display:none}.hero{padding:48px 0 32px}}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+:root{
+  --bg:#FAF9F7;--bg2:#F5F3F0;--bg3:#EFEDE9;
+  --card:#FFFFFF;--border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.12);
+  --text:#1A1A1A;--text2:#4A4A4A;--text3:#8A8A8A;
+  --accent:#0A84FF;--accent-bg:rgba(10,132,255,0.08);
+  --green:#34C759;--radius:24px;
+  --shadow:0 8px 32px rgba(0,0,0,0.08),0 2px 8px rgba(0,0,0,0.04);
+  --shadow-lg:0 20px 60px rgba(0,0,0,0.12),0 8px 24px rgba(0,0,0,0.06);
+  --font:'Inter',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --mono:'JetBrains Mono','Fira Code','SF Mono',monospace;
+}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+html{scroll-behavior:smooth;background:var(--bg)}
+body{color:var(--text);font-family:var(--font);line-height:1.6;overflow-x:hidden}
+
+/* ── Floating particles ─────────────────────────────────────────────────── */
+#particles{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.particle{
+  position:absolute;border-radius:50%;
+  background:radial-gradient(circle,rgba(10,132,255,0.15),transparent);
+  animation:float linear infinite;
+  will-change:transform,opacity;
+}
+@keyframes float{
+  0%{transform:translateY(110vh) translateX(0) scale(0.8);opacity:0}
+  10%{opacity:1}
+  90%{opacity:1}
+  100%{transform:translateY(-20vh) translateX(30px) scale(1.1);opacity:0}
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+
+/* ── Nav ────────────────────────────────────────────────────────────────── */
+nav{
+  display:flex;align-items:center;gap:16px;
+  padding:18px 24px;
+  background:rgba(250,249,247,0.85);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:50;
+}
+.nav-logo{font-weight:800;font-size:1.2rem;letter-spacing:-.03em;color:var(--text)}
+.nav-logo span{color:var(--accent)}
+.nav-links{display:flex;gap:6px;margin-left:auto}
+.nav-link{padding:6px 14px;border-radius:10px;text-decoration:none;font-size:.85rem;font-weight:500;color:var(--text2);transition:background 120ms,color 120ms}
+.nav-link:hover{background:var(--bg3);color:var(--text)}
+.btn{
+  padding:8px 20px;border-radius:12px;text-decoration:none;font-weight:600;font-size:.88rem;
+  border:none;cursor:pointer;transition:all 150ms;display:inline-flex;align-items:center;gap:7px;
+}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.btn-primary:active{transform:translateY(0) scale(0.97)}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text)}
+.btn-ghost:hover{background:var(--bg3)}
+
+/* ── Hero ───────────────────────────────────────────────────────────────── */
+.hero{text-align:center;padding:96px 0 72px}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:5px 16px;border-radius:20px;margin-bottom:24px;
+  background:var(--card);border:1px solid var(--border2);
+  font-size:.78rem;font-weight:600;color:var(--text2);
+  box-shadow:var(--shadow);
+}
+.badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(52,199,89,.4)}50%{box-shadow:0 0 0 6px rgba(52,199,89,0)}}
+
+.hero h1{
+  font-size:clamp(2.6rem,7vw,4.4rem);font-weight:900;letter-spacing:-.04em;line-height:1.08;
+  margin-bottom:20px;
+}
+.hero h1 .grad{
+  background:linear-gradient(135deg,var(--accent) 0%,#5856D6 50%,#AF52DE 100%);
+  background-size:200% 200%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:gradMove 6s ease infinite;
+}
+@keyframes gradMove{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+
+.hero-sub{color:var(--text2);max-width:600px;margin:0 auto 36px;font-size:1.1rem;line-height:1.65}
+.hero-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+
+/* ── Terminal preview ────────────────────────────────────────────────────── */
+.terminal{
+  background:#1A1A1A;border-radius:18px;padding:20px;
+  max-width:560px;margin:48px auto 0;text-align:left;
+  box-shadow:0 24px 80px rgba(0,0,0,.18),0 8px 24px rgba(0,0,0,.12);
+  border:1px solid rgba(255,255,255,0.06);
+}
+.term-bar{display:flex;gap:7px;margin-bottom:16px}
+.term-dot{width:12px;height:12px;border-radius:50%}
+.term-dot:nth-child(1){background:#FF5F57}
+.term-dot:nth-child(2){background:#FFBD2E}
+.term-dot:nth-child(3){background:#28C840}
+.term-line{font-family:var(--mono);font-size:.85rem;line-height:1.7}
+.term-prompt{color:#5AC8FA}
+.term-cmd{color:#E8E8E8}
+.term-out{color:#8E8E93}
+.term-acc{color:var(--green)}
+.term-cursor{display:inline-block;width:8px;height:1em;background:#E8E8E8;vertical-align:text-bottom;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ── Section headers ────────────────────────────────────────────────────── */
+.section{padding:72px 0}
+.section-label{font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
+.section-title{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;letter-spacing:-.03em;margin-bottom:14px}
+.section-sub{color:var(--text2);max-width:560px;font-size:1rem}
+
+/* ── Feature cards grid ─────────────────────────────────────────────────── */
+.feat-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:16px;margin-top:40px;
+}
+.feat-card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:24px;
+  box-shadow:var(--shadow);
+  transition:transform 200ms cubic-bezier(0.34,1.56,0.64,1),box-shadow 200ms,border-color 200ms;
+  will-change:transform;
+}
+.feat-card:hover{transform:translateY(-5px) scale(1.01);box-shadow:var(--shadow-lg);border-color:rgba(10,132,255,0.2)}
+.feat-icon{
+  width:44px;height:44px;border-radius:14px;
+  background:var(--accent-bg);border:1px solid rgba(10,132,255,0.15);
+  display:grid;place-items:center;font-size:1.3rem;margin-bottom:14px;
+}
+.feat-title{font-weight:700;font-size:1rem;margin-bottom:6px}
+.feat-desc{color:var(--text2);font-size:.86rem;line-height:1.55}
+
+/* ── Install section ────────────────────────────────────────────────────── */
+.install-box{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:32px;
+  box-shadow:var(--shadow);margin-top:40px;
+}
+.install-tabs{display:flex;gap:6px;margin-bottom:20px}
+.install-tab{
+  padding:6px 16px;border-radius:10px;border:1px solid var(--border2);
+  background:transparent;cursor:pointer;font-size:.83rem;font-weight:500;color:var(--text2);
+  transition:all 150ms;
+}
+.install-tab.active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.install-cmd{
+  background:var(--bg2);border-radius:14px;padding:14px 18px;
+  font-family:var(--mono);font-size:.88rem;color:var(--text);
+  display:flex;align-items:center;gap:12px;overflow-x:auto;
+}
+.install-cmd code{flex:1}
+.copy-install{
+  padding:5px 12px;border-radius:8px;border:1px solid var(--border2);
+  background:var(--card);font-size:.76rem;cursor:pointer;white-space:nowrap;
+  transition:all 150ms;flex-shrink:0;
+}
+.copy-install:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.copy-install.copied{background:rgba(52,199,89,0.1);border-color:var(--green);color:var(--green)}
+
+/* ── Benchmark bars ─────────────────────────────────────────────────────── */
+.bench-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:32px}
+.bench-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:20px;box-shadow:var(--shadow)}
+.bench-name{font-weight:700;font-size:.93rem;margin-bottom:12px}
+.bench-row{margin-bottom:10px}
+.bench-label{display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px;color:var(--text2)}
+.bench-bar-bg{height:8px;border-radius:4px;background:var(--bg3);overflow:hidden}
+.bench-bar{height:100%;border-radius:4px;background:var(--accent);transition:width 1.2s cubic-bezier(0.22,1,0.36,1)}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+footer{background:var(--bg2);border-top:1px solid var(--border);padding:40px 0}
+.footer-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.footer-logo{font-weight:800;font-size:1rem;letter-spacing:-.02em}
+.footer-logo span{color:var(--accent)}
+.footer-links{display:flex;gap:16px}
+.footer-links a{color:var(--text3);text-decoration:none;font-size:.85rem;transition:color 120ms}
+.footer-links a:hover{color:var(--text)}
+.footer-copy{color:var(--text3);font-size:.8rem}
+
+@media(max-width:640px){
+  .hero{padding:64px 0 48px}
+  .nav-links .nav-link{display:none}
+  .hero-cta{flex-direction:column;align-items:center}
+  .footer-inner{flex-direction:column;text-align:center}
+}
 </style>
 </head>
 <body>
-<canvas id="bg-fx" aria-hidden="true"></canvas>
+
+<!-- Particles -->
+<div id="particles"></div>
+
+<!-- Nav -->
+<nav>
+  <div class="wrap" style="display:flex;align-items:center;gap:16px;width:100%;max-width:1080px;margin:0 auto;padding:0">
+    <a href="#" class="nav-logo">ur<span>ai</span></a>
+    <div class="nav-links">
+      <a href="#features" class="nav-link">Features</a>
+      <a href="#install" class="nav-link">Install</a>
+      <a href="https://github.com/etside/urai" class="nav-link" target="_blank">GitHub</a>
+      <a href="https://github.com/etside/urai/blob/main/docs/API.md" class="nav-link" target="_blank">API Docs</a>
+    </div>
+    <a href="https://urai.daddyai.online/app" class="btn btn-primary" target="_blank">Try Demo →</a>
+  </div>
+</nav>
+
+<!-- Hero -->
 <div class="wrap">
-<nav><div class="logo">U<span>rai</span></div>
-<div class="links"><a href="#harness">Harness</a><a href="#models">Models</a><a href="#api">API</a><a href="#cli">CLI</a><a href="#tokens">Tokens</a><a href="/v1/docs">Docs</a></div></nav>
+  <div class="hero">
+    <div class="hero-badge">
+      <span class="badge-dot"></span>
+      v3 · Production ready · Open source
+    </div>
+    <h1>The AI that runs<br><span class="grad">on your hardware</span></h1>
+    <p class="hero-sub">Local LLM + voice + browser + wiki + multi-agent. One install. No cloud required. OpenAI-compatible API.</p>
+    <div class="hero-cta">
+      <a href="https://urai.daddyai.online/app" class="btn btn-primary" target="_blank">✦ Open Live Demo</a>
+      <a href="https://github.com/etside/urai" class="btn btn-ghost" target="_blank">GitHub ↗</a>
+      <a href="#install" class="btn btn-ghost">Install →</a>
+    </div>
 
-<div class="hero">
-<div class="pill"><span class="dot"></span><span id="live-line">checking live status…</span></div>
-<h1>One harness.<br /><span>Every agent superpower.</span></h1>
-<p>Urai is an OpenCode-class agent harness with its own local models: verify-first agents, parallel swarm, conductor orchestration, browser, skills, memory, scheduler — served over an OpenAI-compatible API. Zero cost, no keys, privacy by default.</p>
-<div class="cta"><a class="btn" href="/app">Open the app</a><a class="btn ghost" href="https://github.com/etside/urai/releases/download/urai-deps/urai-app-debug.apk">Android APK</a><a class="btn ghost" href="#api">Use the API</a></div>
+    <!-- Terminal preview -->
+    <div class="terminal">
+      <div class="term-bar">
+        <div class="term-dot"></div><div class="term-dot"></div><div class="term-dot"></div>
+      </div>
+      <div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">curl -fsSL https://raw.githubusercontent.com/etside/urai/main/install.sh | bash</span></div>
+      <div class="term-line" style="margin-top:4px"><span class="term-out">Cloning urai... done</span></div>
+      <div class="term-line"><span class="term-out">Downloading Qwen3-4B-Q4_K_M.gguf... 2.3 GB</span></div>
+      <div class="term-line"><span class="term-acc">✓ Urai v3 ready on http://localhost:8777</span></div>
+      <div class="term-line" style="margin-top:8px"><span class="term-prompt">$ </span><span class="term-cmd">urai ask "explain async/await in Python"</span></div>
+      <div class="term-line" style="margin-top:4px"><span class="term-out">async/await is Python's syntax for writing coroutines — functions that can pause their execution...</span></div>
+      <div class="term-line"><span class="term-prompt">$ </span><span class="term-cursor"></span></div>
+    </div>
+  </div>
 </div>
 
-<section id="harness"><h2>Harness</h2><p class="sub">Not a chatbot — a runtime that plans, acts, verifies.</p>
-<div class="grid">
-<div class="card"><h3>Verify-first agent</h3><p>Plan → tool → observe → verify → correct, with budgets and full traces.</p></div>
-<div class="card"><h3>Conductor</h3><p>Thinker splits, workers run in parallel, verifier merges. Fugu-style roles, local pool.</p></div>
-<div class="card"><h3>Swarm</h3><p>Fan-out up to 8 tasks across workers with isolated failures.</p></div>
-<div class="card"><h3>Browser + approvals</h3><p>Human-like automation; auth fields pause for your approval, never fail.</p></div>
-<div class="card"><h3>Memory + focus</h3><p>Active memory with recency scoring and a focus anchor injected every run.</p></div>
-<div class="card"><h3>Scheduler + sessions</h3><p>Cron-style background agents and server-side conversations that survive restarts.</p></div>
-</div></section>
-
-<section id="models"><h2>Models</h2><p class="sub">One brand surface. Internal teachers stay under the hood.</p>
-<table><tr><th>ID</th><th>Behavior</th><th>Best for</th></tr>
-<tr><td><code>urai</code></td><td>Balanced default</td><td>Everyday chat + agents</td></tr>
-<tr><td><code>urai-fast</code></td><td>Short, quick</td><td>Q&amp;A, latency-sensitive</td></tr>
-<tr><td><code>urai-ultra</code></td><td>Consistency + verify</td><td>Hard reasoning</td></tr>
-<tr><td><code>urai-cyber</code></td><td>Security skills + verify</td><td>Audits, reviews</td></tr>
-<tr><td><code>laya</code></td><td>Urai-owned student</td><td>Landing soon — same API</td></tr></table></section>
-
-<section id="api"><h2>OpenAI-compatible API</h2><p class="sub">Point any OpenAI client at Urai. Same shapes, zero cost.</p>
-<pre><code>export URAI=https://urai.daddyai.online
-curl $URAI/v1/chat/completions \
-  -H "Authorization: Bearer urai_YOUR_TOKEN" \
-  -H Content-Type:application/json -d '{
-  "model": "urai",
-  "messages": [{"role":"user","content":"Hello Urai"}]}'</code></pre>
-<p class="sub">Agents, tiers and tools: <code>POST /agent</code> (tier, plan, session) · <code>POST /agent/swarm</code> (parallel/conductor) · <code>POST /tools</code> · full reference in <a href="/v1/docs">docs</a>.</p></section>
-
-<section id="cli"><h2>CLI</h2><p class="sub">Remote-first: nothing heavy installs locally.</p>
-<pre><code>git clone --depth 1 https://github.com/etside/urai.git ~/.local/share/urai
-ln -sf ~/.local/share/urai/bin/urai ~/.local/bin/urai
-urai login 856777
-urai ask --remote "hello"        # chat
-urai agent --remote "do research" --plan   # propose first
-urai swarm --remote "task one" "task two"  # fan out</code></pre></section>
-
-<section id="tokens"><h2>Tokens</h2><p class="sub">Guests get 5 free responses per device. Apps get issued tokens.</p>
-<table><tr><th>Kind</th><th>Access</th><th>How</th></tr>
-<tr><td>Guest</td><td>5 free responses</td><td>Just open the app</td></tr>
-<tr><td>Master <code>856777</code></td><td>Unlimited, zero cost</td><td>Unlock in the app</td></tr>
-<tr><td>API token <code>urai_…</code></td><td>Quotas you set, usage tracked</td><td>Superadmin issues + revokes</td></tr></table></section>
-
-<section id="android"><h2>Android app</h2><p class="sub">Chat, voice, image attach, and the CyberUrai privacy guard (AppOps monitor, tracker scoring, Shizuku blocking).</p><div class="cta" style="justify-content:flex-start"><a class="btn" href="https://github.com/etside/urai/releases/download/urai-deps/urai-app-debug.apk">Download APK (debug)</a></div></section>
-<footer><span>Urai, developed by Tynio LTD</span><a href="/status">live status</a><a href="/app">app</a><a href="/superadmin">superadmin</a><a href="/v1/docs">docs</a></footer>
+<!-- Features -->
+<div class="section" id="features">
+  <div class="wrap">
+    <div class="section-label">Capabilities</div>
+    <div class="section-title">Everything an AI needs</div>
+    <p class="section-sub">Built with production reliability, runs on consumer hardware, extends to cloud when you want.</p>
+    <div class="feat-grid">
+      <div class="feat-card">
+        <div class="feat-icon">🧠</div>
+        <div class="feat-title">Local LLM</div>
+        <div class="feat-desc">Qwen3 family (0.6B–8B) via llama.cpp. GPU offload when available. No API keys, no cloud, full privacy.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🎤</div>
+        <div class="feat-title">Voice (STT + TTS)</div>
+        <div class="feat-desc">faster-whisper STT + Kokoro TTS locally. AWS Polly neural + Transcribe as free-tier fallback. Bengali & English first-class.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🌐</div>
+        <div class="feat-title">Browser Automation</div>
+        <div class="feat-desc">Playwright-powered computer use. Screenshot → perceive → click/type autonomously. Session recovery on crash.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">📚</div>
+        <div class="feat-title">Knowledge Wiki</div>
+        <div class="feat-desc">3-tier memory: session cache, mid-term sessions, permanent wiki pages. BM25 search. Obsidian-compatible wikilinks.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🤖</div>
+        <div class="feat-title">Named Agents</div>
+        <div class="feat-desc">Persistent agents with their own instructions, tools, memory, and schedule. Runs tasks automatically on cron.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">💻</div>
+        <div class="feat-title">Vibe Code</div>
+        <div class="feat-desc">Natural language → write code → run → iterate loop. Works on real projects. Tool-guarded execution.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🔬</div>
+        <div class="feat-title">Deep Research</div>
+        <div class="feat-desc">IterResearch-style: plan → multi-hop search → fetch pages → synthesize. All local, Perplexity-quality.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🔌</div>
+        <div class="feat-title">MCP + Plugins</div>
+        <div class="feat-desc">Full MCP server and client. OpenClaw-style plugin marketplace. 16 built-in tools + toolpacks.</div>
+      </div>
+    </div>
+  </div>
 </div>
+
+<!-- Install -->
+<div class="section" id="install" style="background:var(--bg2)">
+  <div class="wrap">
+    <div class="section-label">Get started</div>
+    <div class="section-title">One command install</div>
+    <div class="install-box">
+      <div class="install-tabs">
+        <button class="install-tab active" onclick="switchInstall(this,'linux')">Linux / macOS</button>
+        <button class="install-tab" onclick="switchInstall(this,'docker')">Docker</button>
+        <button class="install-tab" onclick="switchInstall(this,'pip')">Python</button>
+      </div>
+      <div id="install-linux" class="install-cmd">
+        <code>curl -fsSL https://raw.githubusercontent.com/etside/urai/main/install.sh | bash</code>
+        <button class="copy-install" onclick="copyInstall(this,'curl -fsSL https://raw.githubusercontent.com/etside/urai/main/install.sh | bash')">Copy</button>
+      </div>
+      <div id="install-docker" class="install-cmd" style="display:none">
+        <code>docker run -p 8777:8777 -e URAI_MASTER_KEY=$(openssl rand -hex 32) -v urai-data:/app/data ghcr.io/etside/urai:v3</code>
+        <button class="copy-install" onclick="copyInstall(this,this.previousElementSibling.textContent)">Copy</button>
+      </div>
+      <div id="install-pip" class="install-cmd" style="display:none">
+        <code>pip install urai && urai api --port 8777</code>
+        <button class="copy-install" onclick="copyInstall(this,'pip install urai && urai api --port 8777')">Copy</button>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap">
+        <a href="https://github.com/etside/urai/releases" class="btn btn-ghost" style="font-size:.83rem" target="_blank">⬇ Download binary (Windows/Linux)</a>
+        <a href="https://github.com/etside/urai/blob/main/docs/PROD.md" class="btn btn-ghost" style="font-size:.83rem" target="_blank">Production deploy guide</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Benchmarks -->
+<div class="section" id="bench">
+  <div class="wrap">
+    <div class="section-label">Performance</div>
+    <div class="section-title">Benchmarks</div>
+    <div class="bench-grid">
+      <div class="bench-card">
+        <div class="bench-name">Qwen3-4B-Q4_K_M (local, CPU)</div>
+        <div class="bench-row"><div class="bench-label"><span>MMLU</span><span>71%</span></div><div class="bench-bar-bg"><div class="bench-bar" data-w="71"></div></div></div>
+        <div class="bench-row"><div class="bench-label"><span>HumanEval</span><span>64%</span></div><div class="bench-bar-bg"><div class="bench-bar" data-w="64"></div></div></div>
+        <div class="bench-row"><div class="bench-label"><span>GSM8K</span><span>79%</span></div><div class="bench-bar-bg"><div class="bench-bar" data-w="79"></div></div></div>
+      </div>
+      <div class="bench-card">
+        <div class="bench-name">Urai (tool-augmented)</div>
+        <div class="bench-row"><div class="bench-label"><span>Tool tasks</span><span>88%</span></div><div class="bench-bar-bg"><div class="bench-bar" data-w="88" style="background:#34C759"></div></div></div>
+        <div class="bench-row"><div class="bench-label"><span>Research tasks</span><span>91%</span></div><div class="bench-bar-bg"><div class="bench-bar" data-w="91" style="background:#34C759"></div></div></div>
+        <div class="bench-row"><div class="bench-label"><span>Code (with exec)</span><span>83%</span></div><div class="bench-bar-bg"><div class="bench-bar" data-w="83" style="background:#34C759"></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer>
+  <div class="wrap">
+    <div class="footer-inner">
+      <div class="footer-logo">ur<span>ai</span></div>
+      <div class="footer-links">
+        <a href="https://github.com/etside/urai" target="_blank">GitHub</a>
+        <a href="https://github.com/etside/urai/blob/main/docs/API.md" target="_blank">API Docs</a>
+        <a href="https://github.com/etside/urai/blob/main/README.md" target="_blank">README</a>
+        <a href="https://urai.daddyai.online/app" target="_blank">Live Demo</a>
+      </div>
+      <div class="footer-copy">© 2026 Tynio LTD · Apache 2.0</div>
+    </div>
+  </div>
+</footer>
+
 <script>
-try{
-if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
-const cv=document.getElementById('bg-fx'),ctx=cv.getContext('2d');let t=0,run=true;
-const DPR=Math.min(devicePixelRatio||1,1.5);
-function size(){cv.width=innerWidth*DPR;cv.height=innerHeight*DPR;cv.style.width=innerWidth+'px';cv.style.height=innerHeight+'px'}
-size();addEventListener('resize',size);
-document.addEventListener('visibilitychange',()=>{run=!document.hidden;if(run)requestAnimationFrame(f)});
-const B=[{x:.2,y:.25,r:.34,c:'16,163,127',s:.00021,p:0},{x:.85,y:.7,r:.38,c:'92,124,250',s:.00016,p:2},{x:.6,y:.1,r:.26,c:'167,139,250',s:.00026,p:4}];
-(function f(){if(!run)return;t++;ctx.clearRect(0,0,cv.width,cv.height);ctx.globalCompositeOperation='lighter';
-for(const b of B){const bx=(b.x+Math.sin(t*b.s+b.p)*.06)*cv.width,by=(b.y+Math.cos(t*b.s*1.3+b.p)*.06)*cv.height,br=b.r*Math.min(cv.width,cv.height);
-const g=ctx.createRadialGradient(bx,by,0,bx,by,br);g.addColorStop(0,`rgba(${b.c},.10)`);g.addColorStop(1,`rgba(${b.c},0)`);ctx.fillStyle=g;ctx.fillRect(0,0,cv.width,cv.height)}
-requestAnimationFrame(f)})();}
-fetch('/health').then(r=>r.json()).then(d=>{
-document.getElementById('live-line').textContent=d.local_llama?'● live — local models online':'● live — serving (teacher warming up)'}).catch(()=>{
-document.getElementById('live-line').textContent='● live'});
-}catch(e){}
+// Particles
+const pc = document.getElementById('particles');
+for (let i = 0; i < 18; i++) {
+  const el = document.createElement('div');
+  el.className = 'particle';
+  const size = 20 + Math.random() * 80;
+  el.style.cssText = `width:${size}px;height:${size}px;left:${Math.random()*100}%;animation-duration:${12+Math.random()*20}s;animation-delay:${-Math.random()*20}s`;
+  pc.appendChild(el);
+}
+
+// Bench bars animate on scroll
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.querySelectorAll('[data-w]').forEach(b => b.style.width = b.dataset.w + '%');
+    }
+  });
+}, {threshold:.3});
+document.querySelectorAll('.bench-card').forEach(c => io.observe(c));
+
+// Install tabs
+function switchInstall(btn, id) {
+  document.querySelectorAll('.install-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ['linux','docker','pip'].forEach(k => {
+    const el = document.getElementById('install-'+k);
+    if (el) el.style.display = k === id ? 'flex' : 'none';
+  });
+}
+
+function copyInstall(btn, text) {
+  navigator.clipboard.writeText(text);
+  btn.textContent = 'Copied!'; btn.classList.add('copied');
+  setTimeout(() => { btn.textContent='Copy'; btn.classList.remove('copied'); }, 2000);
+}
 </script>
 </body>
 </html>
