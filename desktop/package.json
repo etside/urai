@@ -4,7 +4,10 @@
   "version": "3.0.0",
   "description": "Urai AI Studio \u2014 desktop shell (Windows / Linux)",
   "main": "main.js",
-  "author": "Tynio LTD",
+  "author": {
+    "name": "Tynio LTD",
+    "email": "whotjms@gmail.com"
+  },
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
@@ -48,7 +51,8 @@
       "category": "Development",
       "icon": "build/icon.png",
       "synopsis": "Local-first AI studio",
-      "description": "Urai AI Studio: chat, agents, wiki, voice, vibe coding and computer use on your own hardware."
+      "description": "Urai AI Studio: chat, agents, wiki, voice, vibe coding and computer use on your own hardware.",
+      "maintainer": "Tynio LTD <whotjms@gmail.com>"
     },
     "win": {
       "target": [
@@ -76,6 +80,8 @@
     },
     "portable": {
       "artifactName": "urai-${version}-win-${arch}-portable.${ext}"
-    }
-  }
+    },
+    "icon": "build/icon.png"
+  },
+  "homepage": "https://github.com/etside/urai"
 }

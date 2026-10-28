@@ -240,7 +240,11 @@ ELEVENLABS_API_KEY=
 AWS_DEFAULT_REGION=ap-south-1
 ```
 
-All variables documented in [`.env.example`](.env.example).
+`.env` is loaded automatically by `urai api`, `urai studio` and the desktop
+shell (current directory first, then the repo root). Shell environment
+variables always win. `URAI_ENV_FILE=/path/to/file` reads a different file.
+
+All variables are documented in [`.env.example`](.env.example).
 
 ---
 

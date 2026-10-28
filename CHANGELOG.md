@@ -14,6 +14,8 @@ versioning follows [SemVer](https://semver.org/).
   Linux (AppImage + .deb). Starts the API, opens the Studio, graceful shutdown.
 - **PWA**: manifest, service worker, maskable icons, install prompt, panel deep links.
 - **CLI**: `studio`, `tui`, `key`, `vibe`, `wiki`, `agents`, `routines`.
+- **`.env` loading**: `urai api`/`studio`/desktop read `.env` (cwd, then repo
+  root) without overriding exported variables.
 - **Read-only API**: `GET /v1/wiki/search`, `/v1/wiki/list`, `/v1/wiki/get`,
   `/v1/agents/list`, `/v1/routines/list`.
 - **`POST /vibe`**: server-side vibe coding session (master key only).

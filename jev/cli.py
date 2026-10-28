@@ -39,6 +39,10 @@ import subprocess
 import sys
 import urllib.request
 
+from .envfile import load as _load_env
+
+_load_env()   # pick up .env before reading defaults
+
 BASE = "http://127.0.0.1:8777"
 DEFAULT_REMOTE = os.environ.get("URAI_REMOTE_URL", BASE)
 

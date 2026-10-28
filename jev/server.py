@@ -36,7 +36,11 @@ from pathlib import Path
 
 from .agent import run_agent
 from .backends import LlamaServerBackend, MockBackend, CloudAPIBackend
+from .envfile import load as _load_env
 from .router import route
+
+# Read .env before any configuration constant below is evaluated.
+_load_env()
 
 
 # ── Per-IP rate limiting (sliding window) ──────────────────────────────────────
