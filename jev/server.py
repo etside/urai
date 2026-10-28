@@ -792,6 +792,18 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
             return
+        # Normalise the trailing slash so the shell's relative asset URLs
+        # (./manifest.webmanifest, ./sw.js) resolve from the site root.
+        if p in ("/app/", "/welcome/"):
+            loc = p.rstrip("/")
+            if "?" in self.path:
+                loc += "?" + self.path.split("?", 1)[1]
+            self.send_response(302)
+            self.send_header("Location", loc)
+            self.send_header("Content-Length", "0")
+            self._cors()
+            self.end_headers()
+            return
         if p in ("/", "/app", "/app/", "/app.html", "/index.html", "/welcome", "/welcome/") or p.startswith("/app/") or p == "/superadmin" or p.lstrip("/") in _STATIC_ASSETS:
             return self._static()
         self._send({"error": "not found"}, 404)

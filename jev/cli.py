@@ -225,12 +225,17 @@ def cmd_studio(args):
     if not _api_ok(base):
         print(f"starting Urai API on {base} …", flush=True)
         env = dict(os.environ)
+        # Make `python -m jev.cli` importable even when `urai` is a symlink
+        # invoked from another directory.
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        env["PYTHONPATH"] = root + (os.pathsep + env["PYTHONPATH"]
+                                    if env.get("PYTHONPATH") else "")
         subprocess.Popen(
             [sys.executable, "-m", "jev.cli", "api",
              "--port", str(getattr(args, "port", 8777)),
              "--host", getattr(args, "host", "127.0.0.1")],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True, env=env,
+            cwd=root, start_new_session=True, env=env,
         )
         if not _wait_api(base, 30):
             sys.exit(f"server did not answer /health on {base} — run `urai api` to see why")
@@ -308,7 +313,12 @@ def cmd_wiki(args):
     if args.action == "add":
         if not args.value:
             sys.exit("usage: urai wiki add <title> [--content TEXT] [--category C]")
-        content = args.content or getattr(args, "body", "") or sys.stdin.read()
+        content = args.content or getattr(args, "body", "")
+        if not content:
+            if sys.stdin.isatty():
+                sys.exit("usage: urai wiki add <title> <body>  "
+                         "(or pipe the body on stdin)")
+            content = sys.stdin.read()
         _json_out(wiki.wiki_add(args.value, content, args.category))
         return 0
     if args.action == "get":
@@ -349,6 +359,8 @@ def cmd_agents(args):
                or "What is your current focus?")
         _json_out(ja.run_agent_turn(args.value, msg))
         return 0
+    if not args.value:
+        sys.exit("usage: urai agents delete <agent-id>")
     _json_out(ja.delete_agent(args.value))
     return 0
 
@@ -369,8 +381,12 @@ def cmd_routines(args):
         _json_out(rt.create_routine(args.value, args.prompt, args.schedule))
         return 0
     if args.action == "run":
+        if not args.value:
+            sys.exit("usage: urai routines run <id>")
         _json_out(rt.run_routine(args.value))
         return 0
+    if not args.value:
+        sys.exit("usage: urai routines delete <id>")
     _json_out(rt.delete_routine(args.value))
     return 0
 
