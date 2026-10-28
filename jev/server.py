@@ -38,6 +38,27 @@ from .agent import run_agent
 from .backends import LlamaServerBackend, MockBackend, CloudAPIBackend
 from .router import route
 
+
+# ── Per-IP rate limiting (sliding window) ──────────────────────────────────────
+import collections as _col
+_RATE_WINDOW_S = int(os.environ.get("URAI_RATE_WINDOW", "60"))
+_RATE_LIMIT    = int(os.environ.get("URAI_RATE_LIMIT",  "60"))   # 0=disabled
+_rate_store: dict = {}
+_rate_lock2 = threading.Lock()
+
+def _rate_check(ip: str) -> tuple:
+    if _RATE_LIMIT <= 0:
+        return True, 999
+    now = time.time()
+    with _rate_lock2:
+        dq = _rate_store.setdefault(ip, _col.deque())
+        while dq and now - dq[0] > _RATE_WINDOW_S:
+            dq.popleft()
+        if len(dq) >= _RATE_LIMIT:
+            return False, 0
+        dq.append(now)
+        return True, max(0, _RATE_LIMIT - len(dq))
+
 # ── Response cache (LRU, in-process) ──────────────────────────────────────
 import collections, hashlib as _hs
 _CACHE_MAX = int(os.environ.get('URAI_CACHE_MAX', '256'))
@@ -522,6 +543,12 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._send({"error": str(e)[:200]}, 500)
 
+        if p == "/v1/rate-limit-status":
+            _now = time.time()
+            with _rate_lock2:
+                _cnt = sum(1 for _t in _rate_store.get(ip,[]) if _now-_t<=_RATE_WINDOW_S)
+            return self._send({"limit":_RATE_LIMIT,"window_s":_RATE_WINDOW_S,"your_count":_cnt,"your_remaining":max(0,_RATE_LIMIT-_cnt),"your_ip":ip})
+
         if p == "/metrics":
             from .router import routing_scores as _rs
             local = LlamaServerBackend()
@@ -721,6 +748,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send({"error": "invalid json"}, 400)
 
         ip = _client_ip(self)
+        # Per-IP rate limiting
+        _rl_ok, _rl_rem = _rate_check(ip)
+        if not _rl_ok:
+            return self._send({"error":"rate_limit_exceeded",
+                               "message":f"Too many requests. Limit: {_RATE_LIMIT}/{_RATE_WINDOW_S}s per IP.",
+                               "retry_after":_RATE_WINDOW_S},429)
         device = _device_id(body if isinstance(body, dict) else {}, self.headers, q)
         ident = _identity(ip, device)
         is_master = _extract_master(body if isinstance(body, dict) else {}, self.headers, q)
