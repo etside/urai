@@ -95,6 +95,23 @@ window and stops the backend on exit. It is a shell, not a Python bundle: instal
 Urai first with the one-liner above (or `pip install -e .` from a checkout).
 Build from source: [desktop/README.md](desktop/README.md).
 
+### Urai's own weights (GGUF)
+
+The Urai-tuned model ships as a release asset (GitHub caps repo files at
+100 MB): [urai-qwen3-06b-v1](https://github.com/etside/urai/releases/tag/urai-qwen3-06b-v1).
+
+```bash
+urai model download urai-qwen3-06b   # 379 MB Q4_K_M
+urai model use urai-qwen3-06b
+urai serve start --model urai-qwen3-06b --ctx 8192
+```
+
+`urai-qwen3-06b-v1-f16.gguf` (1.2 GB) is the full-precision reference;
+`SHA256SUMS.txt` covers both files. The Q4_K_M quant is the same weights
+Qwen3-0.6B merged with the Urai distill adapter, converted with llama.cpp's
+`convert_hf_to_gguf.py` (b12000) — thinking is off by default, opt in with
+`chat_template_kwargs: {"urai_thinking": true}`.
+
 ### Runners + weights bundle
 
 `build.yml` produces `urai-bundle-linux-x64` — pinned llama.cpp + sd-cli

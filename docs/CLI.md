@@ -142,6 +142,16 @@ urai serve stop
 `--ctx` sets the llama.cpp context window. The Studio's `∞ No limit` pill
 requests up to 8192 output tokens; the real ceiling is the server's `--ctx`.
 
+Urai's own weights are a release asset rather than a repo file:
+
+```bash
+urai model download urai-qwen3-06b    # 379 MB Q4_K_M, GitHub release asset
+urai model use urai-qwen3-06b
+```
+
+See [the release](https://github.com/etside/urai/releases/tag/urai-qwen3-06b-v1)
+for the f16 reference build and `SHA256SUMS.txt`.
+
 ## Media & vision
 
 ```bash

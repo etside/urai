@@ -70,6 +70,17 @@ DEFAULTS = {
         #   https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF
         #   https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF
         #   https://github.com/QwenLM/Qwen3
+        # Urai's own tuned student: Qwen3-0.6B merged with the Urai distill
+        # adapter, converted with llama.cpp's convert_hf_to_gguf.py. GitHub
+        # caps repo files at 100 MB, so the weights are a release asset.
+        "urai-qwen3-06b": {
+            "path": "model/base/urai-qwen3-06b-v1-Q4_K_M.gguf",
+            "params": "0.6B", "quant": "Q4_K_M", "role": "fast",
+            "kind": "chat",
+            "hf": "https://github.com/etside/urai/releases/download/urai-qwen3-06b-v1/urai-qwen3-06b-v1-Q4_K_M.gguf",
+            "pp_toks": 40, "tg_toks": 20, "ram_mb": 900,
+            "note": "Urai-tuned v1 (379MB); release asset + SHA256SUMS.txt",
+        },
         "qwen3-4b": {
             "path": "model/base/Qwen3-4B-Q4_K_M.gguf",
             "params": "4B", "quant": "Q4_K_M", "role": "primary",

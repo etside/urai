@@ -1,6 +1,21 @@
 {
   "active": "qwen3-4b",
   "models": {
+    "urai-qwen3-06b": {
+      "path": "model/base/urai-qwen3-06b-v1-Q4_K_M.gguf",
+      "params": "0.6B",
+      "quant": "Q4_K_M",
+      "role": "fast",
+      "kind": "chat",
+      "note": "Urai-tuned Qwen3-0.6B v1 (distilled on Urai's own task data); weights ship as a GitHub release asset",
+      "hf": "https://github.com/etside/urai/releases/download/urai-qwen3-06b-v1/urai-qwen3-06b-v1-Q4_K_M.gguf",
+      "ollama_name": "urai:0.6b",
+      "ollama_template": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
+      "ollama_stop": [
+        "<|im_end|>",
+        "<|im_start|>"
+      ]
+    },
     "qwen3-06b": {
       "path": "model/base/Qwen3-0.6B-Q8_0.gguf",
       "params": "0.6B",
