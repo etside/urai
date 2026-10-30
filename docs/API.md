@@ -53,6 +53,7 @@ with HTTP `429`. Check your own budget with `GET /v1/rate-limit-status`:
 |---|---|---|
 | `GET` | `/health` | `{status, local_llama, voice, watchdog, identity, time}` |
 | `GET` | `/v1/models` | Registry models with availability + active flag |
+| `GET` | `/v1/models/<id>/download` | Stream that model's local GGUF (404 + `hint` if not on disk) |
 | `GET` | `/v1/info` | Strengths, endpoints, measured throughput |
 | `GET` | `/metrics` | Counters, routing scores, cache size, budgets |
 | `GET` | `/v1/tools` | Built-in tool schemas |

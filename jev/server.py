@@ -27,6 +27,7 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -474,6 +475,25 @@ class Handler(BaseHTTPRequestHandler):
         print(f"{self.client_address[0]} {self.command} {self.path} -> {code}",
               flush=True)
 
+    def _send_file(self, path, download_name=None):
+        """Stream a local file (model weights) without buffering it in RAM."""
+        size = path.stat().st_size
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(size))
+        self.send_header("Content-Disposition",
+                         f'attachment; filename="{download_name or path.name}"')
+        self._cors()
+        self._sec_headers()
+        self.end_headers()
+        try:
+            with open(path, "rb") as fh:
+                shutil.copyfileobj(fh, self.wfile, 1024 * 1024)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        print(f"{self.client_address[0]} {self.command} {self.path} -> 200 "
+              f"({size} bytes)", flush=True)
+
     def _deny(self):
         self._send({"error": {"message": "invalid API key",
                               "type": "invalid_request_error",
@@ -661,6 +681,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send({"error":"master key required"},401)
             from .apitokens import list_tokens as _lt
             return self._send({"tokens":_lt()})
+
+        if p.startswith("/v1/models/") and p.endswith("/download"):
+            # The Studio's "Ollama import" panel and `urai model download`
+            # share one source of truth: the local GGUF from the registry.
+            mid = p[len("/v1/models/"):-len("/download")].strip("/")
+            from . import models_registry as _reg
+            m = _reg.load().get("models", {}).get(mid)
+            if not m:
+                return self._send({"error": "unknown model", "model": mid}, 404)
+            f = ROOT / m["path"]
+            if not f.exists():
+                return self._send({"error": "model not on disk", "model": mid,
+                                   "hint": f"urai model download {mid}"}, 404)
+            return self._send_file(f)
 
         if p in ("/models", "/v1/models"):
             self._send({"object": "list",

@@ -939,9 +939,10 @@ function showOllamaImport(mid, ollamaName) {
   const base = S.url || 'http://127.0.0.1:8777';
   // Provide a ready-to-use Modelfile + import command
   const modelfile = `FROM ${mid}.gguf\nPARAMETER num_ctx 4096\nPARAMETER stop "<|im_end|>"\nSYSTEM "You are a helpful assistant."`;
+  const auth = S.key ? `-H "Authorization: Bearer ${S.key}" ` : '';
   const steps = `# 1. Download the GGUF from the server
-curl -L "${base}/v1/models/${mid}/download" -o ${mid}.gguf
-# (or download manually from HuggingFace — see urai model list)
+curl -L ${auth}"${base}/v1/models/${mid}/download" -o ${mid}.gguf
+# (or run: urai model download ${mid})
 
 # 2. Create a Modelfile
 cat > Modelfile <<'EOF'
