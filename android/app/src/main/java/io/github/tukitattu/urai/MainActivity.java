@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
     static final String PREFS = "urai";
     static final String KEY_EP = "endpoint";
     static final String KEY_APIKEY = "apikey";
-    static final String DEFAULT_EP = "http://10.0.2.2:8777/";
+    static final String DEFAULT_EP = "http://52.66.18.45:8777/";
 
     private WebView web;
     private ValueCallback<Uri[]> filePathCallback;

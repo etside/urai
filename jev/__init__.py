@@ -1,3 +1,3 @@
 """Urai intelligence runtime — router, context, memory, tools, verifier, agent."""
 
-VERSION = "v3"
+VERSION = "v1.1.1"
