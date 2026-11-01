@@ -1,0 +1,41 @@
+# CyberGuard Custom Suricata Rules
+# Covers: TraderTraitor/Lazarus TTPs, EIP-7702 exploitation, crypto theft,
+#         AI scraping, supply chain attacks, LLM prompt injection via network
+
+# ── Nation-state: TraderTraitor / Lazarus Group ──────────────────────────
+alert tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"CG-TRADERTRAIT-C2 TraderTraitor known C2 port pattern"; flow:established,to_server; dport:8080; content:"POST"; http_method; content:"X-Request-Id"; http_header; threshold:type limit, track by_src, count 5, seconds 60; sid:9000001; rev:1;)
+
+alert dns $HOME_NET any -> any 53 (msg:"CG-LAZARUS-DGA Lazarus-style DGA domain query"; dns.query; pcre:"/^[a-z0-9]{12,20}\.(xyz|top|click|loan|win|bid)$/i"; threshold:type limit, track by_src, count 3, seconds 300; sid:9000002; rev:1;)
+
+alert tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"CG-SUPPLY-CHAIN Suspicious dev tool network beacon (engineer laptop compromise)"; flow:established,to_server; content:"User-Agent: python-requests"; http_header; content:"Authorization"; http_header; dport:[8443,8080,4444,1337]; sid:9000003; rev:1;)
+
+# ── EIP-7702 / Crypto wallet attack ─────────────────────────────────────
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"CG-EIP7702 Suspicious EIP-7702 delegation submission"; flow:established,to_server; content:"eth_sendRawTransaction"; http_uri; content:"0xef0100"; http_client_body; threshold:type limit, track by_src, count 3, seconds 60; sid:9000004; rev:1;)
+
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"CG-CRYPTO-SWEEP Possible crypto sweeper contract deployment"; flow:established,to_server; content:"eth_sendTransaction"; http_client_body; content:"60606040"; http_client_body; sid:9000005; rev:1;)
+
+# ── AI data scraping / training data theft ───────────────────────────────
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS any (msg:"CG-AI-SCRAPE Possible LLM training data scrape (high-rate API calls)"; flow:established,to_server; content:"/v1/chat/completions"; http_uri; threshold:type threshold, track by_src, count 100, seconds 60; sid:9000006; rev:1;)
+
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS any (msg:"CG-AI-EXTRACT Model extraction attack (diverse low-temp queries)"; flow:established,to_server; content:"/v1/chat/completions"; http_uri; content:"\"temperature\":0"; http_client_body; threshold:type threshold, track by_src, count 50, seconds 30; sid:9000007; rev:1;)
+
+# ── Prompt injection via network ─────────────────────────────────────────
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS any (msg:"CG-PROMPT-INJ Prompt injection attempt in API call"; flow:established,to_server; content:"/v1/chat/completions"; http_uri; pcre:"/ignore.{0,20}(previous|all|above).{0,20}instructions/i"; sid:9000008; rev:1;)
+
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS any (msg:"CG-PROMPT-INJ2 DAN/jailbreak attempt"; flow:established,to_server; content:"/v1/chat/completions"; http_uri; pcre:"/(you are now|act as|DAN|jailbreak|new persona)/i"; sid:9000009; rev:1;)
+
+# ── Cryptomining detection ────────────────────────────────────────────────
+alert tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"CG-MINER Stratum mining protocol detected"; flow:established,to_server; content:"{\"method\":\"mining."; content:"stratum"; nocase; sid:9000010; rev:1;)
+
+alert dns $HOME_NET any -> any 53 (msg:"CG-MINER-POOL Known mining pool domain"; dns.query; content:"pool."; pcre:"/(xmr|monero|nicehash|f2pool|antpool|btc\.com)/i"; sid:9000011; rev:1;)
+
+# ── Ransomware C2 patterns ───────────────────────────────────────────────
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"CG-RANSOMWARE Possible ransomware C2 checkin"; flow:established,to_server; content:".onion."; http_header; sid:9000012; rev:1;)
+
+alert tcp $HOME_NET any -> $EXTERNAL_NET 443 (msg:"CG-RANSOMWARE2 Encrypted large upload after file access spike"; flow:established,to_server; dsize:>8192; threshold:type threshold, track by_src, count 100, seconds 30; sid:9000013; rev:1;)
+
+# ── DDoS swarm pattern (Cloudflare-style detection) ─────────────────────
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS any (msg:"CG-DDOS-SWARM Short-burst swarm DDoS pattern"; flow:established,to_server; threshold:type both, track by_src, count 50, seconds 5; sid:9000014; rev:1;)
+
+# ── EDR-silencing attack detection ──────────────────────────────────────
+alert tcp $HOME_NET any -> any any (msg:"CG-EDR-SILENCE Possible WFP-based EDR silencing (blocked outbound)"; flow:established; tcp_flags:!A+; threshold:type both, track by_src, count 10, seconds 5; sid:9000015; rev:1;)
