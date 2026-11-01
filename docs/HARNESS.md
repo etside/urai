@@ -42,8 +42,10 @@ summary; `cron` plugin hook fires per run. Scheduler starts with the API.
   Set on real work, clear when done.
 
 ## Skills (`skills/*/SKILL.md`, `urai skill`)
-Capability packs matched by keyword stems (10 built in: threat-analysis,
-motion, mcp-builder, …). Agent loads top matches into context.
+Capability packs matched by keyword stems (14 built in: threat-analysis,
+motion, mcp-builder, urai-router, …). Agent loads top matches into context.
+`urai-router` is a companion pack for pooled API keys / free OpenCode Zen
+models; Urai's own `urai` and `cyberurai` models remain the default.
 
 ## Browser (`/browser/run|status|approve`, `urai browse`)
 Human-like automation; auth fields pause for approval instead of failing.
