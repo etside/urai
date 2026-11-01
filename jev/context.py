@@ -193,3 +193,42 @@ class ContextBuilder:
             messages = compress_history(messages, budget_chars)
 
         return messages
+
+
+# ── Backward-compat shims (kept for agent.py, server.py, other callers) ──────
+
+EST_CHARS_PER_TOKEN = 3.5
+
+def estimate_tokens(text: str) -> int:
+    return max(1, int(len(text) / EST_CHARS_PER_TOKEN))
+
+def build_context(requirements: str = "", files: dict = None, errors: str = "",
+                  contracts: str = "", decisions: str = "", history: list = None,
+                  budget_tokens: int = 2048, rag: bool = False) -> dict:
+    """Legacy dict-returning build_context — wraps ContextBuilder."""
+    cb = ContextBuilder(requirements=requirements, files=files or {},
+                        errors=errors, contracts=contracts, decisions=decisions)
+    budget_chars = budget_tokens * int(EST_CHARS_PER_TOKEN)
+    msgs = cb.to_messages(history=history or [], rag=rag, budget_chars=budget_chars)
+    sections = []
+    if requirements: sections.append(("requirements", requirements))
+    if errors:       sections.append(("errors", errors))
+    if contracts:    sections.append(("contracts", contracts))
+    if decisions:    sections.append(("decisions", decisions))
+    if files:
+        ft = "\n\n".join(f"--- {p} ---\n{c}" for p, c in (files or {}).items())
+        if ft: sections.insert(1, ("active_files", ft))
+    return {"sections": sections, "history": msgs, "dropped_history": 0,
+            "est_tokens": estimate_tokens(" ".join(m.get("content","") for m in msgs)),
+            "budget_tokens": budget_tokens, "over_budget": False}
+
+def to_messages(ctx: dict) -> list:
+    """Legacy to_messages — converts build_context dict to message list."""
+    parts = [f"[{name.upper()}]\n{body}" for name, body in ctx.get("sections", []) if body]
+    msgs = list(ctx.get("history", []))
+    if parts:
+        content = "\n\n".join(parts)
+        # inject as last user message if no system already
+        if not any(m.get("role") == "system" for m in msgs):
+            msgs = [{"role": "system", "content": content}] + msgs
+    return msgs
