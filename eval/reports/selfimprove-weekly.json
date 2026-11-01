@@ -1,13 +1,15 @@
 {
   "tag": "weekly",
   "probes": 10,
-  "passed": 9,
-  "failed": 1,
+  "passed": 0,
+  "failed": 10,
   "by_kind": {
-    "reasoning": 1
+    "tool": 4,
+    "reasoning": 4,
+    "instruction": 2
   },
-  "tasks_written": 0,
-  "calls": 10,
+  "tasks_written": 9,
+  "calls": 0,
   "bench_window": [
     {
       "file": "bench-harness-cyber.json",
