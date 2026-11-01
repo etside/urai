@@ -1,0 +1,11 @@
+task: urai_basic
+dataset_name: urai_basic
+description: "Basic capability evaluation for Urai models"
+group:
+  - urai
+doc_to_text: "{{question}}"
+doc_to_target: "{{answer}}"
+metric_list:
+  - metric: exact_match
+  - metric: contains_match
+test_split: test
