@@ -1,6 +1,24 @@
 {
-  "active": "qwen3-4b",
+  "active": "urai-v1.04",
   "models": {
+    "urai-v1.04": {
+      "path": "model/base/urai-v1.04.gguf",
+      "params": "0.6B",
+      "quant": "Q4_K_M",
+      "role": "fast",
+      "kind": "chat",
+      "note": "Urai v1.04 — fine-tuned for vibe coding, LLM tooling, and agentic features",
+      "hf": "https://github.com/etside/urai/releases/download/urai-qwen3-06b-v1/urai-qwen3-06b-v1-Q4_K_M.gguf",
+      "version": "1.04",
+      "description": "Urai v1.04 — fine-tuned for vibe coding, LLM tooling, and agentic features",
+      "features": ["vibe-code", "llm-tools", "agent", "memory", "mcp", "vision"],
+      "ollama_name": "urai:v1.04",
+      "ollama_template": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
+      "ollama_stop": [
+        "<|im_end|>",
+        "<|im_start|>"
+      ]
+    },
     "urai-qwen3-06b": {
       "path": "model/base/urai-qwen3-06b-v1-Q4_K_M.gguf",
       "params": "0.6B",
