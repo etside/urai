@@ -77,6 +77,7 @@ def main():
                  logging_steps=5, save_steps=200, optim="adamw_8bit",
                  seed=3407, report_to="none", max_steps=MAX_STEPS)
     SFTTrainer(model=model, tokenizer=tok, train_dataset=ds,
+               dataset_text_field="text",   # required by trl >= 0.8
                args=TrainingArguments(**targs)).train()
     model.save_pretrained(OUT)
     tok.save_pretrained(OUT)

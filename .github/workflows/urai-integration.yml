@@ -4,9 +4,9 @@ name: Urai Integration
 
 on:
   push:
-    branches: ["feat/unified-urai-surface"]
+    branches: ["main", "master", "feat/unified-urai-surface"]
   pull_request:
-    branches: ["feat/unified-urai-surface"]
+    branches: ["main", "master", "feat/unified-urai-surface"]
   workflow_dispatch:
 
 jobs:

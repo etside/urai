@@ -1,1 +1,34 @@
-{"notices": [{"t": "2026-10-14T23:10:00Z", "level": "info", "title": "Agent swarm is live", "body": "Run up to 8 tasks in parallel: urai swarm \"t1\" \"t2\" or POST /agent/swarm."}, {"t": "2026-10-14T23:10:00Z", "level": "info", "title": "Human-like browser + safety approvals", "body": "Browser runs pause for your input on login fields. See docs/agent-swarm.md."}, {"t": "2026-10-14T23:10:00Z", "level": "premium", "title": "Master key 856777 = unlimited, cost 0", "body": "Guests get 5 free responses per device, then unlock with the master key."}, {"t": "2026-10-14T23:10:00Z", "level": "info", "title": "Video endpoint (animatic-grade local, SOTA via providers)", "body": "POST /v1/videos/generations, or set HIGGSFIELD_API_KEY for studio-grade motion."}]}
+{
+  "notices": [
+    {
+      "t": "2026-10-14T23:10:00Z",
+      "level": "info",
+      "title": "Agent swarm is live",
+      "body": "Run up to 8 tasks in parallel: urai swarm \"t1\" \"t2\" or POST /agent/swarm."
+    },
+    {
+      "t": "2026-10-14T23:10:00Z",
+      "level": "info",
+      "title": "Human-like browser + safety approvals",
+      "body": "Browser runs pause for your input on login fields. See docs/agent-swarm.md."
+    },
+    {
+      "t": "2026-10-14T23:10:00Z",
+      "level": "premium",
+      "title": "Master key 856777 = unlimited, cost 0",
+      "body": "Guests get 5 free responses per device, then unlock with the master key."
+    },
+    {
+      "t": "2026-10-14T23:10:00Z",
+      "level": "info",
+      "title": "Video endpoint (animatic-grade local, SOTA via providers)",
+      "body": "POST /v1/videos/generations, or set HIGGSFIELD_API_KEY for studio-grade motion."
+    },
+    {
+      "t": "2026-10-29T12:00:00Z",
+      "level": "warn",
+      "title": "LoRA fine-tune blocked — distill data gate",
+      "body": "Verified training set is at 245/500 rows. LoRA promotion (Laya GGUF) is blocked until the gate passes. Run: python3 scripts/distill/run_distill.py --categories code,debug,api --n 50 to grow the set. See docs/LAYA.md and docs/KAGGLE_NOW.md."
+    }
+  ]
+}

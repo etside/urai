@@ -3,8 +3,9 @@
 
 There are exactly TWO public models:
 
-  urai       — one unified assistant. Internally it picks the right local /
-               teacher backend and mode (fast · balanced · ultra) per request.
+  urai       — one unified assistant. Internally it picks the right local
+               mode (fast · balanced · ultra) per request on the self-hosted
+               Urai runtime. An external teacher is offline-only and opt-in.
   cyberurai  — separate cybersecurity specialist (latest threat knowledge,
                threat-analysis + Android privacy guard).
 
@@ -70,7 +71,10 @@ def tier_of_brand(model: str) -> str:
 
 
 def brand_list(available: bool = True) -> list:
-    return [{"id": bid, "owned_by": "Urai", "available": available,
+    return [{"id": bid, "owned_by": "Urai", "provider": "Urai",
+             "self_hosted": True, "inference": "llama.cpp",
+             "external_fallback": False,
+             "available": available,
              "tier": b["tier"], "description": b["desc"],
              "modes": [m["id"] for m in b.get("modes", [])]}
             for bid, b in BRANDS.items()]

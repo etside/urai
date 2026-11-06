@@ -20,3 +20,6 @@ jobs:
         run: |
           python3 -m py_compile jev/*.py scripts/*.py scripts/distill/*.py
           python3 scripts/smoke_urai.py
+
+      - name: Predeploy self-hosted integrity gate
+        run: python3 scripts/predeploy_selfhosted_check.py

@@ -1,0 +1,204 @@
+# Urai VPS deploy — triggered on version tags (v*) or manually.
+#
+# Flow: lint+tests → SSH git pull → systemctl restart → smoke check.
+#
+# Required GitHub secrets:
+#   VPS_HOST        VPS IP or hostname
+#   VPS_USER        deploy user (typically: urai)
+#   VPS_SSH_KEY     private SSH key (ED25519)
+# Optional:
+#   VPS_DEPLOY_PATH absolute repo path on VPS (default: /opt/urai)
+#   URAI_MASTER_KEY master key for smoke-check auth (skipped if absent)
+name: Urai Deploy
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git ref to deploy (tag or branch, e.g. v1.2 or main)"
+        required: false
+        default: ""
+
+# Only one deploy at a time; a new run cancels any in-progress deploy.
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. Lint + tests ────────────────────────────────────────────────────────
+  test:
+    name: lint + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile check (all jev/*.py)
+        run: python3 -m py_compile jev/*.py
+
+      - name: Unit tests
+        run: python3 -m pytest tests/ -x -q --tb=short
+
+      - name: Offline smoke
+        run: python3 scripts/smoke_urai.py --offline
+
+  # ── 2. Deploy over SSH ─────────────────────────────────────────────────────
+  deploy:
+    name: deploy
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Skip silently on forks or when VPS secrets are not configured.
+    if: |
+      github.repository_owner == 'tukitattu' &&
+      secrets.VPS_HOST != '' &&
+      secrets.VPS_USER != '' &&
+      secrets.VPS_SSH_KEY != ''
+
+    env:
+      VPS_HOST:    ${{ secrets.VPS_HOST }}
+      VPS_USER:    ${{ secrets.VPS_USER || 'urai' }}
+      DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/urai' }}
+      MASTER_KEY:  ${{ secrets.URAI_MASTER_KEY || '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── SSH key setup ──────────────────────────────────────────────────────
+      - name: Install SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # ── Determine ref to deploy ────────────────────────────────────────────
+      - name: Resolve deploy ref
+        id: ref
+        run: |
+          REF="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "Deploying ref: $REF to $VPS_USER@$VPS_HOST:$DEPLOY_PATH"
+
+      # ── git pull on VPS ────────────────────────────────────────────────────
+      - name: Pull ref on VPS
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              "$VPS_USER@$VPS_HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          DEPLOY_PATH="${DEPLOY_PATH:-/opt/urai}"
+          REF="${{ steps.ref.outputs.ref }}"
+          cd "$DEPLOY_PATH"
+          git fetch --all --tags --prune
+          # Try as tag first, then as branch
+          if git rev-parse "refs/tags/$REF" >/dev/null 2>&1; then
+              git checkout "refs/tags/$REF" --detach
+          else
+              git checkout "$REF"
+              git pull --ff-only
+          fi
+          echo "Now at: $(git rev-parse --short HEAD) ($(git describe --tags --exact-match 2>/dev/null || git rev-parse --abbrev-ref HEAD))"
+          REMOTE
+
+      # ── Restart service ────────────────────────────────────────────────────
+      - name: Restart urai-api.service
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              "$VPS_USER@$VPS_HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          sudo systemctl daemon-reload
+          sudo systemctl restart urai-api.service
+          echo "service restarted"
+          REMOTE
+
+      # ── Smoke check: /health ───────────────────────────────────────────────
+      - name: Smoke /health
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              "$VPS_USER@$VPS_HOST" python3 - <<'PY'
+          import sys, time, urllib.request, json
+          url = "http://127.0.0.1:8777/health"
+          for i in range(20):
+              try:
+                  with urllib.request.urlopen(url, timeout=5) as r:
+                      body = json.load(r)
+                      assert body.get("status") == "ok", f"unexpected: {body}"
+                      print("health OK:", body)
+                      sys.exit(0)
+              except Exception as e:
+                  print(f"  [{i+1}/20] waiting... {e}", file=sys.stderr)
+                  time.sleep(3)
+          print("FAIL: health check timed out after 60s", file=sys.stderr)
+          sys.exit(1)
+          PY
+
+      # ── Smoke check: /v1/models must return exactly ["cyberurai","urai"] ───
+      - name: Smoke /v1/models (assert 2 public ids)
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              "$VPS_USER@$VPS_HOST" python3 - <<'PY'
+          import sys, urllib.request, json
+          with urllib.request.urlopen("http://127.0.0.1:8777/v1/models", timeout=10) as r:
+              data = json.load(r)
+          ids = sorted(m["id"] for m in data.get("data", []))
+          expected = ["cyberurai", "urai"]
+          if ids != expected:
+              print(f"FAIL: expected {expected}, got {ids}", file=sys.stderr)
+              sys.exit(1)
+          print("models OK:", ids)
+          PY
+
+      # ── Smoke check: /v1/capabilities ─────────────────────────────────────
+      - name: Smoke /v1/capabilities
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              "$VPS_USER@$VPS_HOST" python3 - <<'PY'
+          import sys, urllib.request, json
+          with urllib.request.urlopen("http://127.0.0.1:8777/v1/capabilities", timeout=10) as r:
+              data = json.load(r)
+          assert data.get("identity"), "missing identity field"
+          assert data.get("models"), "missing models list"
+          print("capabilities OK:", data.get("identity", "?"))
+          PY
+
+      # ── Optional: authenticated smoke (skipped when MASTER_KEY not set) ───
+      - name: Smoke /chat (authenticated, optional)
+        if: env.MASTER_KEY != ''
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              "$VPS_USER@$VPS_HOST" python3 - <<'PY'
+          import sys, os, urllib.request, json
+          key = os.environ.get("MASTER_KEY", "")
+          payload = json.dumps({
+              "messages": [{"role": "user", "content": "reply with exactly: pong"}],
+              "max_tokens": 16, "stream": False,
+              "master_key": key,
+          }).encode()
+          req = urllib.request.Request(
+              "http://127.0.0.1:8777/chat", payload,
+              {"Content-Type": "application/json", "Authorization": "Bearer " + key})
+          with urllib.request.urlopen(req, timeout=60) as r:
+              data = json.load(r)
+          choices = data.get("choices", [])
+          assert choices, f"no choices in response: {data}"
+          print("chat OK:", choices[0]["message"]["content"][:120])
+          PY
+        env:
+          MASTER_KEY: ${{ env.MASTER_KEY }}
+
+      # ── Cleanup ────────────────────────────────────────────────────────────
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

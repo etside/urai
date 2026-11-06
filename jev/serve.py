@@ -31,12 +31,11 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
 
-from jev import imagine as _imagine
-from jev import models_registry as reg
-from jev import serve_ctl as ctl
-from jev.gpu import detect
+from . import imagine as _imagine
+from . import models_registry as reg
+from . import serve_ctl as ctl
+from .gpu import detect
 
 PORT = int(os.environ.get("SIDECAR_PORT", "8778"))
 
@@ -75,7 +74,7 @@ class Handler(BaseHTTPRequestHandler):
             active_id, entry = reg.active_model()
             running = ctl.is_up()
             try:
-                from jev import cache as _cache
+                from . import cache as _cache
                 cache_stats = _cache.get_cache().stats()
             except Exception:
                 cache_stats = {}
@@ -139,7 +138,7 @@ class Handler(BaseHTTPRequestHandler):
 
         elif p == "/cache/clear":
             try:
-                from jev import cache as _cache
+                from . import cache as _cache
                 cleared = _cache.get_cache().clear()
             except Exception as e:
                 self.send_json({"error": str(e)}, 500); return
@@ -150,8 +149,8 @@ class Handler(BaseHTTPRequestHandler):
             text = body.get("text", "")
             meta = {}
             try:
-                from jev import nlp as _nlp
-                from jev import vibe as _vibe
+                from . import nlp as _nlp
+                from . import vibe as _vibe
                 analysis = _nlp.analyze(text)
                 v = _vibe.plan(analysis, {}) if _vibe.enabled() else {}
                 if v:
@@ -169,7 +168,7 @@ class Handler(BaseHTTPRequestHandler):
             out_path = body.get("output_path")
             meta = {}
             try:
-                from jev import nlp as _nlp
+                from . import nlp as _nlp
                 analysis = _nlp.analyze(prompt)
                 meta = {"nlp": analysis}
                 if steps is None and analysis.get("urgency", 0) > 0.5:

@@ -36,7 +36,8 @@ from pathlib import Path
 
 from .agent import run_agent
 from .backends import LlamaServerBackend, MockBackend
-from .router import route
+from .brand import BRANDS, brand_id, brand_list, tier_of_brand
+from .router import route, teacher_allowed
 from . import tools as tool_engine
 
 PORT = int(os.environ.get("URAI_PORT", "8777"))
@@ -274,20 +275,57 @@ def _stream_enabled() -> bool:
         return True
 
 
+def _selfhosted_info() -> dict:
+    """Provenance block: this deployment runs Urai weights locally.
+
+    ``external_fallback`` is False unless an operator explicitly enables the
+    offline teacher with URAI_ALLOW_TEACHER=1. Public requests never leave the
+    instance for another provider's model.
+    """
+    info = {
+        "self_hosted": True,
+        "provider": "Urai",
+        "inference": "llama.cpp",
+        "external_fallback": teacher_allowed(),
+        "public_models": ["urai", "cyberurai"],
+        "active_model": None,
+        "weights": {},
+    }
+    try:
+        from . import models_registry as _reg
+        reg = _reg.load()
+        active = reg.get("active")
+        entry = (reg.get("models") or {}).get(active) or {}
+        info["active_model"] = active
+        info["weights"] = {k: entry.get(k) for k in
+                           ("path", "params", "quant", "kind", "role")
+                           if entry.get(k)}
+        info["weights"]["local"] = bool(entry.get("path")
+                                        and not str(entry["path"]).startswith("http"))
+    except Exception as e:
+        info["registry_error"] = str(e)[:120]
+    return info
+
+
+def _backend_meta(backend) -> dict:
+    """Public-safe backend provenance for chat responses."""
+    name = getattr(backend, "name", "unknown")
+    return {"backend": name, "self_hosted": name != "teacher-api",
+            "origin": "local" if name != "teacher-api" else "external"}
+
+
 def _models():
     # Public surface only: two brands (urai, cyberurai). Internal backend ids
-    # (qwen*, coder*, laya, jev-local-student, teacher fallback) stay in
-    # metadata/traces and are never listed as selectable models.
+    # (qwen*, coder*, laya, jev-local-student, teacher) stay in metadata/traces
+    # and are never listed as selectable models.
     local = LlamaServerBackend()
     up = local.healthy()
-    from .brand import brand_list
     return brand_list(up)
 
 
 def _capabilities() -> dict:
     """One unified surface: models + their modes, then features / skills /
     methods / plugins. The UI renders this instead of a long model list."""
-    from .brand import BRANDS, brand_list
     up = LlamaServerBackend().healthy()
     models = []
     for b in brand_list(up):
@@ -312,9 +350,10 @@ def _capabilities() -> dict:
         pass
     return {
         "identity": "Urai, developed by Tynio LTD",
+        "deployment": _selfhosted_info(),
         "models": models,
         "features": [
-            "local-first zero-cost chat (cloud fallback)",
+            "self-hosted inference on Urai's own llama.cpp runtime (no external model fallback)",
             "large context window (configurable, q8_0 KV cache)",
             "tool-use + agent + parallel swarm",
             "vision (images) + image generation + video animatic",
@@ -617,6 +656,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+            "connect-src 'self' wss: https:; frame-ancestors 'none'",
+        )
+        self.send_header("X-XSS-Protection", "0")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 
     def _reqid(self) -> str:
         rid = getattr(self, "_urai_rid", None)
@@ -710,6 +757,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.send_header("X-Request-Id", self._reqid())
         self._cors()
+        self._sec_headers()
         self.end_headers()
         self.wfile.write(data)
         print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
@@ -739,6 +787,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "public, max-age=3600")
             self.send_header("X-Request-Id", self._reqid())
             self._cors()
+            self._sec_headers()
             self.end_headers()
             return
         # Content-hashed filenames (name<sep><8+ hex>.<ext>) are immutable.
@@ -754,6 +803,7 @@ class Handler(BaseHTTPRequestHandler):
                          else "public, max-age=3600")
         self.send_header("X-Request-Id", self._reqid())
         self._cors()
+        self._sec_headers()
         self.end_headers()
         self.wfile.write(data)
         print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
@@ -768,6 +818,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "public, max-age=86400")
         self.send_header("X-Request-Id", self._reqid())
         self._cors()
+        self._sec_headers()
         self.end_headers()
         self.wfile.write(data)
         print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
@@ -784,6 +835,7 @@ class Handler(BaseHTTPRequestHandler):
             local = LlamaServerBackend()
             self._send({"status": "ok", "local_llama": local.healthy(),
                         "identity": "Urai, developed by Tynio LTD",
+                        "deployment": _selfhosted_info(),
                         "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
             return
         if p in ("/models", "/v1/models"):
@@ -880,11 +932,12 @@ class Handler(BaseHTTPRequestHandler):
                 "version": _repo_status().get("version"),
                 "active_model": _repo_status().get("active_model"),
                 "local_llama": local.healthy(),
+                "deployment": _selfhosted_info(),
                 "measured": {
                     "gen_toks_per_s": "6-9", "prompt_toks_per_s": "12-28",
                     "embed_dims": 768, "note": "llama-server slot timings on this CPU droplet (Qwen3-4B Q4_K_M); varies with load and context length",
                 },
-                "strengths": ["local-first zero-cost chat", "agent + swarm + tools",
+                "strengths": ["self-hosted zero-cost chat", "agent + swarm + tools",
                               "vision + image + video-animatic", "OpenAI-compatible API + MCP",
                               "human-like browser with approval safety"],
                 "endpoints": ["/health", "/v1/models", "/v1/chat/completions",
@@ -947,6 +1000,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/markdown; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
             self._cors()
+            self._sec_headers()
             self.end_headers()
             self.wfile.write(data)
             print(f"{self.client_address[0]} GET {self.path} -> 200", flush=True)
@@ -1136,7 +1190,7 @@ class Handler(BaseHTTPRequestHandler):
                      {"master": bool(body.get("_urai_authed")), "safety": True})
                 return self._send({
                     "id": "chatcmpl-urai", "object": "chat.completion",
-                    "model": __import__("jev.brand", fromlist=["brand_id"]).brand_id(body.get("model", "urai")),
+                    "model": brand_id(body.get("model", "urai")),
                     "choices": [{"index": 0, "message": {"role": "assistant",
                                                           "content": _refuse},
                                  "finish_reason": "stop"}],
@@ -1151,8 +1205,7 @@ class Handler(BaseHTTPRequestHandler):
             temperature = body.get("temperature", 0.2)
             # identity guard: always Urai / Tynio LTD
             try:
-                from .brand import tier_of_brand as _tier_of
-                r = route(user_text, tier=_tier_of(body.get("model", "urai")))
+                r = route(user_text, tier=tier_of_brand(body.get("model", "urai")))
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
             if body.get("stream"):
@@ -1160,7 +1213,7 @@ class Handler(BaseHTTPRequestHandler):
                 _log("chat", ip, device, user_text[:160] + " -> (stream)",
                      {"master": bool(body.get("_urai_authed"))})
                 return self._stream(
-                    None, __import__("jev.brand", fromlist=["brand_id"]).brand_id(body.get("model", "urai")),
+                    None, brand_id(body.get("model", "urai")),
                     _meta, backend=r["backend"], msgs=msgs,
                     max_tokens=max_tokens, temperature=temperature)
             try:
@@ -1175,21 +1228,21 @@ class Handler(BaseHTTPRequestHandler):
             usage = res.get("usage") or {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost": 0}
             return self._send({
                 "id": "chatcmpl-urai", "object": "chat.completion",
-                "model": __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")),
+                "model": brand_id(res.get("model", "")),
                 "choices": [{"index": 0, "message": {"role": "assistant",
                                                      "content": content},
                              "finish_reason": "stop"}],
                 "usage": usage,
-                "urai": {"level": r["level"], "backend": r["backend"].name,
+                "urai": {"level": r["level"], **_backend_meta(r["backend"]),
                          "tokens_remaining": body.get("_urai_remaining", 0),
                          "auth": body.get("_urai_reason", "free"),
                          **_meta},
-                "jev": {"level": r["level"], "backend": r["backend"].name}})
+                "jev": {"level": r["level"], **_backend_meta(r["backend"])}})
 
         if p == "/v1/chat/completions":
             msgs = _as_messages(body.get("messages", []))
             _meta = {}
-            model = body.get("model", "urai")
+            model = brand_id(body.get("model", "urai"))
             max_tokens = body.get("max_tokens", 256)
             temperature = body.get("temperature", 0.2)
             _refuse = _safety_refusal(_text_of(msgs))
@@ -1208,6 +1261,7 @@ class Handler(BaseHTTPRequestHandler):
                     "urai": {"tokens_remaining": body.get("_urai_remaining", 0),
                              "auth": body.get("_urai_reason", "free"),
                              "refused": True}})
+            r = None
             if _has_image(msgs):
                 from . import vision as _vision
                 img, question = _split_image(msgs)
@@ -1219,17 +1273,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send({"error": res["error"]}, 502)
                 content = res["answer"]
                 _meta = _urai_meta(_text_of(msgs))
-                model = body.get("model", __import__("jev.brand", fromlist=["brand_id"]).brand_id(body.get("model", "urai")))
+                model = brand_id(body.get("model", "urai"))
             else:
                 user_text = _text_of(msgs)
                 msgs, _meta = _apply_vibe(msgs)
                 try:
-                    from .brand import tier_of_brand as _tier_of
-                    r = route(user_text, tier=_tier_of(body.get("model", "urai")))
+                    r = route(user_text, tier=tier_of_brand(body.get("model", "urai")))
                 except Exception as e:
                     return self._send({"error": str(e)[:300]}, 502)
-                model = __import__("jev.brand", fromlist=["brand_id"]).brand_id(
-                    body.get("model", r["backend"].name))
+                model = brand_id(body.get("model", r["backend"].name))
                 if body.get("stream"):
                     _record_use(ip, device, bool(body.get("_urai_authed")))
                     _log("chat", ip, device, user_text[:160] + " -> (stream)",
@@ -1241,7 +1293,7 @@ class Handler(BaseHTTPRequestHandler):
                     res = _complete(r["backend"], msgs, max_tokens, temperature)
                     content = res["content"]
                     _meta = _with_cache(_meta, res)
-                    model = body.get("model", __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")))
+                    model = brand_id(body.get("model", model))
                 except Exception as e:
                     return self._send({"error": str(e)[:300]}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
@@ -1257,6 +1309,9 @@ class Handler(BaseHTTPRequestHandler):
                           "total_tokens": 0, "cost": 0},
                 "urai": {"tokens_remaining": body.get("_urai_remaining", 0),
                          "auth": body.get("_urai_reason", "free"),
+                         "self_hosted": True,
+                         **({"level": r["level"], **_backend_meta(r["backend"])}
+                            if r else {}),
                          **_meta}})
 
         if p in ("/imagine", "/v1/images/generations"):
@@ -1363,7 +1418,7 @@ class Handler(BaseHTTPRequestHandler):
             r = route(prompt, complexity=(_meta.get("nlp") or {}).get("complexity"))
             if body.get("stream"):
                 _record_use(ip, device, bool(body.get("_urai_authed")))
-                return self._stream(None, body.get("model", "urai"), _meta,
+                return self._stream(None, brand_id(body.get("model", "urai")), _meta,
                                     backend=r["backend"], msgs=msgs,
                                     max_tokens=max_tokens, temperature=temperature)
             try:
@@ -1382,7 +1437,7 @@ class Handler(BaseHTTPRequestHandler):
                 _record_use(ip, device, bool(body.get("_urai_authed")))
                 return self._send({
                     "id": "cmpl-urai", "object": "text_completion",
-                    "created": int(time.time()), "model": body.get("model", "urai"),
+                    "created": int(time.time()), "model": brand_id(body.get("model", "urai")),
                     "choices": [{"index": 0, "text": _refuse,
                                  "finish_reason": "stop"}],
                     "usage": {"prompt_tokens": 0, "completion_tokens": 0,
@@ -1392,7 +1447,7 @@ class Handler(BaseHTTPRequestHandler):
             max_tokens = body.get("max_tokens", 256)
             temperature = body.get("temperature", 0.2)
             r = route(prompt, complexity=(_meta.get("nlp") or {}).get("complexity"))
-            model = body.get("model", "urai")
+            model = brand_id(body.get("model", "urai"))
             if body.get("stream"):
                 _record_use(ip, device, bool(body.get("_urai_authed")))
                 return self._stream(None, model, _meta, backend=r["backend"],
@@ -1402,7 +1457,7 @@ class Handler(BaseHTTPRequestHandler):
                 res = _complete(r["backend"], msgs, max_tokens, temperature)
             except Exception as e:
                 return self._send({"error": str(e)[:300]}, 502)
-            model = body.get("model", __import__("jev.brand", fromlist=["brand_id"]).brand_id(res.get("model", "")))
+            model = brand_id(body.get("model", model))
             _meta = _with_cache(_meta, res)
             _record_use(ip, device, bool(body.get("_urai_authed")))
             return self._send({

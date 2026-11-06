@@ -319,3 +319,86 @@ def load_toolpacks() -> dict:
 
 
 load_toolpacks()
+
+
+# ---------------------------------------------------------------------------
+# Sandbox tools (gated by URAI_SANDBOX=1)
+# ---------------------------------------------------------------------------
+
+_sandboxes: dict = {}  # session_id -> DockerSandbox
+
+
+def _get_sandbox(session_id: str = "default"):
+    """Return (creating if needed) a DockerSandbox for session_id."""
+    from .sandbox import DockerSandbox  # lazy import — no Docker required at module load
+    if session_id not in _sandboxes:
+        sb = DockerSandbox(session_id)
+        sb.create()
+        sb.ensure_ready(timeout=30)
+        _sandboxes[session_id] = sb
+    return _sandboxes[session_id]
+
+
+def sandbox_exec(cmd: str, session_id: str = "default") -> dict:
+    """Execute a shell command inside a Docker sandbox session.
+
+    When URAI_SANDBOX=1: routes through DockerSandbox -> /api/v1/shell/exec.
+    Otherwise: falls back to run_cmd (existing behaviour, existing tests unaffected).
+    """
+    if os.environ.get("URAI_SANDBOX") == "1":
+        try:
+            sb = _get_sandbox(session_id)
+            return sb.proxy_call(
+                "POST", "/api/v1/shell/exec",
+                json={"session_id": session_id, "cmd": cmd},
+            )
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+    # Fallback: parse cmd string into argv and run via existing run_cmd
+    import shlex
+    try:
+        argv = shlex.split(cmd)
+    except ValueError:
+        argv = cmd.split()
+    return run_cmd(argv)
+
+
+def sandbox_file_read(path: str, session_id: str = "default") -> dict:
+    """Read a file from the sandbox filesystem.
+
+    When URAI_SANDBOX=1: routes through DockerSandbox -> /api/v1/file/read.
+    Otherwise: falls back to read_file (existing behaviour).
+    """
+    if os.environ.get("URAI_SANDBOX") == "1":
+        try:
+            sb = _get_sandbox(session_id)
+            return sb.proxy_call(
+                "POST", "/api/v1/file/read",
+                json={"path": path},
+            )
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+    return read_file(path)
+
+
+def sandbox_file_write(path: str, content: str = "", session_id: str = "default") -> dict:
+    """Write a file in the sandbox filesystem.
+
+    When URAI_SANDBOX=1: routes through DockerSandbox -> /api/v1/file/write.
+    Otherwise: falls back to write_file (existing behaviour).
+    """
+    if os.environ.get("URAI_SANDBOX") == "1":
+        try:
+            sb = _get_sandbox(session_id)
+            return sb.proxy_call(
+                "POST", "/api/v1/file/write",
+                json={"path": path, "content": content},
+            )
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+    return write_file(path, content)
+
+
+TOOLS["sandbox_exec"] = sandbox_exec
+TOOLS["sandbox_file_read"] = sandbox_file_read
+TOOLS["sandbox_file_write"] = sandbox_file_write
