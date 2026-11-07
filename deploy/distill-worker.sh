@@ -9,7 +9,7 @@
 # other worker can run in parallel without duplicating work.
 set -uo pipefail
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a
 
 SHARD="${SHARD:-0/1}"
