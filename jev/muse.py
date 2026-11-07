@@ -75,11 +75,13 @@ def complete(
     reasoning_effort: str | None = None,
     tools: list | None = None,
     tool_choice: str | None = None,
+    model: str | None = None,
 ) -> dict:
     if not available():
         raise RuntimeError("OPENROUTER_API_KEY not set")
+    model_id = model or MODEL_ID
     payload: dict = {
-        "model": MODEL_ID,
+        "model": model_id,
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
@@ -100,15 +102,15 @@ def complete(
     if not content.strip() and choice.get("finish_reason") == "length" \
             and max_tokens < 32768:
         return complete(messages, min(max_tokens * 4, 32768), temperature,
-                        reasoning_effort, tools, tool_choice)
+                        reasoning_effort, tools, tool_choice, model=model_id)
     return {
         "content": content,
         "reasoning_content": msg.get("reasoning_content") or msg.get("reasoning") or "",
         "tool_calls": msg.get("tool_calls") or [],
         "finish_reason": choice.get("finish_reason"),
         "usage": data.get("usage", {}),
-        "model": data.get("model") or MODEL_ID,
-        "backend": "muse-spark-open/openrouter",
+        "model": data.get("model") or model_id,
+        "backend": f"{model_id}/openrouter",
     }
 
 def stream(
@@ -116,12 +118,14 @@ def stream(
     max_tokens: int = 2048,
     temperature: float = 1.0,
     reasoning_effort: str | None = None,
+    model: str | None = None,
 ):
     """Yield OpenAI-shaped SSE chunk JSON strings from OpenRouter."""
     if not available():
         raise RuntimeError("OPENROUTER_API_KEY not set")
+    model_id = model or MODEL_ID
     payload: dict = {
-        "model": MODEL_ID,
+        "model": model_id,
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
@@ -161,7 +165,7 @@ def stream(
                 yield json.dumps({
                     "id": ev.get("id", "chatcmpl-urai"),
                     "object": "chat.completion.chunk",
-                    "model": ev.get("model", MODEL_ID),
+                    "model": ev.get("model", model_id),
                     "choices": [{"index": 0, "delta": out_delta,
                                  "finish_reason": choice.get("finish_reason")}],
                 })

@@ -34,6 +34,13 @@ def main():
     ap.add_argument("--retries", type=int, default=3)
     ap.add_argument("--resume", action="store_true",
                     help="append to --out and skip prompts already present")
+    ap.add_argument("--models", default=(
+        "meta/muse-spark-open,"
+        "nvidia/nemotron-3-ultra-550b-a55b:free,"
+        "nvidia/nemotron-3.5-super-vl:free"),
+        help="comma-separated teacher chain; first that answers wins")
+    ap.add_argument("--shard", default="",
+                    help="i/n — run only tasks where index %% n == i")
     a = ap.parse_args()
 
     if not muse.available():
@@ -41,6 +48,9 @@ def main():
         return 1
 
     tasks = [json.loads(l) for l in Path(a.tasks).read_text().splitlines() if l.strip()]
+    if a.shard:
+        i, n = (int(x) for x in a.shard.split("/"))
+        tasks = tasks[i::n]
     if a.limit:
         tasks = tasks[: a.limit]
     out = Path(a.out)
@@ -55,36 +65,50 @@ def main():
                 pass
 
     n = 0
+    models = [m.strip() for m in a.models.split(",") if m.strip()]
     with out.open("a" if a.resume else "w") as f:
         for t in tasks:
             prompt = t.get("prompt") or t.get("input") or t.get("text") or ""
             if not prompt or prompt in done:
                 continue
-            max_tokens = a.max_tokens
             res = None
-            for attempt in range(1, a.retries + 1):
-                try:
-                    res = muse.complete(
-                        [
-                            {"role": "system", "content": muse.SYSTEM_PROMPT},
-                            {"role": "user", "content": prompt},
-                        ],
-                        max_tokens=max_tokens,
-                        reasoning_effort=a.reasoning,
-                    )
-                    break
-                except Exception as e:
-                    msg = str(e)
-                    print(f"  attempt {attempt} failed: {msg[:180]}", flush=True)
-                    if attempt == a.retries:
+            teacher = models[0]
+            for model in models:
+                teacher = model
+                max_tokens = a.max_tokens
+                # reasoning_effort is a Muse/paid-model knob; free routers
+                # reject unknown fields on some providers.
+                effort = a.reasoning if model.startswith("meta/") else None
+                for attempt in range(1, a.retries + 1):
+                    try:
+                        res = muse.complete(
+                            [
+                                {"role": "system", "content": muse.SYSTEM_PROMPT},
+                                {"role": "user", "content": prompt},
+                            ],
+                            max_tokens=max_tokens,
+                            reasoning_effort=effort,
+                            model=model,
+                        )
                         break
-                    # Free-tier budget is per-request: ask for less next time.
-                    if "402" in msg:
-                        max_tokens = max(512, max_tokens // 2)
-                        time.sleep(15)
-                    else:
-                        time.sleep(5 * attempt)
-            if not res or not (res.get("content") or "").strip():
+                    except Exception as e:
+                        msg = str(e)
+                        print(f"  {model} attempt {attempt} failed: {msg[:160]}",
+                              flush=True)
+                        if attempt == a.retries:
+                            break
+                        # Free-tier budget is per-request: ask for less next time.
+                        if "402" in msg:
+                            max_tokens = max(512, max_tokens // 2)
+                            time.sleep(10)
+                        elif "429" in msg:
+                            time.sleep(20 * attempt)
+                        else:
+                            time.sleep(5 * attempt)
+                if res and (res.get("content") or "").strip():
+                    break
+                res = None
+            if not res:
                 print(f"  skipped (no content): {prompt[:60]}", flush=True)
                 continue
             f.write(json.dumps({
@@ -95,7 +119,7 @@ def main():
                     {"role": "user", "content": prompt},
                     {"role": "assistant", "content": res["content"]},
                 ],
-                "teacher": "meta/muse-spark-open",
+                "teacher": res.get("model") or teacher,
                 "reasoning_effort": a.reasoning,
                 "usage": res.get("usage", {}),
             }) + "\n")
