@@ -58,29 +58,6 @@ jobs:
               "cd /home/ubuntu/urai && git pull origin main && sudo systemctl restart urai || echo restart-skipped"
           rm -f /tmp/urai-deploy.pem
 
-  pages:
-    name: Deploy Pages
-    needs: smoke
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{steps.deployment.outputs.page_url}}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./studio
-
-      - name: Deploy to Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+  # Pages is deployed by .github/workflows/pages.yml from jev/static/.
+  # This workflow used to deploy ./studio (which does not exist), producing an
+  # empty artifact that raced with the real deploy and left the site at 404.
