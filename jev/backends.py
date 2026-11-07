@@ -517,6 +517,12 @@ class MuseBackend(Backend):
     Used when the local llama-server is unavailable AND URAI_CLOUD_FALLBACK=1
     (default on in public/free mode). Keeps Urai's identity: a Urai system
     prompt is prepended and the backend is labelled 'muse-spark-open'.
+
+    Fallback chain (in order):
+      1. meta/muse-spark-open         — paid; 1M ctx, multimodal
+      2. nvidia/nemotron-3-ultra-550b — free 550B text teacher
+      3. nvidia/nemotron-3.5-super-vl — free multimodal teacher
+      4. local LlamaServerBackend     — offline student
     """
 
     name = "muse-spark-open"
@@ -526,6 +532,11 @@ class MuseBackend(Backend):
         self._muse = _muse
         self.model = _muse.MODEL_ID
         self.ctx = 1048576
+        self.chain = [
+            "meta/muse-spark-open",
+            "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "nvidia/nemotron-3.5-super-vl:free",
+        ]
 
     def healthy(self) -> bool:
         return self._muse.available()
@@ -536,55 +547,75 @@ class MuseBackend(Backend):
             msgs.insert(0, {"role": "system", "content": self._muse.SYSTEM_PROMPT})
         return msgs
 
+    def _call(self, model, messages, max_tokens, temperature):
+        # reasoning_effort is a Muse/paid-model knob; free routers reject
+        # unknown fields on some providers.
+        effort = os.environ.get("URAI_REASONING_EFFORT", "medium") \
+            if model.startswith("meta/") else None
+        return self._muse.complete(
+            self._with_identity(messages),
+            max_tokens=max(max_tokens, 2048),   # reasoning is always on
+            temperature=temperature,
+            reasoning_effort=effort,
+            model=model,
+        )
+
     def complete(self, messages, max_tokens=256, temperature=0.2):
-        try:
-            res = self._muse.complete(
-                self._with_identity(messages),
-                max_tokens=max(max_tokens, 2048),   # reasoning is always on
-                temperature=temperature,
-                reasoning_effort=os.environ.get("URAI_REASONING_EFFORT", "medium"),
-            )
-            return {
-                "content": res.get("content") or res.get("reasoning_content") or "",
-                "reasoning_content": res.get("reasoning_content", ""),
-                "backend": self.name,
-                "model": res.get("model", self.model),
-                "usage": res.get("usage", {}),
-            }
-        except Exception as e:
-            # Out of credits / rate limited / upstream down → local student
-            local = LlamaServerBackend()
-            if local.healthy():
-                out = local.complete(messages, max_tokens, temperature)
-                out["backend"] = f"{self.name}->{local.name}"
-                out["degraded"] = str(e)[:200]
-                return out
-            raise
+        last_err = None
+        for model in self.chain:
+            try:
+                res = self._call(model, messages, max_tokens, temperature)
+                return {
+                    "content": res.get("content") or res.get("reasoning_content") or "",
+                    "reasoning_content": res.get("reasoning_content", ""),
+                    "backend": self.name,
+                    "model": res.get("model", model),
+                    "usage": res.get("usage", {}),
+                    "teacher": res.get("model", model),
+                }
+            except Exception as e:
+                last_err = e
+                # 402 / 429 / 5xx on one provider → try the next teacher.
+                continue
+        # All hosted teachers down → local student
+        local = LlamaServerBackend()
+        if local.healthy():
+            out = local.complete(messages, max_tokens, temperature)
+            out["backend"] = f"{self.name}->{local.name}"
+            out["degraded"] = str(last_err)[:200] if last_err else ""
+            return out
+        raise last_err or RuntimeError("no backend available")
 
     def stream_complete(self, messages, max_tokens=256, temperature=0.2):
-        """True SSE streaming from OpenRouter, falling back to the local student.
+        """True SSE streaming down the teacher chain, then the local student.
 
         OpenRouter can reject a stream before the first byte (402 out of credits,
         429 rate limit, 5xx upstream).  Only fall back when nothing has been
         emitted yet, so the client never sees two answers spliced together.
         """
-        emitted = False
-        try:
-            for chunk in self._muse.stream(
-                self._with_identity(messages),
-                max_tokens=max(max_tokens, 2048),
-                temperature=temperature,
-                reasoning_effort=os.environ.get("URAI_REASONING_EFFORT", "medium"),
-            ):
-                emitted = True
-                yield chunk
-        except Exception:
-            if emitted:
-                raise
-            local = LlamaServerBackend()
-            if not local.healthy():
-                raise
-            yield from local.stream_complete(messages, max_tokens, temperature)
+        for model in self.chain:
+            emitted = False
+            try:
+                effort = os.environ.get("URAI_REASONING_EFFORT", "medium") \
+                    if model.startswith("meta/") else None
+                for chunk in self._muse.stream(
+                    self._with_identity(messages),
+                    max_tokens=max(max_tokens, 2048),
+                    temperature=temperature,
+                    reasoning_effort=effort,
+                    model=model,
+                ):
+                    emitted = True
+                    yield chunk
+                return
+            except Exception:
+                if emitted:
+                    raise
+                continue
+        local = LlamaServerBackend()
+        if not local.healthy():
+            raise RuntimeError("no backend available")
+        yield from local.stream_complete(messages, max_tokens, temperature)
 
 
 # ── TeacherAPIBackend — legacy alias ───────────────────────────────────────────
