@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -30,6 +31,9 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--reasoning", default="high", choices=["low", "medium", "high", "xhigh"])
     ap.add_argument("--max-tokens", type=int, default=8192)
+    ap.add_argument("--retries", type=int, default=3)
+    ap.add_argument("--resume", action="store_true",
+                    help="append to --out and skip prompts already present")
     a = ap.parse_args()
 
     if not muse.available():
@@ -41,20 +45,48 @@ def main():
         tasks = tasks[: a.limit]
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
+
+    done = set()
+    if a.resume and out.exists():
+        for line in out.read_text().splitlines():
+            try:
+                done.add(json.loads(line).get("prompt", ""))
+            except Exception:
+                pass
+
     n = 0
-    with out.open("w") as f:
+    with out.open("a" if a.resume else "w") as f:
         for t in tasks:
             prompt = t.get("prompt") or t.get("input") or t.get("text") or ""
-            if not prompt:
+            if not prompt or prompt in done:
                 continue
-            res = muse.complete(
-                [
-                    {"role": "system", "content": muse.SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=a.max_tokens,
-                reasoning_effort=a.reasoning,
-            )
+            max_tokens = a.max_tokens
+            res = None
+            for attempt in range(1, a.retries + 1):
+                try:
+                    res = muse.complete(
+                        [
+                            {"role": "system", "content": muse.SYSTEM_PROMPT},
+                            {"role": "user", "content": prompt},
+                        ],
+                        max_tokens=max_tokens,
+                        reasoning_effort=a.reasoning,
+                    )
+                    break
+                except Exception as e:
+                    msg = str(e)
+                    print(f"  attempt {attempt} failed: {msg[:180]}", flush=True)
+                    if attempt == a.retries:
+                        break
+                    # Free-tier budget is per-request: ask for less next time.
+                    if "402" in msg:
+                        max_tokens = max(512, max_tokens // 2)
+                        time.sleep(15)
+                    else:
+                        time.sleep(5 * attempt)
+            if not res or not (res.get("content") or "").strip():
+                print(f"  skipped (no content): {prompt[:60]}", flush=True)
+                continue
             f.write(json.dumps({
                 "prompt": prompt,
                 "completion": res["content"],
@@ -67,8 +99,9 @@ def main():
                 "reasoning_effort": a.reasoning,
                 "usage": res.get("usage", {}),
             }) + "\n")
+            f.flush()
             n += 1
-            print(f"[{n}/{len(tasks)}] {res.get('usage', {})}")
+            print(f"[{n}/{len(tasks)}] {res.get('usage', {})}", flush=True)
     print(f"wrote {n} → {out}")
     return 0
 
