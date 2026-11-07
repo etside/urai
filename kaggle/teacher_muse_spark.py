@@ -29,6 +29,7 @@ def main():
     ap.add_argument("--out", default="data/finetune/muse-spark-open/train.jsonl")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--reasoning", default="high", choices=["low", "medium", "high", "xhigh"])
+    ap.add_argument("--max-tokens", type=int, default=8192)
     a = ap.parse_args()
 
     if not muse.available():
@@ -51,10 +52,12 @@ def main():
                     {"role": "system", "content": muse.SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=8192,
+                max_tokens=a.max_tokens,
                 reasoning_effort=a.reasoning,
             )
             f.write(json.dumps({
+                "prompt": prompt,
+                "completion": res["content"],
                 "messages": [
                     {"role": "system", "content": muse.SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},

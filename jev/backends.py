@@ -537,19 +537,29 @@ class MuseBackend(Backend):
         return msgs
 
     def complete(self, messages, max_tokens=256, temperature=0.2):
-        res = self._muse.complete(
-            self._with_identity(messages),
-            max_tokens=max(max_tokens, 2048),   # reasoning is always on
-            temperature=temperature,
-            reasoning_effort=os.environ.get("URAI_REASONING_EFFORT", "medium"),
-        )
-        return {
-            "content": res.get("content") or res.get("reasoning_content") or "",
-            "reasoning_content": res.get("reasoning_content", ""),
-            "backend": self.name,
-            "model": res.get("model", self.model),
-            "usage": res.get("usage", {}),
-        }
+        try:
+            res = self._muse.complete(
+                self._with_identity(messages),
+                max_tokens=max(max_tokens, 2048),   # reasoning is always on
+                temperature=temperature,
+                reasoning_effort=os.environ.get("URAI_REASONING_EFFORT", "medium"),
+            )
+            return {
+                "content": res.get("content") or res.get("reasoning_content") or "",
+                "reasoning_content": res.get("reasoning_content", ""),
+                "backend": self.name,
+                "model": res.get("model", self.model),
+                "usage": res.get("usage", {}),
+            }
+        except Exception as e:
+            # Out of credits / rate limited / upstream down → local student
+            local = LlamaServerBackend()
+            if local.healthy():
+                out = local.complete(messages, max_tokens, temperature)
+                out["backend"] = f"{self.name}->{local.name}"
+                out["degraded"] = str(e)[:200]
+                return out
+            raise
 
     def stream_complete(self, messages, max_tokens=256, temperature=0.2):
         """True SSE streaming from OpenRouter (reasoning + content deltas)."""
