@@ -16,6 +16,7 @@ Cost (OpenRouter): $1.25/M in, $4.25/M out. 200 tasks ≈ $0.50.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -70,6 +71,7 @@ def main():
 
     n = 0
     models = [m.strip() for m in a.models.split(",") if m.strip()]
+    disabled: set[str] = set()   # models out of budget for this pass
     with out.open("a" if a.resume else "w") as f:
         for t in tasks:
             prompt = t.get("prompt") or t.get("input") or t.get("text") or ""
@@ -78,6 +80,8 @@ def main():
             res = None
             teacher = models[0]
             for model in models:
+                if model in disabled:
+                    continue
                 teacher = model
                 max_tokens = a.max_tokens
                 # reasoning_effort is a Muse/paid-model knob; free routers
@@ -99,16 +103,20 @@ def main():
                         msg = str(e)
                         print(f"  {model} attempt {attempt} failed: {msg[:160]}",
                               flush=True)
+                        if "402" in msg:
+                            # The provider tells us exactly what fits. Retry
+                            # once at that size; below ~1k it is not worth a
+                            # reasoning model, so drop it for this pass.
+                            m = re.search(r"can only afford (\d+)", msg)
+                            afford = int(m.group(1)) if m else 0
+                            if afford >= 1024 and max_tokens > afford:
+                                max_tokens = afford - 128
+                                continue
+                            disabled.add(model)
+                            break
                         if attempt == a.retries:
                             break
-                        # Free-tier budget is per-request: ask for less next time.
-                        if "402" in msg:
-                            max_tokens = max(512, max_tokens // 2)
-                            time.sleep(10)
-                        elif "429" in msg:
-                            time.sleep(20 * attempt)
-                        else:
-                            time.sleep(5 * attempt)
+                        time.sleep(15 * attempt if "429" in msg else 3 * attempt)
                 if res and (res.get("content") or "").strip():
                     break
                 res = None
