@@ -173,9 +173,18 @@ class LlamaServerBackend(Backend):
         self.model = model or "local-student"
 
     def healthy(self) -> bool:
-        return _probe_cached(
-            f"llama:{self.base}",
-            lambda: urllib.request.urlopen(self.base + "/health", timeout=5).read())
+        def _probe():
+            try:
+                return urllib.request.urlopen(
+                    self.base + "/health", timeout=5).read()
+            except urllib.error.HTTPError as e:
+                if e.code != 404:
+                    raise
+                # OpenAI-compatible servers such as Ollama have no /health;
+                # fall back to the model list as a liveness probe.
+                return urllib.request.urlopen(
+                    self.base + "/v1/models", timeout=5).read()
+        return _probe_cached(f"llama:{self.base}", _probe)
 
     def complete(self, messages, max_tokens=256, temperature=0.2):
         msgs = [dict(m) for m in messages]
