@@ -562,13 +562,29 @@ class MuseBackend(Backend):
             raise
 
     def stream_complete(self, messages, max_tokens=256, temperature=0.2):
-        """True SSE streaming from OpenRouter (reasoning + content deltas)."""
-        yield from self._muse.stream(
-            self._with_identity(messages),
-            max_tokens=max(max_tokens, 2048),
-            temperature=temperature,
-            reasoning_effort=os.environ.get("URAI_REASONING_EFFORT", "medium"),
-        )
+        """True SSE streaming from OpenRouter, falling back to the local student.
+
+        OpenRouter can reject a stream before the first byte (402 out of credits,
+        429 rate limit, 5xx upstream).  Only fall back when nothing has been
+        emitted yet, so the client never sees two answers spliced together.
+        """
+        emitted = False
+        try:
+            for chunk in self._muse.stream(
+                self._with_identity(messages),
+                max_tokens=max(max_tokens, 2048),
+                temperature=temperature,
+                reasoning_effort=os.environ.get("URAI_REASONING_EFFORT", "medium"),
+            ):
+                emitted = True
+                yield chunk
+        except Exception:
+            if emitted:
+                raise
+            local = LlamaServerBackend()
+            if not local.healthy():
+                raise
+            yield from local.stream_complete(messages, max_tokens, temperature)
 
 
 # ── TeacherAPIBackend — legacy alias ───────────────────────────────────────────
