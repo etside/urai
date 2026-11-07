@@ -6,7 +6,7 @@
 #
 # Requires: kaggle CLI authenticated (kaggle config view) and AWS read access
 # to the shard bucket. The kernel trains the student that ships on the EC2 host
-# (Qwen3-0.6B) and writes /kaggle/working/urai-adapter.
+# (Qwen3-1.7B) and writes /kaggle/working/urai-adapter.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -54,18 +54,30 @@ else
   kaggle datasets create -p "$WORK/dataset" -r zip
 fi
 
-# ── kernel: the live student (0.6B), 400 steps ──────────────────────────────
-sed -e 's|unsloth/Qwen3-4B-bnb-4bit|unsloth/Qwen3-0.6B|' \
-    -e 's|MAX_TRAIN_STEPS", "300"|MAX_TRAIN_STEPS", "400"|' \
-    kaggle/train_qlora.py > "$WORK/kernel/train_kernel.py"
+# ── kernel: notebook (script kernels fail on Kaggle — see v1 ERROR) ─────────
+# The live student is Qwen3-1.7B; MAX_STEPS 400 for the small dataset.
+python3 - <<PYEOF
+import json
+src = open("kaggle/train_qlora.py").read()
+nb = {
+  "cells": [{"cell_type": "code", "execution_count": None, "metadata": {},
+             "outputs": [], "source": src.splitlines(True)}],
+  "metadata": {"kernelspec": {"display_name": "Python 3",
+                              "language": "python", "name": "python3"},
+               "language_info": {"name": "python", "version": "3"}},
+  "nbformat": 4, "nbformat_minor": 4,
+}
+json.dump(nb, open("$WORK/kernel/train_kernel.ipynb", "w"), indent=1)
+print("notebook built:", len(src.splitlines()), "lines")
+PYEOF
 
 cat > "$WORK/kernel/kernel-metadata.json" <<EOF
 {
   "id": "$KAGGLE_USER/$KERNEL_SLUG",
   "title": "Urai QLoRA distill",
-  "code_file": "train_kernel.py",
+  "code_file": "train_kernel.ipynb",
   "language": "python",
-  "kernel_type": "script",
+  "kernel_type": "notebook",
   "is_private": true,
   "enable_gpu": true,
   "enable_internet": true,
@@ -75,6 +87,10 @@ cat > "$WORK/kernel/kernel-metadata.json" <<EOF
 }
 EOF
 
-kaggle kernels push -p "$WORK/kernel"
+PUSH_ARGS=()
+if [ "${NO_RUN:-0}" = "1" ]; then
+  PUSH_ARGS+=(--no-run)
+fi
+kaggle kernels push -p "$WORK/kernel" "${PUSH_ARGS[@]}"
 echo "kernel: https://www.kaggle.com/code/$KAGGLE_USER/$KERNEL_SLUG"
 echo "status: kaggle kernels status $KAGGLE_USER/$KERNEL_SLUG"
