@@ -30,7 +30,9 @@ while true; do
     --max-tokens "${URAI_DISTILL_MAX_TOKENS:-4096}" \
     --retries 2 \
     --resume \
-    --shard "$SHARD" >> "$LOG" 2>&1
+    --shard "$SHARD" \
+    --s3-uri "s3://$BUCKET/distill/muse-spark-open/train-$HOST.jsonl" \
+    --sync-every 5 >> "$LOG" 2>&1
   after=$(wc -l < "$OUT" 2>/dev/null || echo 0)
   echo "$(date -u +%FT%TZ) shard=$SHARD rows=$after (+$((after-before)))" >> "$LOG"
 

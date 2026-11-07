@@ -16,6 +16,7 @@ Cost (OpenRouter): $1.25/M in, $4.25/M out. 200 tasks ≈ $0.50.
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -41,6 +42,9 @@ def main():
         help="comma-separated teacher chain; first that answers wins")
     ap.add_argument("--shard", default="",
                     help="i/n — run only tasks where index %% n == i")
+    ap.add_argument("--s3-uri", default="",
+                    help="upload the shard here every --sync-every rows")
+    ap.add_argument("--sync-every", type=int, default=10)
     a = ap.parse_args()
 
     if not muse.available():
@@ -126,6 +130,9 @@ def main():
             f.flush()
             n += 1
             print(f"[{n}/{len(tasks)}] {res.get('usage', {})}", flush=True)
+            if a.s3_uri and n % a.sync_every == 0:
+                subprocess.run(["aws", "s3", "cp", str(out), a.s3_uri],
+                               capture_output=True, check=False)
     print(f"wrote {n} → {out}")
     return 0
 
