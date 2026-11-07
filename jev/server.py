@@ -396,6 +396,14 @@ def _has_image(msgs) -> bool:
                for m in msgs)
 
 
+def _has_multimodal(msgs) -> bool:
+    """True for video/audio (Muse Spark Open only) — image stays on local VL."""
+    return any(isinstance(m.get("content"), list) and
+               any(p.get("type") in ("video_url", "audio_url", "input_audio")
+                   for p in m["content"])
+               for m in msgs)
+
+
 def _split_image(msgs):
     question = ""
     for m in reversed(msgs):
@@ -755,6 +763,7 @@ class Handler(BaseHTTPRequestHandler):
                 "version": _repo_status().get("version"),
                 "active_model": _repo_status().get("active_model"),
                 "local_llama": local.healthy(),
+                "ctx_window": int(os.environ.get("URAI_CTX", "32768")),
                 "measured": {
                     "gen_toks_per_s": "6-9", "prompt_toks_per_s": "12-28",
                     "embed_dims": 768, "note": "llama-server slot timings on this CPU droplet (Qwen3-4B Q4_K_M); varies with load and context length",
@@ -1034,6 +1043,38 @@ class Handler(BaseHTTPRequestHandler):
             max_tokens = body.get("max_tokens", 256)
             temperature = float(body.get("temperature", 0.2))
             req_model = body.get("model", "urai")
+
+            if _has_multimodal(msgs):
+                # Video/audio understanding → Muse Spark Open (hosted, 1M ctx)
+                from . import muse as _muse
+                if _muse.available():
+                    try:
+                        res = _muse.complete(
+                            msgs, max_tokens=max_tokens, temperature=temperature,
+                            reasoning_effort=body.get("reasoning_effort") or os.environ.get("URAI_REASONING_EFFORT", "medium"),
+                            tools=body.get("tools"),
+                            tool_choice=body.get("tool_choice"),
+                        )
+                        _record_use(ip, device, bool(body.get("_urai_authed")))
+                        return self._send({
+                            "id": "chatcmpl-urai", "object": "chat.completion",
+                            "created": int(time.time()), "model": _muse.MODEL_ID,
+                            "choices": [{"index": 0, "message": {
+                                "role": "assistant",
+                                "content": res["content"],
+                                **({"reasoning_content": res["reasoning_content"]} if res.get("reasoning_content") else {}),
+                                **({"tool_calls": res["tool_calls"]} if res.get("tool_calls") else {}),
+                            }, "finish_reason": res.get("finish_reason") or "stop"}],
+                            "usage": res.get("usage") or {},
+                            "urai": {"backend": "muse-spark-open/openrouter", "auth": body.get("_urai_reason", "free")},
+                        })
+                    except Exception as e:
+                        _m_inc('errors')
+                        return self._send({"error": str(e)[:300]}, 502)
+                else:
+                    return self._send({"error": "Video/audio requires OPENROUTER_API_KEY (Muse Spark Open). Set it and restart `urai api`."}, 503)
+                # fall through unreachable
+                pass
 
             if _has_image(msgs):
                 from . import vision as _vision

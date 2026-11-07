@@ -39,3 +39,8 @@ desktop/dist/
 
 # Tool-guard audit log
 jev/data/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example

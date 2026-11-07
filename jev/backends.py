@@ -251,7 +251,8 @@ class CloudAPIBackend(Backend):
 
     Reads model/registry.json entries with api_only=true.  Selects the
     best available backend in priority order:
-        kimi-k2 (MOONSHOT_API_KEY) → deepseek-r2 (DEEPSEEK_API_KEY)
+        muse-spark-open (OPENROUTER_API_KEY) → kimi-k2 (MOONSHOT_API_KEY)
+        → deepseek-r2 (DEEPSEEK_API_KEY)
         → claude-haiku (ANTHROPIC_API_KEY) → gpt-4o-mini (OPENAI_API_KEY)
 
     Health is probed once and cached (PROBE_TTL_S seconds).
@@ -262,14 +263,16 @@ class CloudAPIBackend(Backend):
     # Provider → (env_var, endpoint_key, chat_path, auth_header_style)
     # auth_header_style: "bearer" | "x-api-key" (Anthropic)
     _PROVIDERS = {
+        "openrouter": ("OPENROUTER_API_KEY", "endpoint", "/chat/completions", "bearer"),
         "moonshot":   ("MOONSHOT_API_KEY",   "endpoint", "/chat/completions", "bearer"),
         "deepseek":   ("DEEPSEEK_API_KEY",   "endpoint", "/chat/completions", "bearer"),
         "openai":     ("OPENAI_API_KEY",     "endpoint", "/chat/completions", "bearer"),
         "anthropic":  ("ANTHROPIC_API_KEY",  "endpoint", "/messages",         "x-api-key"),
     }
 
-    # Preferred order (best reasoning → cheapest)
-    _PRIORITY = ["kimi-k2", "deepseek-r2", "claude-haiku", "gpt-4o-mini", "muse-wonder"]
+    # Preferred order (best reasoning → cheapest). Muse Spark Open first —
+    # 1M context, multimodal, agentic tool-calling (OpenRouter gateway).
+    _PRIORITY = ["muse-spark-open", "kimi-k2", "deepseek-r2", "claude-haiku", "gpt-4o-mini", "muse-wonder"]
     _BEDROCK_FALLBACK = True  # use BedrockBackend if all registry cloud unavailable
 
     def __init__(self, model_id: str | None = None):
@@ -310,6 +313,13 @@ class CloudAPIBackend(Backend):
         self._reg_entry = entry
         self._key = key
         self._base = entry.get(endpoint_key, "").rstrip("/")
+        # OpenRouter registry entry may omit endpoint — fall back to env
+        if not self._base and provider == "openrouter":
+            self._base = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+        # OpenRouter model id override
+        if provider == "openrouter":
+            self._reg_entry = dict(entry)
+            self._reg_entry["model_id"] = os.environ.get("OPENROUTER_MODEL", entry.get("model_id", "meta/muse-spark-open"))
         self._chat_path = chat_path
         self._auth_style = auth_style
         self.name = f"cloud:{provider}/{mid}"
@@ -357,13 +367,19 @@ class CloudAPIBackend(Backend):
             if system_msgs:
                 payload["system"] = "\n".join(system_msgs)
             return payload
-        return {
+        payload = {
             "model": model_api_id,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": stream,
         }
+        # Muse Spark Open via OpenRouter: reasoning control + OpenRouter headers
+        if (self._reg_entry or {}).get("provider") == "openrouter":
+            eff = os.environ.get("URAI_REASONING_EFFORT", "medium")
+            if eff in ("low", "medium", "high", "xhigh"):
+                payload["reasoning_effort"] = eff
+        return payload
 
     def _headers(self) -> dict:
         h = {"Content-Type": "application/json"}
@@ -372,12 +388,15 @@ class CloudAPIBackend(Backend):
             h["anthropic-version"] = "2023-06-01"
         else:
             h["Authorization"] = f"Bearer {self._key}"
+        if (self._reg_entry or {}).get("provider") == "openrouter":
+            h["HTTP-Referer"] = os.environ.get("URAI_PUBLIC_URL", "https://etside.github.io/urai/")
+            h["X-Title"] = "Urai"
         return h
 
     def complete(self, messages, max_tokens=256, temperature=0.2) -> dict:
         if not self.available:
             raise RuntimeError("No cloud backend configured "
-                               "(set MOONSHOT_API_KEY / DEEPSEEK_API_KEY / "
+                               "(set OPENROUTER_API_KEY / MOONSHOT_API_KEY / DEEPSEEK_API_KEY / "
                                "ANTHROPIC_API_KEY / OPENAI_API_KEY)")
         # Budget guard — raises BudgetExceeded if daily limit hit
         try:
@@ -479,6 +498,58 @@ class CloudAPIBackend(Backend):
             except Exception:
                 detail = ""
             raise RuntimeError(f"Cloud stream {self.name} HTTP {e.code}: {detail}")
+
+
+# ── Muse Spark Open (hosted, OpenRouter) ──────────────────────────────────────
+
+class MuseBackend(Backend):
+    """Muse Spark Open via OpenRouter — hosted brain when no local model fits.
+
+    Used when the local llama-server is unavailable AND URAI_CLOUD_FALLBACK=1
+    (default on in public/free mode). Keeps Urai's identity: a Urai system
+    prompt is prepended and the backend is labelled 'muse-spark-open'.
+    """
+
+    name = "muse-spark-open"
+
+    def __init__(self):
+        from . import muse as _muse
+        self._muse = _muse
+        self.model = _muse.MODEL_ID
+        self.ctx = 1048576
+
+    def healthy(self) -> bool:
+        return self._muse.available()
+
+    def _with_identity(self, messages):
+        msgs = [dict(m) for m in messages]
+        if not any(m.get("role") == "system" for m in msgs):
+            msgs.insert(0, {"role": "system", "content": self._muse.SYSTEM_PROMPT})
+        return msgs
+
+    def complete(self, messages, max_tokens=256, temperature=0.2):
+        res = self._muse.complete(
+            self._with_identity(messages),
+            max_tokens=max(max_tokens, 2048),   # reasoning is always on
+            temperature=temperature,
+            reasoning_effort=os.environ.get("URAI_REASONING_EFFORT", "medium"),
+        )
+        return {
+            "content": res.get("content") or res.get("reasoning_content") or "",
+            "reasoning_content": res.get("reasoning_content", ""),
+            "backend": self.name,
+            "model": res.get("model", self.model),
+            "usage": res.get("usage", {}),
+        }
+
+    def stream_complete(self, messages, max_tokens=256, temperature=0.2):
+        """True SSE streaming from OpenRouter (reasoning + content deltas)."""
+        yield from self._muse.stream(
+            self._with_identity(messages),
+            max_tokens=max(max_tokens, 2048),
+            temperature=temperature,
+            reasoning_effort=os.environ.get("URAI_REASONING_EFFORT", "medium"),
+        )
 
 
 # ── TeacherAPIBackend — legacy alias ───────────────────────────────────────────

@@ -37,8 +37,8 @@ def is_up(port=8080):
         return False
 
 
-def start(model_path, ctx=2048, threads=None, port=8080, ngl=None,
-          mmproj=None, spec=None):
+def start(model_path, ctx=32768, threads=None, port=8080, ngl=None,
+          mmproj=None, spec=None, rope_scale=1.0, yarn_ext_factor=-1.0):
     from .gpu import offload_policy
     if ngl is None:
         ngl = offload_policy()["ngl"]
@@ -50,6 +50,14 @@ def start(model_path, ctx=2048, threads=None, port=8080, ngl=None,
            # KV-cache quant: often a bigger RAM win than one more weight
            # bit (q8_0 = safe default; use q4_0/q5_0 when RAM is tight).
            "-ctk", "q8_0", "-ctv", "q8_0"]
+    if rope_scale > 1.0:
+        # RoPE linear scaling: extend context by rope_scale factor (e.g. 4.0 = 4×).
+        # Use with --ctx (rope_scale * base_ctx) for 128K+ via llama.cpp.
+        cmd += ["--rope-scale", str(rope_scale)]
+    if yarn_ext_factor >= 0:
+        # YaRN extrapolation factor: -1 = disabled (default), 0.0+ = enabled.
+        # YaRN outperforms linear RoPE scaling for very long contexts (128K+).
+        cmd += ["--yarn-ext-factor", str(yarn_ext_factor)]
     if mmproj:
         # vision model: llama.cpp mtmd path (text GGUF + vision projector)
         cmd += ["--mmproj", str(mmproj)]

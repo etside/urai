@@ -6,16 +6,26 @@ Architecture:
   brain — not a backend option. Cloud APIs are TOOLS Urai can call through
   the agent/tools layer (like web_search), not replacements for Urai itself.
 
+  Muse Spark Open (816B MoE, 1M ctx, multimodal, via OpenRouter) is Urai's
+  hosted teacher/consult: it supplies long-context reasoning, image/video/
+  audio/PDF understanding, and distill data. It never claims to BE Urai.
+  See jev/muse.py + docs/MUSE_SPARK_OPEN.md.
+
   When llama-server is temporarily down, the watchdog (sched.py) restarts
   it within seconds. The right response to "local is down" is:
     → return a clear service-unavailable error (503)
     → NOT silently answer as Claude/DeepSeek pretending to be Urai
 
-  Cloud keys (MOONSHOT_API_KEY etc.) power Urai's TOOLS:
+  Cloud keys (OPENROUTER_API_KEY etc.) power Urai's TOOLS:
     - research tool: fetch info from a smarter model mid-task
-    - distill teacher: generate training data
+    - distill teacher: generate training data (Muse Spark → Qwen3 student)
     - verify tool: second-opinion check on Urai's own answer
   They do NOT replace Urai's identity.
+
+  Public mode (URAI_PUBLIC=1 / URAI_FREE_MODE=1):
+    - API exposed publicly behind Caddy + HTTPS (see deploy/deploy-public.sh)
+    - Local-model bad requests still 503; cloud teacher available to any
+      authenticated caller. Keep URAI_MASTER_KEY set when public.
 
 LEVELS (complexity classifier — unchanged):
   LEVEL 0: short/simple              → fast model (0.6B if available, else active)
@@ -31,6 +41,11 @@ Cloud consult (level 3-4, URAI_CLOUD_CONSULT=1):
   Urai calls the cloud API as a TOOL mid-reasoning and incorporates the
   result into its own answer. The final response is always Urai's voice.
   Default OFF — explicit opt-in only.
+
+Multimodal routing:
+  If messages contain image/video/audio parts or a PDF (URAI_CLOUD_1M=1),
+  route understanding to Muse Spark Open (1M ctx) and return the summary
+  as context for the local model. Local llama-server Cedaruri keeps text-only.
 """
 
 from __future__ import annotations
@@ -80,22 +95,38 @@ def _urai_local() -> LlamaServerBackend | None:
 
 
 def pick_backend(level: int, stream: bool = False):
-    """Always returns Urai's own local model, or raises UnavailableError.
+    """Urai's own local model, else hosted Muse Spark when fallback is on.
 
     Returns (backend, needs_verification, allow_fallback).
-    Raises RuntimeError with 503 hint when llama-server is down —
-    the watchdog will restart it; the caller should surface this to the
-    client rather than silently substituting a foreign LLM.
+    Raises RuntimeError with 503 hint when no brain is available —
+    the caller surfaces this to the client rather than silently
+    substituting an unrelated LLM.
     """
     local = _urai_local()
     if local:
         verify = level >= 2
-        return local, verify, False   # allow_fallback=False: Urai never falls back to a foreign LLM
+        return local, verify, False   # allow_fallback=False: local brain
+
+    # Hosted fallback (public/free deployments without a local model)
+    if cloud_fallback():
+        from .backends import MuseBackend
+        mb = MuseBackend()
+        if mb.healthy():
+            return mb, level >= 2, True
 
     # llama-server is temporarily down (watchdog is restarting it)
     raise RuntimeError(
         "Urai's local model is starting up — please retry in a few seconds. "
         "(watchdog is restarting llama-server)")
+
+
+def cloud_fallback() -> bool:
+    """True when hosted Muse Spark may stand in for a missing local model."""
+    if os.environ.get("URAI_CLOUD_FALLBACK") in ("0", "false", "no"):
+        return False
+    if os.environ.get("URAI_CLOUD_FALLBACK") == "1":
+        return True
+    return free_mode()   # public/free deployments default to on
 
 
 def pick_backend_safe(level: int, stream: bool = False):
@@ -110,11 +141,58 @@ def pick_backend_safe(level: int, stream: bool = False):
 
 # ── Cloud consult tool (opt-in only, URAI_CLOUD_CONSULT=1) ───────────────────
 
+# ── 1M-context cloud path (L4, URAI_CLOUD_1M=1, tier='urai-ultra') ───────────
+# When URAI_CLOUD_1M=1 is set in the environment AND the tier is 'urai-ultra',
+# cloud_consult() can route to a 1M-context provider as a research tool:
+#
+#   Provider priority (Muse Spark Open first):
+#     1. Muse Spark Open  (1M tokens, OPENROUTER_API_KEY → meta/muse-spark-open)
+#     2. Gemini 1.5 Pro  (1M token window, GEMINI_API_KEY)
+#     3. Claude 3.5      (200K window,     ANTHROPIC_API_KEY — fallback)
+#
+#   This path is a TOOL call inside Urai's reasoning, not a replacement:
+#     - Urai stays the identity (voice, personality, answer author)
+#     - The cloud result is marked [cloud-consult:<model-id>] so Urai
+#       can incorporate or cross-check it before responding
+#     - Activate:  URAI_CLOUD_1M=1 URAI_CLOUD_CONSULT=1 urai chat
+#     - Tier gate: only 'urai-ultra' enables cloud consult by default;
+#       'urai' / 'urai-fast' ignore cloud even when URAI_CLOUD_1M=1
+#
+# URAI_CTX env sets the local context window hint (default 32768).
+# Public free mode: URAI_FREE_MODE=1 — Muse Spark consult allowed for
+# any authenticated caller until official release (no billing gate).
+# ─────────────────────────────────────────────────────────────────────────────
+
+def is_multimodal(messages: list) -> bool:
+    """True if any user message carries non-text content (image/video/audio)."""
+    for m in messages or []:
+        c = m.get("content")
+        if isinstance(c, list):
+            for part in c:
+                if isinstance(part, dict) and part.get("type") in (
+                    "image_url", "video_url", "audio_url", "input_audio",
+                ):
+                    return True
+    return False
+
+def reasoning_effort_for(level: int, override: str | None = None) -> str:
+    """Muse Spark reasoning effort by Urai level (low/med/high/xhigh)."""
+    if override in ("low", "medium", "high", "xhigh"):
+        return override
+    env = os.environ.get("URAI_REASONING_EFFORT", "")
+    if env in ("low", "medium", "high", "xhigh"):
+        return env
+    return {0: "low", 1: "medium", 2: "high", 3: "high", 4: "xhigh"}.get(level, "medium")
+
+def free_mode() -> bool:
+    return os.environ.get("URAI_FREE_MODE", "0") == "1" or os.environ.get("URAI_PUBLIC", "0") == "1"
+
 def cloud_consult(prompt: str, context: str = "") -> str | None:
     """Call a cloud model as a RESEARCH TOOL for Urai to incorporate.
     Returns a string Urai can include in its reasoning, or None if unavailable.
     Only fires when URAI_CLOUD_CONSULT=1 AND a cloud key is configured.
     The result is clearly marked [cloud-consult] so Urai knows it's external.
+    When URAI_CLOUD_1M=1 the context hint and URAI_CTX window size are passed.
     """
     if os.environ.get("URAI_CLOUD_CONSULT") != "1":
         return None
@@ -123,13 +201,20 @@ def cloud_consult(prompt: str, context: str = "") -> str | None:
         c = CloudAPIBackend()
         if not c.available or not c.healthy():
             return None
+        # Build context hint — include local ctx window when 1M path is active
+        ctx_hint = ""
+        if os.environ.get("URAI_CLOUD_1M") == "1":
+            ctx_window = int(os.environ.get("URAI_CTX", "32768"))
+            ctx_hint = (f"[context-window-hint: local={ctx_window} tokens, "
+                        f"cloud=1M path active]\n")
         msgs = []
-        if context:
+        if context or ctx_hint:
             msgs.append({"role": "system",
                          "content": "You are a research assistant. Be concise."})
         msgs.append({"role": "user",
-                     "content": (f"Research context:\n{context}\n\n" if context else "")
-                                 + prompt})
+                     "content": (ctx_hint
+                                 + (f"Research context:\n{context}\n\n" if context else "")
+                                 + prompt)})
         res = c.complete(msgs, max_tokens=512, temperature=0.1)
         return f"[cloud-consult:{c._model_id}] {res.get('content', '').strip()}"
     except Exception:
@@ -229,9 +314,9 @@ def route(prompt: str, tier: str = "urai", stream: bool = False) -> dict:
         "level": level,
         "reason": cls["reason"],
         "tier": tier,
-        "backend": backend,       # always LlamaServerBackend — Urai's own model
+        "backend": backend,       # local llama-server, or Muse Spark fallback
         "verify": verify,
-        "fallback": False,        # Urai never falls back to a foreign LLM
+        "fallback": getattr(backend, "name", "") == "muse-spark-open",
         "stream": want_stream,
         "gpu": _gpu_available(),
         "tier_cfg": t,

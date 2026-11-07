@@ -105,6 +105,22 @@ DEFAULTS = {
             "port": 8081,
             "note": "~100MB; served with llama-server --embedding",
         },
+        # Muse Spark Open (hosted only — 816B MoE, 42B active, 1M ctx).
+        # Cannot run locally on Urai hardware (min ~300GB RAM for 2-bit GGUF).
+        # Served via OpenRouter gateway; see jev/muse.py + docs/MUSE_SPARK_OPEN.md.
+        # OpenRouter model id: meta/muse-spark-open ($1.25/M in, $4.25/M out).
+        "muse-spark-open": {
+            "params": "816B MoE (42B active)", "quant": "NVFP4/BF16 hosted", "role": "reasoning",
+            "kind": "chat",
+            "api_only": True,
+            "provider": "openrouter",
+            "endpoint": "https://openrouter.ai/api/v1",
+            "model_id": "meta/muse-spark-open",
+            "ctx": 1048576,
+            "modalities": ["text", "image", "video", "audio", "pdf"],
+            "env": "OPENROUTER_API_KEY",
+            "note": "Hosted teacher/consult — not a local download",
+        },
     },
 }
 

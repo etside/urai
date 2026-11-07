@@ -516,15 +516,19 @@ def main(argv=None):
     p.add_argument("action", choices=["list", "download", "use", "bench", "add", "info"])
     p.add_argument("id", nargs="?")
     p.add_argument("value", nargs="?", help="path for 'add', unused for others")
-    p.add_argument("--ctx", type=int, default=2048)
+    p.add_argument("--ctx", type=int, default=int(os.environ.get("URAI_CTX", "32768")))
 
     p = sub.add_parser("serve")
     p.add_argument("action", choices=["start", "stop", "status"])
     p.add_argument("--model", default=None)
-    p.add_argument("--ctx", type=int, default=2048)
+    p.add_argument("--ctx", type=int, default=int(os.environ.get("URAI_CTX", "32768")))
     p.add_argument("--port", type=int, default=8080)
     p.add_argument("--spec", default=None,
                    help="speculative decoding, e.g. ngram-mod (free) — see docs/TRAINING.md#speed")
+    p.add_argument("--rope-scale", type=float, default=1.0,
+                   help="RoPE linear scaling factor (>1.0 extends context; e.g. 4.0 for 128K)")
+    p.add_argument("--yarn-ext-factor", type=float, default=-1.0,
+                   help="YaRN extrapolation factor (-1.0=disabled, 0.0+ enables YaRN for 128K+ ctx)")
 
     sub.add_parser("gpu")
     sub.add_parser("version")
@@ -842,7 +846,8 @@ def main(argv=None):
             if mmproj is None:
                 sys.exit(f"{mid} needs its mmproj file; run: urai model download {mid}")
         print(serve_ctl.start(mp, ctx=args.ctx, port=args.port, mmproj=mmproj,
-                              spec=args.spec))
+                              spec=args.spec, rope_scale=args.rope_scale,
+                              yarn_ext_factor=args.yarn_ext_factor))
         return
 
     if args.cmd == "version":

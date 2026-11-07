@@ -8,6 +8,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="apple-mobile-web-app-title" content="Urai"/>
 <meta name="description" content="Urai AI Studio — local-first chat, agents, wiki, voice and vibe coding."/>
+<!-- Public API used by the Pages build. Override with window.URAI_API_BASE. -->
+<meta name="urai-api" content="https://52-66-18-45.sslip.io"/>
 <title>Urai — AI Studio</title>
 <link rel="manifest" href="./manifest.webmanifest"/>
 <link rel="icon" href="./favicon.svg" type="image/svg+xml"/>
@@ -251,6 +253,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
 #send-btn:hover{background:var(--accent-h)}
 #send-btn:active{transform:scale(0.88)}
 #send-btn:disabled{opacity:.4;cursor:default}
+#token-counter{
+  font-size:.75rem;color:var(--text3);text-align:right;
+  padding:3px 8px 0;user-select:none;min-height:16px;
+}
+#token-counter span{
+  display:inline-block;background:var(--bg3);border-radius:6px;
+  padding:1px 7px;font-variant-numeric:tabular-nums;
+}
 
 /* ── API Keys panel ─────────────────────────────────────────────────────── */
 #keys-panel{padding:24px;overflow-y:auto}
@@ -558,6 +568,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
           </button>
         </div>
       </div>
+      <div id="token-counter"></div>
     </div>
   </div>
 
@@ -756,8 +767,12 @@ ollama run my-model</pre>
 <script>
 // ── State ───────────────────────────────────────────────────────────────────
 // When the Studio is served from GitHub Pages (or opened from disk) there is
-// no API on that origin — point at a local Urai server instead.
+// no API on that origin — point at the public Urai server instead.
+// Priority: window.URAI_API_BASE → <meta name="urai-api"> → localhost.
 const DEFAULT_API = (() => {
+  const meta = document.querySelector('meta[name="urai-api"]');
+  const configured = ((window.URAI_API_BASE || (meta && meta.content) || '') + '').trim();
+  if (configured) return configured.replace(/\/+$/, '');
   const h = location.hostname;
   if (location.protocol === 'file:' || !h || /\.github\.io$/i.test(h)) return 'http://127.0.0.1:8777';
   return location.origin;
@@ -775,6 +790,7 @@ let S = {
   maxTokens: 512,
   attachedImage: null,
   activeAgentId: null,
+  ctxWindow: 32768,
 };
 
 // ── Init ────────────────────────────────────────────────────────────────────
@@ -784,6 +800,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderHistory();
   loadRateStatus();
   updateCompatBlock();
+  loadCtxWindow();
   if (document.getElementById('pill-stream').classList.contains('on')) S.streaming = true;
   hljs?.configure({ignoreUnescapedHTML:true});
   // auto-collapse sidebar on mobile so main area is not blocked on load

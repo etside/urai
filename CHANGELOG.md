@@ -3,6 +3,24 @@
 All notable changes to Urai. Format follows [Keep a Changelog](https://keepachangelog.com/),
 versioning follows [SemVer](https://semver.org/).
 
+## [3.1.0] — 2026-11-07 (unreleased: Muse Spark Open upgrade)
+
+### Added
+- **Muse Spark Open via OpenRouter** (`jev/muse.py`, `muse-spark-open` registry entry):
+  816B MoE, 42B active, 1M ctx, text/image/video/audio in. Hosted teacher/consult,
+  not a local download (min ~300 GB RAM). `OPENROUTER_API_KEY` + `OPENROUTER_MODEL=meta/muse-spark-open`.
+- **Multimodal API**: video/audio parts (`video_url`/`audio_url`/`input_audio`) route
+  to Muse Spark; image stays on local VL. `reasoning_effort` (low/medium/high/xhigh)
+  and parallel tool calling pass through. Streaming for long reasoning.
+- **Public deploy**: `deploy/deploy-public.sh --tailscale|--aws|--both` (Tailscale VPS
+  `100.124.118.90` + AWS EC2 `urai-v3`), Caddy HTTPS, `URAI_PUBLIC=1`, `URAI_FREE_MODE=1`.
+- **Distill pipeline**: `configs/distill_muse_spark_open.yaml` + `kaggle/teacher_muse_spark.py`
+  (Muse Spark → JSONL → Kaggle QLoRA → `urai-v-next.gguf`).
+
+### Changed
+- `jev/backends.py` + `jev/router.py`: OpenRouter provider, 1M-context priority,
+  `reasoning_effort_for()` mapping (L0 low → L4 xhigh), `free_mode()` helper.
+
 ## [3.0.0] — 2026-10-27
 
 ### Added
