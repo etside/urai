@@ -23,7 +23,7 @@ print("deps installed", flush=True)
 DATA = sorted(glob.glob("/kaggle/input/**/*.jsonl", recursive=True))
 DATA = DATA[0] if DATA else "distill-now.jsonl"
 OUT = "/kaggle/working/urai-adapter"
-MODEL = os.environ.get("URAI_BASE", "unsloth/Qwen3-4B-bnb-4bit")
+MODEL = os.environ.get("URAI_BASE", "unsloth/Qwen3-1.7B")
 MAX_STEPS = int(os.environ.get("MAX_TRAIN_STEPS", "300"))
 
 
