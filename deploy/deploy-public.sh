@@ -22,12 +22,20 @@ set -euo pipefail
 DOMAIN="${URAI_DOMAIN:-}"
 BRANCH="${URAI_BRANCH:-main}"
 REPO="${URAI_REPO:-https://github.com/etside/urai.git}"
+SSH_KEY="${URAI_SSH_KEY:-}"
 
 : "${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY}"
 : "${URAI_MASTER_KEY:?Set URAI_MASTER_KEY (openssl rand -hex 32)}"
 
+SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+[ -n "$SSH_KEY" ] && SSH_OPTS+=(-i "$SSH_KEY")
+SCP_OPTS=("${SSH_OPTS[@]}")
+
+sshx() { ssh "${SSH_OPTS[@]}" "$@"; }
+scpx() { scp "${SCP_OPTS[@]}" "$@"; }
+
 public_ip() {
-  ssh "$1" "curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ifconfig.me" \
+  sshx "$1" "curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ifconfig.me" \
     | tr -d '[:space:]'
 }
 
@@ -44,6 +52,7 @@ URAI_MASTER_KEY=$URAI_MASTER_KEY
 URAI_PUBLIC=1
 URAI_FREE_MODE=1
 URAI_CLOUD_FALLBACK=1
+URAI_CLOUD_PRIMARY=${URAI_CLOUD_PRIMARY:-1}
 URAI_CORS_ORIGIN=https://etside.github.io
 URAI_RATE_LIMIT=${URAI_RATE_LIMIT:-120}
 URAI_CLOUD_CONSULT=1
@@ -53,21 +62,23 @@ OPENROUTER_API_KEY=$OPENROUTER_API_KEY
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_MODEL=meta/muse-spark-open
 URAI_PUBLIC_URL=https://$domain/
+${URAI_LOCAL_URL:+JEV_LLAMA_URL=$URAI_LOCAL_URL}
+${URAI_LOCAL_URL:+JEV_LLAMA_MODEL=$URAI_MODEL}
 ENV
 
   # Ship the env file out-of-band so the key never appears in a shell history
   # or a remote process list.
-  scp -q "$envfile" "$ssh_target:/tmp/urai.env.new"
+  scpx -q "$envfile" "$ssh_target:/tmp/urai.env.new"
   rm -f "$envfile"
 
-  ssh "$ssh_target" "BRANCH='$BRANCH' REPO='$REPO' DOMAIN='$domain' bash -s" <<'REMOTE'
+  sshx "$ssh_target" "BRANCH='$BRANCH' REPO='$REPO' DOMAIN='$domain' bash -s" <<'REMOTE'
 set -euo pipefail
 
 # ── code ────────────────────────────────────────────────────────────────────
 if [ -d /opt/urai/.git ]; then
   cd /opt/urai
   sudo git fetch --depth 1 origin "$BRANCH"
-  sudo git checkout -B deploy-muse FETCH_HEAD
+  sudo git checkout -f -B deploy-muse FETCH_HEAD
 else
   sudo mkdir -p /opt/urai
   sudo chown "$USER": /opt/urai
@@ -132,6 +143,7 @@ $DOMAIN {
 }
 CADDY
 
+sudo systemctl disable --now urai 2>/dev/null || true
 sudo systemctl daemon-reload
 sudo systemctl enable --now urai-api
 sudo systemctl restart urai-api

@@ -103,16 +103,19 @@ def pick_backend(level: int, stream: bool = False):
     substituting an unrelated LLM.
     """
     local = _urai_local()
-    if local:
+    if local and not cloud_primary():
         verify = level >= 2
         return local, verify, False   # allow_fallback=False: local brain
 
-    # Hosted fallback (public/free deployments without a local model)
-    if cloud_fallback():
+    # Hosted Muse Spark (public deployments, or when no local model is up)
+    if cloud_primary() or cloud_fallback():
         from .backends import MuseBackend
         mb = MuseBackend()
         if mb.healthy():
             return mb, level >= 2, True
+
+    if local:
+        return local, level >= 2, False
 
     # llama-server is temporarily down (watchdog is restarting it)
     raise RuntimeError(
@@ -127,6 +130,16 @@ def cloud_fallback() -> bool:
     if os.environ.get("URAI_CLOUD_FALLBACK") == "1":
         return True
     return free_mode()   # public/free deployments default to on
+
+
+def cloud_primary() -> bool:
+    """True when hosted Muse Spark should answer first (public deployments).
+
+    Urai keeps the local student for offline use; on hosts with no capable
+    local GPU the hosted teacher gives the quality users expect. Set
+    URAI_CLOUD_PRIMARY=1 to prefer it, 0 to prefer the local model.
+    """
+    return os.environ.get("URAI_CLOUD_PRIMARY", "0") == "1"
 
 
 def pick_backend_safe(level: int, stream: bool = False):
