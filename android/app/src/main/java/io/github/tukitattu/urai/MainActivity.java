@@ -44,7 +44,7 @@ public class MainActivity extends Activity {
     public static final String KEY_APIKEY = "apikey";
     // emulator loopback default; real devices get the hosted endpoint below
     static final String EMULATOR_EP = "http://10.0.2.2:8777/";
-    static final String DEFAULT_EP = "https://urai.daddyai.online/";
+    static final String DEFAULT_EP = "http://139.59.100.237/";
 
     private WebView web;
     private ValueCallback<Uri[]> filePathCallback;

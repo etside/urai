@@ -27,14 +27,12 @@
   var HISTORY_KEY = 'urai_media_history';
   var HISTORY_MAX = 60;
 
-  /* The three media profiles are deliberately separate surfaces. */
+  /* Local-only media profiles (no external relay ever). */
   var PROFILES = [
-    { id: 'ref2va_vsa', label: 'H3 Ref2VA VSA', kind: 'video',
-      provider: 'ref2va', grade: 'SOTA character-consistent' },
-    { id: 'wan3', label: 'Wan 3.0', kind: 'video',
-      provider: 'wan3', grade: 'SOTA t2v/i2v' },
-    { id: 'seedream4', label: 'Seedream 4.0', kind: 'image',
-      provider: 'seedream4', grade: 'SOTA image gen/edit' }
+    { id: 'local_animatic', label: 'Urai local animatic', kind: 'video',
+      provider: 'local', grade: 'Local (frames + ffmpeg)' },
+    { id: 'local_image', label: 'Urai local image', kind: 'image',
+      provider: 'local', grade: 'Local (sd-turbo)' }
   ];
 
   function U() { return global.Urai; }
@@ -286,7 +284,7 @@
     __urai: true,
     HISTORY_KEY: HISTORY_KEY,
     PROFILES: PROFILES,
-    REF2VA_ID: 'ref2va_vsa',
+    REF2VA_ID: 'local_animatic',
 
     providerFor: providerFor,
     profileMeta: profileMeta,

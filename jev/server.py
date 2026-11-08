@@ -325,8 +325,12 @@ def _models():
 
 
 def _capabilities() -> dict:
-    """One unified surface: models + their modes, then features / skills /
-    methods / plugins. The UI renders this instead of a long model list."""
+    """One unified surface: models + honest local features.
+
+    Only local, first-party capabilities are advertised. External media
+    relays (Wan / Seedream / SOTA video) and internal routing plumbing
+    (methods / plugins) are not exposed as UI features.
+    """
     up = UraiBackend().healthy()
     models = []
     for b in brand_list(up):
@@ -339,47 +343,22 @@ def _capabilities() -> dict:
                   for s in _skills.all_skills()]
     except Exception:
         pass
-    plugins = []
-    try:
-        from . import plugins as _plugins
-        plugins = [{"name": p.get("name"), "version": p.get("version", ""),
-                    "description": p.get("description", ""),
-                    "enabled": bool(p.get("enabled")),
-                    "hooks": p.get("hooks", [])}
-                   for p in _plugins.all_plugins()]
-    except Exception:
-        pass
     return {
         "identity": "Urai, developed by Tynio LTD",
         "deployment": _selfhosted_info(),
         "models": models,
         "features": [
-            "self-hosted inference on Urai's own llama.cpp runtime (no external model fallback)",
-            "large context window (configurable, q8_0 KV cache)",
-            "tool-use + agent + parallel swarm",
-            "vision (images) + image generation + video animatic",
-            "character-consistent video: H3 Ref2VA VSA + Wan 3.0 + Seedream 4.0",
-            "OpenAI-compatible API + MCP + IDE integration",
-            "human-like browser with approval safety",
-            "memory, focus, schedules and few-shot self-learning",
+            "self-hosted chat on Urai's own runtime (no external model fallback)",
+            "vision: understand images you share (decoded locally)",
+            "pdf: extract and summarize PDFs you attach",
+            "math, explanations, and short code, all locally",
+            "OpenAI-compatible API (chat, models, embeddings when available)",
         ],
         "skills": skills,
-        "methods": [
-            {"id": "classify", "desc": "per-request difficulty routing (L0-L4)"},
-            {"id": "nlp", "desc": "request understanding: intent, sentiment, urgency, red flags"},
-            {"id": "vibe", "desc": "sentiment-conditioned style directive injected before generation"},
-            {"id": "retrieval", "desc": "memory + focus hybrid retrieval (relevance x recency)"},
-            {"id": "cache", "desc": "prompt cache with near-identical matching (TTL + LRU)"},
-            {"id": "verify", "desc": "consistency sampling + verification on hard tasks"},
-            {"id": "distill", "desc": "teacher->student distillation into verified data"},
-            {"id": "self-improve", "desc": "failure-mining loop promotes chunks to few-shots"},
-            {"id": "tools", "desc": "repo/tool packs with jail + plan-approval guards"},
-        ],
-        "plugins": plugins,
         "media": _media_profiles(),
         "context_window": {
             "default": int(os.environ.get("URAI_CTX", "8192")),
-            "note": "raise with URAI_CTX / --ctx; q8_0 KV keeps RAM low",
+            "note": "raise with URAI_CTX / --ctx; CPU runtime keeps RAM low",
         },
     }
 
@@ -496,7 +475,7 @@ def _metrics_snapshot() -> dict:
         cache_stats = _cache.get_cache().stats()
     except Exception:
         cache_stats = {}
-    local = LlamaServerBackend()
+    local = UraiBackend()
     with _lock:
         stats = dict(_state["stats"])
         free_used = int(sum(_state["free_used"].values()))
@@ -508,6 +487,8 @@ def _metrics_snapshot() -> dict:
         "uptime_seconds": round(time.time() - _START_TS, 1),
         "env": env, "auth_get": bool(auth_get), "stream": bool(stream),
         "local_llama": local.healthy(),
+        "urai_loaded": local.healthy(),
+        "backend": "urai",
         "active_model": _repo_status().get("active_model"),
         "version": _repo_status().get("version"),
         "requests": stats,
@@ -528,9 +509,12 @@ def _prometheus_text(snap: dict) -> str:
         "# HELP urai_uptime_seconds Process uptime.",
         "# TYPE urai_uptime_seconds gauge",
         f"urai_uptime_seconds {snap.get('uptime_seconds', 0)}",
-        "# HELP urai_local_llama_up Whether the local llama-server is reachable.",
+        "# HELP urai_local_llama_up Whether the local Urai runtime is loaded.",
         "# TYPE urai_local_llama_up gauge",
         f"urai_local_llama_up {1 if snap.get('local_llama') else 0}",
+        "# HELP urai_urai_loaded Whether the Urai runtime is loaded.",
+        "# TYPE urai_urai_loaded gauge",
+        f"urai_urai_loaded {1 if snap.get('urai_loaded') else 0}",
         "# HELP urai_requests_total Total requests seen.",
         "# TYPE urai_requests_total counter",
         f"urai_requests_total {r.get('total_requests', 0)}",
@@ -858,8 +842,10 @@ class Handler(BaseHTTPRequestHandler):
             if not self._auth_ok():
                 return self._deny()
         if p == "/health":
-            local = LlamaServerBackend()
-            self._send({"status": "ok", "local_llama": local.healthy(),
+            local = UraiBackend()
+            up = local.healthy()
+            self._send({"status": "ok", "local_llama": up, "urai_loaded": up,
+                        "backend": "urai",
                         "identity": "Urai, developed by Tynio LTD",
                         "deployment": _selfhosted_info(),
                         "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
@@ -952,20 +938,18 @@ class Handler(BaseHTTPRequestHandler):
             from . import video as _video
             return self._send({"profiles": _video.profiles()})
         if p == "/v1/info":
-            local = LlamaServerBackend()
+            local = UraiBackend()
             self._send({
                 "name": "Urai", "identity": "Urai, developed by Tynio LTD",
                 "version": _repo_status().get("version"),
                 "active_model": _repo_status().get("active_model"),
                 "local_llama": local.healthy(),
+                "urai_loaded": local.healthy(),
+                "backend": "urai",
                 "deployment": _selfhosted_info(),
-                "measured": {
-                    "gen_toks_per_s": "6-9", "prompt_toks_per_s": "12-28",
-                    "embed_dims": 768, "note": "llama-server slot timings on this CPU droplet (Qwen3-4B Q4_K_M); varies with load and context length",
-                },
-                "strengths": ["self-hosted zero-cost chat", "agent + swarm + tools",
-                              "vision + image + video-animatic", "OpenAI-compatible API + MCP",
-                              "human-like browser with approval safety"],
+                "strengths": ["self-hosted local chat (no external model)",
+                              "vision: understand images", "pdf: extract and summarize PDFs",
+                              "OpenAI-compatible API"],
                 "endpoints": ["/health", "/v1/models", "/v1/chat/completions",
                               "/v1/completions", "/v1/embeddings", "/agent", "/agent/swarm",
                               "/tools", "/evaluate", "/see", "/imagine",

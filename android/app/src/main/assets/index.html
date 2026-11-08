@@ -698,9 +698,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
             <div class="settings-row settings-full">
               <div class="settings-label">
                 <strong>Server URL</strong>
-                <span>e.g. http://192.168.1.x:8777/ or https://urai.daddyai.online/</span>
+                <span>e.g. http://192.168.1.x:8777/ or http://139.59.100.237/</span>
               </div>
-              <input class="settings-input" id="ep-input" type="url" placeholder="https://urai.daddyai.online/"/>
+              <input class="settings-input" id="ep-input" type="url" placeholder="http://139.59.100.237/"/>
             </div>
             <div class="settings-row settings-full">
               <div class="settings-label">
@@ -828,7 +828,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 ════════════════════════════════════════════════════════════════ */
 
 // ── State ────────────────────────────────────────────────────
-var EP          = localStorage.getItem('urai_ep')  || 'https://urai.daddyai.online/';
+var EP          = localStorage.getItem('urai_ep')  || 'http://139.59.100.237/';
 var API_KEY     = localStorage.getItem('urai_key') || '';
 var MODEL       = localStorage.getItem('urai_model') || 'auto';
 var activeView  = 'home';
@@ -953,15 +953,12 @@ async function loadModels() {
     allModels = (d.data || []).map(function(m) { return { id: m.id, desc: m.description || m.owned_by || '' }; });
   } catch(e) {
     allModels = [
-      { id: 'auto', desc: 'Local-first, cloud fallback' },
-      { id: 'urai-qwen3-06b-v1-Q4_K_M', desc: 'Urai tuned · 0.6B · fast' },
-      { id: 'qwen3-4b', desc: 'Qwen3 4B · balanced' },
-      { id: 'qwen3-17b', desc: 'Qwen3 1.7B · compact' },
-      { id: 'coder15-primary', desc: 'Code specialist · 1.5B' }
+      { id: 'Urai-ai-1.3', desc: 'Urai unified assistant (local)' },
+      { id: 'cyberurai', desc: 'CyberUrai security specialist' }
     ];
   }
   if (!allModels.find(function(m){return m.id==='auto';})) {
-    allModels.unshift({ id: 'auto', desc: 'Local-first, cloud fallback' });
+    allModels.unshift({ id: 'auto', desc: 'Urai unified assistant (local)' });
   }
   renderModelList();
 }

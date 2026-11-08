@@ -53,20 +53,11 @@ def generate(prompt: str, out: str = None, steps: int = None,
              seed: int = 7, provider: str = None) -> dict:
     """Render `prompt` to a PNG. Returns {"ok", "path"|"error", ...}.
 
-    provider:
-      auto     -> Seedream 4.0 relay when ARK_API_KEY is set, else local SD-Turbo
-      seedream -> force the Seedream 4.0 relay (fails honestly without a key)
-      local    -> force local stable-diffusion.cpp
+    """Render `prompt` to a PNG using the LOCAL runtime only.
+
+    No external relay is ever contacted (no-external-AI rule). The local
+    runner is stable-diffusion.cpp with the sd-turbo checkpoint.
     """
-    prov = (provider or "auto").lower()
-    if prov in ("seedream", "seedream4", "ark") or \
-            (prov == "auto" and os.environ.get("ARK_API_KEY")):
-        from . import relays as _relays
-        r = _relays.seedream_images(prompt, size=_size_token(width, height),
-                                    out=out)
-        if r.get("ok") or prov != "auto":
-            return r
-        # auto + relay unavailable -> fall through to the local runner
     from . import models_registry as reg
     st = status()
     if not st["runner_built"]:
