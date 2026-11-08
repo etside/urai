@@ -18,6 +18,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import ml_dtypes  # registers bfloat16 with numpy
+np.dtype(np.float32)
 from safetensors import safe_open
 from safetensors.numpy import save_file
 
