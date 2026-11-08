@@ -519,10 +519,11 @@ class MuseBackend(Backend):
     prompt is prepended and the backend is labelled 'muse-spark-open'.
 
     Fallback chain (in order):
-      1. meta/muse-spark-open         — paid; 1M ctx, multimodal
-      2. nvidia/nemotron-3-ultra-550b — free 550B text teacher
-      3. nvidia/nemotron-3.5-super-vl — free multimodal teacher
-      4. local LlamaServerBackend     — offline student
+      1. meta/muse-spark-open          — paid Muse; 1M ctx, multimodal
+      2. vercel AI Gateway (byok id)   — free-tier gateway, no daily cap
+      3. nvidia/nemotron-3-ultra-550b  — OR free 550B text teacher
+      4. nvidia/nemotron-3.5-super-vl  — OR free multimodal teacher
+      5. local LlamaServerBackend      — offline student
     """
 
     name = "muse-spark-open"
@@ -532,14 +533,24 @@ class MuseBackend(Backend):
         self._muse = _muse
         self.model = _muse.MODEL_ID
         self.ctx = 1048576
-        self.chain = [
-            "meta/muse-spark-open",
+        try:
+            from . import vercelai as _vercel
+            self._vercel = _vercel
+        except Exception:
+            self._vercel = None
+        self.chain = ["meta/muse-spark-open"]
+        # Vercel tier sits right behind Muse when a gateway key is configured.
+        if self._vercel and self._vercel.available():
+            self.chain.append(f"vercel/{self._vercel.MODEL_ID}")
+        self.chain += [
             "nvidia/nemotron-3-ultra-550b-a55b:free",
             "nvidia/nemotron-3.5-super-vl:free",
         ]
 
     def healthy(self) -> bool:
-        return self._muse.available()
+        if self._muse.available():
+            return True
+        return bool(self._vercel and self._vercel.available())
 
     def _with_identity(self, messages):
         msgs = [dict(m) for m in messages]
@@ -547,18 +558,32 @@ class MuseBackend(Backend):
             msgs.insert(0, {"role": "system", "content": self._muse.SYSTEM_PROMPT})
         return msgs
 
-    def _call(self, model, messages, max_tokens, temperature):
-        # reasoning_effort is a Muse/paid-model knob; free routers reject
-        # unknown fields on some providers.
+    def _dispatch(self, model):
+        """Return (client_fn, effort) for one chain link."""
+        if model.startswith("vercel/"):
+            # model id is what follows the prefix
+            vid = model[len("vercel/"):]
+            v = self._vercel
+            def call(messages, max_tokens, temperature):
+                return v.complete(self._with_identity(messages),
+                                  max_tokens=max(max_tokens, 2048),
+                                  temperature=temperature, model=vid)
+            return call, None
         effort = os.environ.get("URAI_REASONING_EFFORT", "medium") \
             if model.startswith("meta/") else None
-        return self._muse.complete(
-            self._with_identity(messages),
-            max_tokens=max(max_tokens, 2048),   # reasoning is always on
-            temperature=temperature,
-            reasoning_effort=effort,
-            model=model,
-        )
+        def call(messages, max_tokens, temperature):
+            return self._muse.complete(
+                self._with_identity(messages),
+                max_tokens=max(max_tokens, 2048),
+                temperature=temperature,
+                reasoning_effort=effort,
+                model=model,
+            )
+        return call, effort
+
+    def _call(self, model, messages, max_tokens, temperature):
+        call, _ = self._dispatch(model)
+        return call(messages, max_tokens, temperature)
 
     def complete(self, messages, max_tokens=256, temperature=0.2):
         last_err = None
@@ -596,15 +621,23 @@ class MuseBackend(Backend):
         for model in self.chain:
             emitted = False
             try:
-                effort = os.environ.get("URAI_REASONING_EFFORT", "medium") \
-                    if model.startswith("meta/") else None
-                for chunk in self._muse.stream(
-                    self._with_identity(messages),
-                    max_tokens=max(max_tokens, 2048),
-                    temperature=temperature,
-                    reasoning_effort=effort,
-                    model=model,
-                ):
+                if model.startswith("vercel/"):
+                    vid = model[len("vercel/"):]
+                    chunks = self._vercel.stream(
+                        self._with_identity(messages),
+                        max_tokens=max(max_tokens, 2048),
+                        temperature=temperature, model=vid)
+                else:
+                    effort = os.environ.get("URAI_REASONING_EFFORT", "medium") \
+                        if model.startswith("meta/") else None
+                    chunks = self._muse.stream(
+                        self._with_identity(messages),
+                        max_tokens=max(max_tokens, 2048),
+                        temperature=temperature,
+                        reasoning_effort=effort,
+                        model=model,
+                    )
+                for chunk in chunks:
                     emitted = True
                     yield chunk
                 return

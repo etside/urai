@@ -38,6 +38,7 @@ def main():
                     help="append to --out and skip prompts already present")
     ap.add_argument("--models", default=(
         "meta/muse-spark-open,"
+        "vercel/meta/muse-spark-open,"
         "nvidia/nemotron-3-ultra-550b-a55b:free,"
         "nvidia/nemotron-3.5-super-vl:free"),
         help="comma-separated teacher chain; first that answers wins")
@@ -72,6 +73,19 @@ def main():
     n = 0
     models = [m.strip() for m in a.models.split(",") if m.strip()]
     disabled: set[str] = set()   # models out of budget for this pass
+    try:
+        from jev import vercelai as _v
+    except Exception:
+        _v = None
+
+    def _ask(model, msgs, max_tokens, effort):
+        if model.startswith("vercel/"):
+            if not _v or not _v.available():
+                raise RuntimeError("VERCEL_AI_GATEWAY_API_KEY not set")
+            return _v.complete(msgs, max_tokens=max_tokens, model=model[len("vercel/"):])
+        return muse.complete(msgs, max_tokens=max_tokens,
+                             reasoning_effort=effort, model=model)
+
     with out.open("a" if a.resume else "w") as f:
         for t in tasks:
             prompt = t.get("prompt") or t.get("input") or t.get("text") or ""
@@ -89,15 +103,10 @@ def main():
                 effort = a.reasoning if model.startswith("meta/") else None
                 for attempt in range(1, a.retries + 1):
                     try:
-                        res = muse.complete(
-                            [
-                                {"role": "system", "content": muse.SYSTEM_PROMPT},
-                                {"role": "user", "content": prompt},
-                            ],
-                            max_tokens=max_tokens,
-                            reasoning_effort=effort,
-                            model=model,
-                        )
+                        res = _ask(model, [
+                            {"role": "system", "content": muse.SYSTEM_PROMPT},
+                            {"role": "user", "content": prompt},
+                        ], max_tokens, effort)
                         break
                     except Exception as e:
                         msg = str(e)
