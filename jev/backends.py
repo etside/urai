@@ -522,9 +522,10 @@ class MuseBackend(Backend):
       1. meta/muse-spark-open          — paid Muse; 1M ctx, multimodal
       2. vercel AI Gateway (byok id)   — free-tier gateway, no daily cap
       3. groq (Llama 3.3 70B)          — free, card-free OpenAI-compatible
-      4. nvidia/nemotron-3-ultra-550b  — OR free 550B text teacher
-      5. nvidia/nemotron-3.5-super-vl  — OR free multimodal teacher
-      6. local LlamaServerBackend      — offline student
+      4. portkey (whole catalog)       — free tier, no card required
+      5. nvidia/nemotron-3-ultra-550b  — OR free 550B text teacher
+      6. nvidia/nemotron-3.5-super-vl  — OR free multimodal teacher
+      7. local LlamaServerBackend      — offline student
     """
 
     name = "muse-spark-open"
@@ -540,6 +541,11 @@ class MuseBackend(Backend):
         except Exception:
             self._vercel = None
         try:
+            from . import portkey as _portkey
+            self._portkey = _portkey
+        except Exception:
+            self._portkey = None
+        try:
             from . import groq as _groq
             self._groq = _groq
         except Exception:
@@ -550,6 +556,8 @@ class MuseBackend(Backend):
             self.chain.append(f"vercel/{self._vercel.MODEL_ID}")
         if self._groq and self._groq.available():
             self.chain.append(f"groq/{self._groq.MODEL_ID}")
+        if self._portkey and self._portkey.available():
+            self.chain.append(f"portkey/{self._portkey.PORTKEY_MODEL}")
         self.chain += [
             "nvidia/nemotron-3-ultra-550b-a55b:free",
             "nvidia/nemotron-3.5-super-vl:free",
@@ -560,7 +568,9 @@ class MuseBackend(Backend):
             return True
         if self._vercel and self._vercel.available():
             return True
-        return bool(self._groq and self._groq.available())
+        if self._groq and self._groq.available():
+            return True
+        return bool(self._portkey and self._portkey.available())
 
     def _with_identity(self, messages):
         msgs = [dict(m) for m in messages]
@@ -586,6 +596,14 @@ class MuseBackend(Backend):
                 return g.complete(self._with_identity(messages),
                                   max_tokens=max(max_tokens, 2048),
                                   temperature=temperature, model=gid)
+            return call, None
+        if model.startswith("portkey/"):
+            pid = model[len("portkey/"):]
+            p = self._portkey
+            def call(messages, max_tokens, temperature):
+                return p.complete(self._with_identity(messages),
+                                  max_tokens=max(max_tokens, 2048),
+                                  temperature=temperature, model=pid)
             return call, None
         effort = os.environ.get("URAI_REASONING_EFFORT", "medium") \
             if model.startswith("meta/") else None
@@ -651,6 +669,12 @@ class MuseBackend(Backend):
                         self._with_identity(messages),
                         max_tokens=max(max_tokens, 2048),
                         temperature=temperature, model=gid)
+                elif model.startswith("portkey/"):
+                    pid = model[len("portkey/"):]
+                    chunks = self._portkey.stream(
+                        self._with_identity(messages),
+                        max_tokens=max(max_tokens, 2048),
+                        temperature=temperature, model=pid)
                 else:
                     effort = os.environ.get("URAI_REASONING_EFFORT", "medium") \
                         if model.startswith("meta/") else None
