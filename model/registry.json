@@ -1,8 +1,8 @@
 {
-  "active": "urai-muse-spark-1.3",
+  "active": "urai-ai-1.3",
   "models": {
-    "urai-muse-spark-1.3": {
-      "path": "models/urai-muse-spark-1.3/weights.json",
+    "urai-ai-1.3": {
+      "path": "models/urai-ai-1.3/weights.json",
       "params": "n-gram-student",
       "quant": "json",
       "role": "primary",

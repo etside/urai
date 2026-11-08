@@ -1,5 +1,5 @@
 {
-  "model": "muse-spark-1.3",
+  "model": "Urai-ai-1.3",
   "weights": "weights.json",
   "sha256": "d2dec88aac4b2eaea3cbc1687d2ebbe9d7b0c0c19396179289203abe25ea141c",
   "context_window": 8192,

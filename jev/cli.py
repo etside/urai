@@ -43,7 +43,7 @@ import urllib.request
 
 BASE = "http://127.0.0.1:8777"
 DEFAULT_REMOTE = "https://urai.daddyai.online"
-BRANDS = ("muse-spark-1.3", "cyberurai")
+BRANDS = ("Urai-ai-1.3", "cyberurai")
 
 
 def _cfg_path():
@@ -131,7 +131,7 @@ def _apply_config_env():
 
 
 def _brand(args):
-    return getattr(args, "model", None) or getattr(args, "brand", None) or "muse-spark-1.3"
+    return getattr(args, "model", None) or getattr(args, "brand", None) or "Urai-ai-1.3"
 
 
 def call(method, path, payload=None, timeout=300, remote=False):
@@ -291,7 +291,7 @@ def _print_urai(meta, verbose=1):
             print(_dim("    " + dl))
 
 
-def remote_chat_turn(messages, max_tokens=512, model="muse-spark-1.3"):
+def remote_chat_turn(messages, max_tokens=512, model="Urai-ai-1.3"):
     """One remote chat turn; returns the full JSON response (incl. `urai`)."""
     return call("POST", "/v1/chat/completions",
                 {"messages": messages, "max_tokens": max_tokens, "stream": False,
@@ -299,7 +299,7 @@ def remote_chat_turn(messages, max_tokens=512, model="muse-spark-1.3"):
                 timeout=300, remote=True)
 
 
-def remote_chat_once(messages, max_tokens=512, model="muse-spark-1.3"):
+def remote_chat_once(messages, max_tokens=512, model="Urai-ai-1.3"):
     """One remote chat turn (non-streaming) against the VPS API."""
     d = remote_chat_turn(messages, max_tokens, model)
     if isinstance(d, dict) and d.get("choices"):
@@ -476,7 +476,7 @@ def main(argv=None):
         help="use VPS API instead of local model (needs: urai login)")
     p.add_argument("--max-tokens", type=int, default=512)
     p.add_argument("--model", "--brand", dest="model", choices=list(BRANDS),
-                   default="muse-spark-1.3", help="brand/tier sent to the model")
+                   default="Urai-ai-1.3", help="brand/tier sent to the model")
 
     p = sub.add_parser("agent"); p.add_argument("text")
     p.add_argument("apply_file", nargs="?", default=None,
@@ -489,7 +489,7 @@ def main(argv=None):
     p.add_argument("--remote", action="store_true",
         help="use VPS /agent instead of local run (needs: urai login)")
     p.add_argument("--model", "--brand", dest="model", choices=list(BRANDS),
-                   default="muse-spark-1.3", help="brand/tier sent to the model")
+                   default="Urai-ai-1.3", help="brand/tier sent to the model")
     p.add_argument("-v", "--verbose", action="count", default=0,
         help="print the [nlp]/[vibe] analysis summary (twice: full directive)")
 
@@ -588,7 +588,7 @@ def main(argv=None):
     p.add_argument("--remote", action="store_true",
         help="fan out on VPS /agent/swarm (needs: urai login)")
     p.add_argument("--model", "--brand", dest="model", choices=list(BRANDS),
-                   default="muse-spark-1.3", help="brand/tier sent to the model")
+                   default="Urai-ai-1.3", help="brand/tier sent to the model")
 
     p = sub.add_parser("plugin"); p.add_argument("action",
         choices=["list", "enable", "disable", "serve"], nargs="?", default="list")

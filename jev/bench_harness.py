@@ -62,9 +62,9 @@ def main():
     check("mcp-loop", ok)
     # T6 brand map: exactly two public models, internals folded, no raw qwen
     ids = [b["id"] for b in brand_list()]
-    check("brands", set(ids) == {"muse-spark-1.3", "cyberurai"}
-          and brand_id("qwen3-4B-Q4_K_M") == "muse-spark-1.3"
-          and brand_id("laya") == "muse-spark-1.3"
+    check("brands", set(ids) == {"Urai-ai-1.3", "cyberurai"}
+          and brand_id("qwen3-4B-Q4_K_M") == "Urai-ai-1.3"
+          and brand_id("laya") == "Urai-ai-1.3"
           and tier_of_brand("cyberurai") == "cyberurai"
           and tier_of_brand("urai-fast") == "urai-fast", ids)
     # T7 registry sanity: active chat model file exists

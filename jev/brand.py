@@ -3,7 +3,7 @@
 
 There are exactly TWO public models:
 
-  muse-spark-1.3 — Urai's OpenAI-compatible model. Internally it picks the
+  Urai-ai-1.3 — Urai's OpenAI-compatible model. Internally it picks the
                    right local mode (fast · balanced · ultra) per request on
                    the self-hosted Urai runtime. An external teacher is
                    offline-only and opt-in.
@@ -16,13 +16,13 @@ appears in traces/metadata. Legacy public ids (urai / urai-fast / urai-ultra /
 urai-cyber / cyberurai-v1) are accepted as aliases and folded into the two.
 
 Urai IS the model: LiteLLM and other OpenAI clients call it as
-``muse-spark-1.3``; Urai never proxies public requests to Meta's Muse Spark.
+``Urai-ai-1.3``; Urai never proxies public requests to Meta's Muse Spark.
 """
 
-PUBLIC = ("muse-spark-1.3", "cyberurai")
+PUBLIC = ("Urai-ai-1.3", "cyberurai")
 
 BRANDS = {
-    "muse-spark-1.3": {
+    "Urai-ai-1.3": {
         "tier": "urai",
         "desc": "Urai — one unified assistant (fast · balanced · ultra modes)",
         "modes": [
@@ -31,7 +31,7 @@ BRANDS = {
             {"id": "ultra", "desc": "verified depth, multi-step reasoning"},
         ],
         "internal": [
-            "urai", "jev-local-student", "local-student", "llama-local", "local",
+            "urai", "muse-spark-1.3", "muse-spark", "jev-local-student", "local-student", "llama-local", "local",
             "qwen3-4b", "qwen3-17b", "qwen3-4B-Q4_K_M", "qwen25vl-3b",
             "coder05-fast", "coder15-primary", "qwen2.5-coder",
             "laya", "urai-fast", "urai-ultra", "auto",
@@ -54,8 +54,9 @@ BRANDS = {
 def brand_id(internal: str) -> str:
     """Map any internal/legacy id to one of the two public brands."""
     name = (internal or "").lower()
-    if name in BRANDS:
-        return name
+    for bid in BRANDS:
+        if name == bid.lower():
+            return bid
     for bid, b in BRANDS.items():
         if name in [i.lower() for i in b.get("internal", [])]:
             return bid
@@ -63,8 +64,8 @@ def brand_id(internal: str) -> str:
         return "cyberurai"
     if any(k in name for k in ("qwen", "llama", "local", "student",
                                "coder", "laya", "vl", "auto", "urai", "muse")):
-        return "muse-spark-1.3"
-    return "muse-spark-1.3"
+        return "Urai-ai-1.3"
+    return "Urai-ai-1.3"
 
 
 def tier_of_brand(model: str) -> str:

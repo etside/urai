@@ -2,7 +2,7 @@
 """Model registry: Urai first-party only.
 
   registry file: model/registry.json
-  First-party artifact: models/urai-muse-spark-1.3/ (weights.json + manifest.json).
+  First-party artifact: models/urai-ai-1.3/ (weights.json + manifest.json).
   `urai model download` fetches ONLY Urai-hosted artifacts and refuses vendor
   model ids or vendor-hosted URLs.
 
@@ -13,13 +13,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "model" / "registry.json"
-ALLOWED = ("urai-muse-spark-1.3",)
-URAI_ARTIFACT_ROOT = "models/urai-muse-spark-1.3"
+ALLOWED = ("urai-ai-1.3",)
+URAI_ARTIFACT_ROOT = "models/urai-ai-1.3"
 
 DEFAULTS = {
-    "active": "urai-muse-spark-1.3",
+    "active": "urai-ai-1.3",
     "models": {
-        "urai-muse-spark-1.3": {
+        "urai-ai-1.3": {
             "path": f"{URAI_ARTIFACT_ROOT}/weights.json",
             "params": "n-gram-student",
             "quant": "json",
@@ -43,14 +43,14 @@ def load():
         if not models:
             models = dict(DEFAULTS["models"])
             reg["models"] = models
-            reg["active"] = "urai-muse-spark-1.3"
+            reg["active"] = "urai-ai-1.3"
             save(reg)
         else:
             if reg.get("models") != models:
                 reg["models"] = models
                 save(reg)
         if reg.get("active") not in reg["models"]:
-            reg["active"] = "urai-muse-spark-1.3"
+            reg["active"] = "urai-ai-1.3"
             save(reg)
         return reg
     save(DEFAULTS)

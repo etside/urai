@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""UraiRuntime: n-gram student serving muse-spark-1.3 (backend="urai").
+"""UraiRuntime: n-gram student serving Urai-ai-1.3 (backend="urai").
 
-Weights live in models/urai-muse-spark-1.3/weights.json
+Weights live in models/urai-ai-1.3/weights.json
 (vocab + bigram counts + provenance). Generation is purely local:
 sample next token from bigram distribution conditioned on prompt.
 No network, no external model endpoint.
@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-MODELS_DIR = ROOT / "models" / "urai-muse-spark-1.3"
+MODELS_DIR = ROOT / "models" / "urai-ai-1.3"
 WEIGHTS = MODELS_DIR / "weights.json"
 MANIFEST = MODELS_DIR / "manifest.json"
 CONTEXT_WINDOW = 8192
@@ -31,7 +31,7 @@ class UraiRuntime:
 
     name = "urai"
     backend = "urai"
-    model = "muse-spark-1.3"
+    model = "Urai-ai-1.3"
 
     def __init__(self, weights_path=None, manifest_path=None):
         p = Path(weights_path) if weights_path else WEIGHTS
@@ -66,7 +66,7 @@ class UraiRuntime:
     def complete(self, messages, max_tokens=256, temperature=0.2,
                  tools=None, tool_choice=None) -> dict:
         if not self._loaded:
-            raise RuntimeError("Urai runtime not loaded (weights missing at models/urai-muse-spark-1.3/)")
+            raise RuntimeError("Urai runtime not loaded (weights missing at models/urai-ai-1.3/)")
         # Extract last user text; content may be str or list with text parts
         prompt = ""
         for m in reversed(list(messages or [])):

@@ -288,7 +288,7 @@ def _selfhosted_info() -> dict:
         "provider": "Urai",
         "inference": "llama.cpp",
         "external_fallback": False,
-        "public_models": ["muse-spark-1.3", "cyberurai"],
+        "public_models": ["Urai-ai-1.3", "cyberurai"],
         "active_model": None,
         "weights": {},
     }
@@ -316,7 +316,7 @@ def _backend_meta(backend) -> dict:
 
 
 def _models():
-    # Public surface only: two brands (muse-spark-1.3, cyberurai). Internal backend ids
+    # Public surface only: two brands (Urai-ai-1.3, cyberurai). Internal backend ids
     # (qwen*, coder*, laya, jev-local-student, teacher) stay in metadata/traces
     # and are never listed as selectable models.
     local = UraiBackend()
@@ -1300,7 +1300,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send({"error": str(e)[:300]}, 503)
                 content = res["answer"]
                 _meta = _urai_meta(_text_of(msgs))
-                model = brand_id(body.get("model", "muse-spark-1.3"))
+                model = brand_id(body.get("model", "Urai-ai-1.3"))
             elif _has_image(msgs):
                 from . import vision as _vision
                 img, question = _split_image(msgs)

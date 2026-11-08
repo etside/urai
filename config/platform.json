@@ -1,11 +1,11 @@
 {
   "_comment": "Model ids + endpoints live here, never hardcoded in code (PRODUCTION_SPEC \u00a74). Env vars override these values at runtime.",
   "llm": {
-    "primary": "muse-spark-1.3",
-    "model": "muse-spark-1.3",
+    "primary": "Urai-ai-1.3",
+    "model": "Urai-ai-1.3",
     "backend": "urai",
     "served_by": "urai",
-    "weights_path": "/opt/urai/models/urai-muse-spark-1.3/",
+    "weights_path": "/opt/urai/models/urai-ai-1.3/",
     "weights_sha256": "d2dec88aac4b2eaea3cbc1687d2ebbe9d7b0c0c19396179289203abe25ea141c",
     "provenance": {
       "base": "Urai n-gram student (trained on Urai repo corpus)",
@@ -16,7 +16,7 @@
     "vision": true,
     "pdf": true,
     "litellm_base": "http://100.117.28.114:4000/v1",
-    "note": "Urai IS muse-spark-1.3 (OpenAI-compatible). LiteLLM routes muse-spark-1.3 -> Urai :8777, never to Meta."
+    "note": "Urai IS Urai-ai-1.3 (OpenAI-compatible). LiteLLM routes Urai-ai-1.3 -> Urai :8777, never to any vendor."
   },
   "media": {
     "image": {
