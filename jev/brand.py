@@ -75,10 +75,23 @@ def tier_of_brand(model: str) -> str:
     return brand_id(m)
 
 
+def _runtime_flags() -> tuple[int, bool, bool]:
+    """(context_window, vision, pdf) from the Urai runtime (real numbers)."""
+    try:
+        from . import urai_runtime as _rt
+        return (int(getattr(_rt, "CONTEXT_WINDOW", 8192)),
+                bool(getattr(_rt, "VISION", True)),
+                bool(getattr(_rt, "PDF", True)))
+    except Exception:
+        return (8192, True, True)
+
+
 def brand_list(available: bool = True) -> list:
+    cw, vision, pdf = _runtime_flags()
     return [{"id": bid, "owned_by": "Urai", "provider": "Urai",
-             "self_hosted": True, "inference": "llama.cpp",
+             "owner": "Urai", "self_hosted": True, "inference": "llama.cpp",
              "external_fallback": False,
+             "context_window": cw, "vision": vision, "pdf": pdf,
              "available": available,
              "tier": b["tier"], "description": b["desc"],
              "modes": [m["id"] for m in b.get("modes", [])]}

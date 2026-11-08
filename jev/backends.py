@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Backends: anything that can complete a prompt. Stdlib only.
+"""Backends: Urai first-party only (stdlib only).
 
-  MockBackend          offline deterministic (tests, no-model dev)
-  LlamaServerBackend   local llama-server OpenAI endpoint (fast/primary local)
-  TeacherAPIBackend    external OpenAI-compatible API (fallback, metered)
+  UraiBackend          Urai weights runtime (primary, backend="urai")
+  LlamaServerBackend   local llama.cpp runtime serving Urai weights
+                       (alias, backend="urai")
 
-Backend selection lives in router.py; this file only executes.
+External teacher APIs are NOT available at request time (offline distill only,
+see scripts/distill/). MockBackend exists only for unit tests and is never
+selected at request time.
 """
 
 import json
@@ -37,6 +39,7 @@ def _chunk_tokens(text: str) -> list:
 
 
 class MockBackend(Backend):
+    """Unit-test only. Never selected at request time (see router.py)."""
     name = "mock"
 
     def complete(self, messages, max_tokens=256, temperature=0.2):
@@ -69,9 +72,9 @@ def _post_json(url, payload, key=None, timeout=900):
 
 
 class LlamaServerBackend(Backend):
-    """Local llama-server (llama.cpp) — our fast/primary student host."""
+    """Local llama.cpp runtime serving Urai weights (first-party)."""
 
-    name = "llama-local"
+    name = "urai"
 
     def __init__(self, base=None, model=None):
         self.base = (base or os.environ.get("JEV_LLAMA_URL",
@@ -203,32 +206,67 @@ class EmbeddingBackend(Backend):
         raise NotImplementedError("embedding backend has no chat; use .embed()")
 
 
-class TeacherAPIBackend(Backend):
-    """External fallback (OpenRouter / Gemini-OAI / any OpenAI endpoint)."""
+class UraiBackend(Backend):
+    """First-party Urai runtime (n-gram student / llama.cpp wrapper).
 
-    name = "teacher-api"
+    backend is always "urai". Raises 503-style RuntimeError when weights
+    are unavailable — never falls back to mock or a vendor model.
+    """
 
-    def __init__(self):
-        self.base = os.environ["TEACHER_BASE_URL"].rstrip("/")
-        self.key = os.environ["TEACHER_API_KEY"]
-        self.model = os.environ.get("TEACHER_MODEL", "")
+    name = "urai"
 
-    def healthy(self):
-        return bool(self.base and self.key and self.model)
+    def __init__(self, runtime=None):
+        self._rt = runtime
 
-    def complete(self, messages, max_tokens=512, temperature=0.2):
-        data = _post_json(self.base + "/chat/completions", {
-            "model": self.model, "messages": messages,
-            "max_tokens": max_tokens, "temperature": temperature,
-        }, key=self.key)
-        _msg = data["choices"][0]["message"]
-        _content = _msg.get("content") or ""
-        if not _content.strip() and _msg.get("reasoning_content"):
-            _content = _msg["reasoning_content"]
-        out = {"content": _content,
-               "backend": self.name, "model": self.model}
-        if isinstance(data.get("usage"), dict):
-            out["usage"] = data["usage"]
-        if isinstance(data.get("timings"), dict):
-            out["timings"] = data["timings"]
-        return out
+    def _get_rt(self):
+        if self._rt is not None:
+            return self._rt
+        from .urai_runtime import load_runtime as _lr
+        self._rt = _lr()
+        return self._rt
+
+    def healthy(self) -> bool:
+        try:
+            return bool(self._get_rt().healthy())
+        except Exception:
+            return False
+
+    def complete(self, messages, max_tokens=256, temperature=0.2,
+                 tools=None, tool_choice=None) -> dict:
+        rt = self._get_rt()
+        if not rt.healthy():
+            # Prefer local llama.cpp if runtime weights absent but server up
+            ll = LlamaServerBackend()
+            if ll.healthy():
+                out = ll.complete(messages, max_tokens=max_tokens,
+                                  temperature=temperature,
+                                  tools=tools, tool_choice=tool_choice)
+                out["backend"] = "urai"
+                return out
+            raise RuntimeError("Urai runtime not loaded (503)")
+        # If llama-server healthy, prefer it (faster GGUF) but keep backend urai
+        ll = LlamaServerBackend()
+        if ll.healthy():
+            out = ll.complete(messages, max_tokens=max_tokens,
+                              temperature=temperature,
+                              tools=tools, tool_choice=tool_choice)
+            out["backend"] = "urai"
+            return out
+        return rt.complete(messages, max_tokens=max_tokens, temperature=temperature,
+                           tools=tools, tool_choice=tool_choice)
+
+    def stream(self, messages, max_tokens=256, temperature=0.2,
+               tools=None, tool_choice=None):
+        rt = self._get_rt()
+        if rt.healthy():
+            yield from rt.stream(messages, max_tokens=max_tokens,
+                                 temperature=temperature,
+                                 tools=tools, tool_choice=tool_choice)
+            return
+        ll = LlamaServerBackend()
+        if ll.healthy():
+            yield from ll.stream(messages, max_tokens=max_tokens,
+                                 temperature=temperature,
+                                 tools=tools, tool_choice=tool_choice)
+            return
+        raise RuntimeError("Urai runtime not loaded (503)")

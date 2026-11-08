@@ -8,7 +8,6 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-os.environ.setdefault("URAI_FORCE_MOCK", "1")
 os.environ["URAI_VIBE"] = "1"
 
 from jev import server  # noqa: E402

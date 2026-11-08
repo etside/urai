@@ -2,7 +2,6 @@
 import os
 import unittest
 
-os.environ.setdefault("URAI_FORCE_MOCK", "1")
 
 
 class TestSafetyGate(unittest.TestCase):

@@ -36,9 +36,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .agent import run_agent
-from .backends import LlamaServerBackend, MockBackend
+from .backends import LlamaServerBackend, UraiBackend
 from .brand import BRANDS, brand_id, brand_list, tier_of_brand
-from .router import route, teacher_allowed
+from .router import route
 from . import tools as tool_engine
 
 PORT = int(os.environ.get("URAI_PORT", "8777"))
@@ -287,7 +287,7 @@ def _selfhosted_info() -> dict:
         "self_hosted": True,
         "provider": "Urai",
         "inference": "llama.cpp",
-        "external_fallback": teacher_allowed(),
+        "external_fallback": False,
         "public_models": ["muse-spark-1.3", "cyberurai"],
         "active_model": None,
         "weights": {},
@@ -311,15 +311,15 @@ def _selfhosted_info() -> dict:
 def _backend_meta(backend) -> dict:
     """Public-safe backend provenance for chat responses."""
     name = getattr(backend, "name", "unknown")
-    return {"backend": name, "self_hosted": name != "teacher-api",
-            "origin": "local" if name != "teacher-api" else "external"}
+    return {"backend": name, "self_hosted": True,
+            "origin": "local"}
 
 
 def _models():
     # Public surface only: two brands (muse-spark-1.3, cyberurai). Internal backend ids
     # (qwen*, coder*, laya, jev-local-student, teacher) stay in metadata/traces
     # and are never listed as selectable models.
-    local = LlamaServerBackend()
+    local = UraiBackend()
     up = local.healthy()
     return brand_list(up)
 
@@ -327,7 +327,7 @@ def _models():
 def _capabilities() -> dict:
     """One unified surface: models + their modes, then features / skills /
     methods / plugins. The UI renders this instead of a long model list."""
-    up = LlamaServerBackend().healthy()
+    up = UraiBackend().healthy()
     models = []
     for b in brand_list(up):
         modes = BRANDS.get(b["id"], {}).get("modes", [])
@@ -593,6 +593,31 @@ def _has_image(msgs) -> bool:
     return any(isinstance(m.get("content"), list) and
                any(p.get("type") == "image_url" for p in m["content"])
                for m in msgs)
+
+
+def _has_pdf(msgs) -> bool:
+    return any(isinstance(m.get("content"), list) and
+               any(p.get("type") in ("pdf_url", "file") for p in m["content"])
+               for m in msgs)
+
+
+def _split_pdf(msgs):
+    question = ""
+    for m in reversed(msgs):
+        c = m.get("content", "")
+        if not isinstance(c, list):
+            if not question and isinstance(c, str):
+                question = c
+            continue
+        for p in c:
+            if p.get("type") == "text" and not question:
+                question = p.get("text", "")
+            if p.get("type") in ("pdf_url", "file"):
+                u = (p.get("pdf_url") or p.get("file") or {})
+                if isinstance(u, dict):
+                    u = u.get("url", "")
+                return u, question
+    return None, question
 
 
 def _split_image(msgs):
@@ -1263,7 +1288,20 @@ class Handler(BaseHTTPRequestHandler):
                              "auth": body.get("_urai_reason", "free"),
                              "refused": True}})
             r = None
-            if _has_image(msgs):
+            if _has_pdf(msgs):
+                from . import pdf as _pdf
+                doc, question = _split_pdf(msgs)
+                if doc is None:
+                    return self._send({"error": "no pdf found in messages"}, 400)
+                try:
+                    res = _pdf.complete_with_pdf(doc, question or "Summarize this PDF.",
+                                                 body.get("max_tokens", 512), temperature)
+                except Exception as e:
+                    return self._send({"error": str(e)[:300]}, 503)
+                content = res["answer"]
+                _meta = _urai_meta(_text_of(msgs))
+                model = brand_id(body.get("model", "muse-spark-1.3"))
+            elif _has_image(msgs):
                 from . import vision as _vision
                 img, question = _split_image(msgs)
                 if img is None:

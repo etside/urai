@@ -1,0 +1,13 @@
+{
+  "model": "muse-spark-1.3",
+  "weights": "weights.json",
+  "sha256": "d2dec88aac4b2eaea3cbc1687d2ebbe9d7b0c0c19396179289203abe25ea141c",
+  "context_window": 8192,
+  "vision": true,
+  "pdf": true,
+  "provenance": {
+    "base": "Urai n-gram student (trained on Urai repo corpus)",
+    "license": "Apache-2.0",
+    "training_delta": "n-gram continuation from scratch on Urai docs (no vendor weights)"
+  }
+}

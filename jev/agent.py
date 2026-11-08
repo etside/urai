@@ -516,11 +516,7 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
                 res = _cache.cached_complete(r["backend"], messages, max_tokens=512)
             answer = res["content"]
         except Exception as e:
-            if r["fallback"]:
-                fb = __import__("jev.backends", fromlist=["MockBackend"]).MockBackend()
-                trace.append({"step": "fallback", "error": str(e)[:200]})
-                answer = fb.complete(messages)["content"]
-                break
+            # No silent fallback: first-party only, surface the error
             return {"ok": False, "error": str(e)[:300], "trace": trace}
         trace.append({"step": "generate", "chars": len(answer),
                       "attempt": fixes, "cached": bool(res.get("cached")),

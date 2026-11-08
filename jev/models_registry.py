@@ -1,98 +1,35 @@
 #!/usr/bin/env python3
-"""Model registry: which local models exist, which is active.
+"""Model registry: Urai first-party only.
 
- registry file: model/registry.json
-   {"active": "<model-id>",
-    "models": {"<id>": {"path": ..., "params": ..., "quant": ...,
-                        "role": "fast|primary|reasoning", "hf": <url>,
-                        "kind": "chat|vision|generate",
-                        "files": [{"path": ..., "hf": <url>}, ...]}}}
- kinds: chat    = text LLM via llama-server (default)
-        vision  = multimodal LLM via llama-server --mmproj (see jev/vision.py)
-        generate= image checkpoint via stable-diffusion.cpp (see jev/imagine.py)
- stdlib only. `urai model download` fetches every listed file from HF;
- `urai model use` switches the active chat/vision model.
+  registry file: model/registry.json
+  First-party artifact: models/urai-muse-spark-1.3/ (weights.json + manifest.json).
+  `urai model download` fetches ONLY Urai-hosted artifacts and refuses vendor
+  model ids or vendor-hosted URLs.
+
+Stdlib only.
 """
-
 import json
-import os
-import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "model" / "registry.json"
+ALLOWED = ("urai-muse-spark-1.3",)
+URAI_ARTIFACT_ROOT = "models/urai-muse-spark-1.3"
 
 DEFAULTS = {
-    "active": "qwen3-4b",
+    "active": "urai-muse-spark-1.3",
     "models": {
-        "coder05-fast": {
-            "path": "model/base/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
-            "params": "0.5B", "quant": "Q4_K_M", "role": "fast-coding",
+        "urai-muse-spark-1.3": {
+            "path": f"{URAI_ARTIFACT_ROOT}/weights.json",
+            "params": "n-gram-student",
+            "quant": "json",
+            "role": "primary",
             "kind": "chat",
-            "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
-        },
-        "coder15-primary": {
-            "path": "model/base/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
-            "params": "1.5B", "quant": "Q4_K_M", "role": "primary",
-            "kind": "chat",
-            "hf": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
-        },
-        # Vision: Qwen2.5-VL-3B-Instruct (open weights, Apache-2.0).
-        # Served by llama.cpp llama-server --mmproj (mtmd). Refs:
-        #   https://github.com/ggml-org/llama.cpp (multimodal docs)
-        #   https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF
-        "qwen25vl-3b": {
-            "path": "model/base/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
-            "params": "3B", "quant": "Q4_K_M", "role": "vision",
-            "kind": "vision",
-            "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
-            "files": [
-                {"path": "model/base/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
-                 "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"},
-                {"path": "model/base/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf",
-                 "hf": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf"},
-            ],
-        },
-        # Generation: SD-Turbo (open weights, CreativeML Open RAIL++-M).
-        # Run by stable-diffusion.cpp on CPU. Refs:
-        #   https://github.com/leejet/stable-diffusion.cpp
-        #   https://huggingface.co/stabilityai/sd-turbo (sd_turbo.safetensors)
-        "sd-turbo": {
-            "path": "model/generate/sd_turbo.safetensors",
-            "params": "0.86B-unet", "quant": "fp16", "role": "generate",
-            "kind": "generate",
-            "hf": "https://huggingface.co/stabilityai/sd-turbo/resolve/main/sd_turbo.safetensors",
-            "steps": 2, "size": [512, 512],
-            "note": "~3.4GB fp16; 1-4 steps; CPU-runnable via stable-diffusion.cpp",
-        },
-        # Qwen3 students (2025+, hybrid thinking, stronger than Qwen2.5
-        # at the same size). Open weights (Apache-2.0). Refs:
-        #   https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF
-        #   https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF
-        #   https://github.com/QwenLM/Qwen3
-        "qwen3-4b": {
-            "path": "model/base/Qwen3-4B-Q4_K_M.gguf",
-            "params": "4B", "quant": "Q4_K_M", "role": "primary",
-            "kind": "chat",
-            "hf": "https://huggingface.co/ggml-org/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
-            "pp_toks": 12, "tg_toks": 6, "ram_mb": 2600,
-        },
-        "qwen3-17b": {
-            "path": "model/base/Qwen3-1.7B-Q4_K_M.gguf",
-            "params": "1.7B", "quant": "Q4_K_M", "role": "primary",
-            "kind": "chat",
-            "hf": "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf",
-        },
-        # Embeddings: nomic-embed-text-v1.5 (open weights, Apache-2.0).
-        # Served by llama-server --embedding on port 8081. Refs:
-        #   https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF
-        "embed-small": {
-            "path": "model/base/nomic-embed-text-v1.5.Q4_K_M.gguf",
-            "params": "137M", "quant": "Q4_K_M", "role": "embed",
-            "kind": "embedding",
-            "hf": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf",
-            "port": 8081,
-            "note": "~100MB; served with llama-server --embedding",
+            "hf": "",
+            "context_window": 8192,
+            "vision": True,
+            "pdf": True,
+            "note": "First-party Urai weights (Urai corpus n-gram). See config/platform.json."
         },
     },
 }
@@ -100,7 +37,22 @@ DEFAULTS = {
 
 def load():
     if REGISTRY.exists():
-        return json.loads(REGISTRY.read_text())
+        reg = json.loads(REGISTRY.read_text())
+        # Migrate: first-party only (drop vendor entries)
+        models = {k: v for k, v in reg.get("models", {}).items() if k in ALLOWED}
+        if not models:
+            models = dict(DEFAULTS["models"])
+            reg["models"] = models
+            reg["active"] = "urai-muse-spark-1.3"
+            save(reg)
+        else:
+            if reg.get("models") != models:
+                reg["models"] = models
+                save(reg)
+        if reg.get("active") not in reg["models"]:
+            reg["active"] = "urai-muse-spark-1.3"
+            save(reg)
+        return reg
     save(DEFAULTS)
     return json.loads(json.dumps(DEFAULTS))
 
@@ -122,32 +74,38 @@ def active_path():
     return mid, str(p) if p.exists() else None
 
 
-def _fetch(url, dest, progress=True):
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.exists() and dest.stat().st_size > 0:
-        print(f"exists, skipping: {dest} ({dest.stat().st_size >> 20} MB)")
-        return str(dest)
-    req = urllib.request.Request(url, headers={"User-Agent": "urai/1.0"})
-    total = 0
-    with urllib.request.urlopen(req, timeout=600) as r, open(dest, "wb") as f:
-        while True:
-            chunk = r.read(1 << 20)
-            if not chunk:
-                break
-            f.write(chunk)
-            total += len(chunk)
-            if progress and total % (20 << 20) < (1 << 20):
-                print(f"  ... {total >> 20} MB", flush=True)
-    print(f"downloaded: {total >> 20} MB -> {dest}")
-    return str(dest)
+_ALLOWED_HOSTS = ("urai.daddyai.online", "urai.model", "localhost", "127.0.0.1")
+
+
+def _is_urai_url(url: str) -> bool:
+    if not url:
+        # No remote URL: local first-party artifact (weights already in repo)
+        return True
+    u = url.lower()
+    if any(v in u for v in ("huggingface.co", "qwen", "openai", "anthropic",
+                            "meta", "together")):
+        return False
+    return any(h in u for h in _ALLOWED_HOSTS) or u.startswith("models/")
 
 
 def download(mid, progress=True):
     reg = load()
+    if mid not in ALLOWED:
+        raise ValueError(f"refused: vendor/non-Urai model id not allowed: {mid}")
     if mid not in reg["models"]:
         raise KeyError(f"unknown model id: {mid}")
     m = reg["models"][mid]
-    jobs = m.get("files") or [{"path": m["path"], "hf": m["hf"]}]
-    outs = [_fetch(j["hf"], ROOT / j["path"], progress) for j in jobs]
-    print(f"ready {mid}: kind={m.get('kind', 'chat')}")
+    jobs = m.get("files") or [{"path": m["path"], "hf": m.get("hf", "")}]
+    for j in jobs:
+        if not _is_urai_url(j.get("hf", "")):
+            raise ValueError(f"refused: non-Urai artifact URL for {mid}")
+    # First-party weights ship in-repo; verify presence, never fetch vendor.
+    outs = []
+    for j in jobs:
+        dest = ROOT / j["path"]
+        if not dest.exists():
+            raise FileNotFoundError(
+                f"Urai weights missing at {dest} (expected first-party artifact)")
+        outs.append(str(dest))
+    print(f"ready {mid}: kind={m.get('kind', 'chat')} (first-party, local)")
     return outs[-1]
