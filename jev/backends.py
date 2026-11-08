@@ -521,9 +521,10 @@ class MuseBackend(Backend):
     Fallback chain (in order):
       1. meta/muse-spark-open          — paid Muse; 1M ctx, multimodal
       2. vercel AI Gateway (byok id)   — free-tier gateway, no daily cap
-      3. nvidia/nemotron-3-ultra-550b  — OR free 550B text teacher
-      4. nvidia/nemotron-3.5-super-vl  — OR free multimodal teacher
-      5. local LlamaServerBackend      — offline student
+      3. groq (Llama 3.3 70B)          — free, card-free OpenAI-compatible
+      4. nvidia/nemotron-3-ultra-550b  — OR free 550B text teacher
+      5. nvidia/nemotron-3.5-super-vl  — OR free multimodal teacher
+      6. local LlamaServerBackend      — offline student
     """
 
     name = "muse-spark-open"
@@ -538,10 +539,17 @@ class MuseBackend(Backend):
             self._vercel = _vercel
         except Exception:
             self._vercel = None
+        try:
+            from . import groq as _groq
+            self._groq = _groq
+        except Exception:
+            self._groq = None
         self.chain = ["meta/muse-spark-open"]
-        # Vercel tier sits right behind Muse when a gateway key is configured.
+        # Gateway tiers sit right behind Muse when their keys are configured.
         if self._vercel and self._vercel.available():
             self.chain.append(f"vercel/{self._vercel.MODEL_ID}")
+        if self._groq and self._groq.available():
+            self.chain.append(f"groq/{self._groq.MODEL_ID}")
         self.chain += [
             "nvidia/nemotron-3-ultra-550b-a55b:free",
             "nvidia/nemotron-3.5-super-vl:free",
@@ -550,7 +558,9 @@ class MuseBackend(Backend):
     def healthy(self) -> bool:
         if self._muse.available():
             return True
-        return bool(self._vercel and self._vercel.available())
+        if self._vercel and self._vercel.available():
+            return True
+        return bool(self._groq and self._groq.available())
 
     def _with_identity(self, messages):
         msgs = [dict(m) for m in messages]
@@ -568,6 +578,14 @@ class MuseBackend(Backend):
                 return v.complete(self._with_identity(messages),
                                   max_tokens=max(max_tokens, 2048),
                                   temperature=temperature, model=vid)
+            return call, None
+        if model.startswith("groq/"):
+            gid = model[len("groq/"):]
+            g = self._groq
+            def call(messages, max_tokens, temperature):
+                return g.complete(self._with_identity(messages),
+                                  max_tokens=max(max_tokens, 2048),
+                                  temperature=temperature, model=gid)
             return call, None
         effort = os.environ.get("URAI_REASONING_EFFORT", "medium") \
             if model.startswith("meta/") else None
@@ -627,6 +645,12 @@ class MuseBackend(Backend):
                         self._with_identity(messages),
                         max_tokens=max(max_tokens, 2048),
                         temperature=temperature, model=vid)
+                elif model.startswith("groq/"):
+                    gid = model[len("groq/"):]
+                    chunks = self._groq.stream(
+                        self._with_identity(messages),
+                        max_tokens=max(max_tokens, 2048),
+                        temperature=temperature, model=gid)
                 else:
                     effort = os.environ.get("URAI_REASONING_EFFORT", "medium") \
                         if model.startswith("meta/") else None
