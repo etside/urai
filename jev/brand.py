@@ -31,6 +31,7 @@ BRANDS = {
             "qwen3-4b", "qwen3-17b", "qwen3-4B-Q4_K_M", "qwen25vl-3b",
             "coder05-fast", "coder15-primary", "qwen2.5-coder",
             "laya", "urai-fast", "urai-ultra", "auto",
+            "muse-spark", "muse-spark-1.3", "teacher-api", "litellm",
         ],
     },
     "cyberurai": {
