@@ -26,6 +26,7 @@ import hashlib
 import json
 import mimetypes
 import os
+import queue as _queue_mod
 import re
 import subprocess
 import threading
@@ -1473,6 +1474,53 @@ class Handler(BaseHTTPRequestHandler):
             from . import sessions as _sess
             sid = body.get("session_id", "")
             hist = _sess.history(sid) if sid else []
+            if body.get("stream"):
+                # Streaming agent: run in a thread, forward SSE events as they arrive
+                eq = _queue_mod.Queue()
+                _sentinel = object()
+
+                def _agent_thread():
+                    try:
+                        result = run_agent(body.get("task", ""),
+                                           body.get("files", {}),
+                                           body.get("budget_tokens", 2048),
+                                           body.get("consistency", 1),
+                                           body.get("plan", False),
+                                           history=hist,
+                                           tier=body.get("tier", "urai"),
+                                           event_queue=eq)
+                        if body.get("remember", True):
+                            _sid = _sess.append(sid, "user", str(body.get("task", ""))[:8000])
+                            _sess.append(_sid, "assistant", str(result.get("answer", ""))[:8000])
+                    except Exception as _e:
+                        result = {"ok": False, "error": str(_e)[:300]}
+                    finally:
+                        eq.put(_sentinel)
+
+                t = threading.Thread(target=_agent_thread, daemon=True)
+                t.start()
+                # Send SSE headers
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("X-Request-Id", self._reqid())
+                self._cors()
+                self._sec_headers()
+                self.end_headers()
+                while True:
+                    try:
+                        ev = eq.get(timeout=120)
+                    except Exception:
+                        break
+                    if ev is _sentinel:
+                        break
+                    ev_type = ev.pop("type", "tool")
+                    self._send_sse_event(ev_type, ev)
+                self.wfile.write(b"data: [DONE]\n\n")
+                self.wfile.flush()
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                _log("agent", ip, device, str(body.get("task", ""))[:160])
+                return
             result = run_agent(body.get("task", ""),
                                body.get("files", {}),
                                body.get("budget_tokens", 2048),
@@ -1681,10 +1729,18 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(f"data: {piece}\n\n".encode())
         self.wfile.flush()
 
+    def _send_sse_event(self, event_type, data_dict):
+        """Send a typed SSE event (plan, step, tool, message)."""
+        self.wfile.write(f"event: {event_type}\n".encode())
+        self.wfile.write(f"data: {json.dumps(data_dict)}\n\n".encode())
+        self.wfile.flush()
+
     def _stream(self, content=None, model="urai", meta=None, backend=None,
-                msgs=None, max_tokens=256, temperature=0.2):
+                msgs=None, max_tokens=256, temperature=0.2, event_queue=None):
         """SSE stream. Real token passthrough when the backend can stream and
-        URAI_STREAM is on; otherwise chunk a (possibly pre-generated) answer."""
+        URAI_STREAM is on; otherwise chunk a (possibly pre-generated) answer.
+        When event_queue is provided, plan/step/tool events are drained and
+        emitted as typed SSE events before each message chunk."""
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
@@ -1693,6 +1749,22 @@ class Handler(BaseHTTPRequestHandler):
         self._sec_headers()
         self.end_headers()
         rid = self._reqid()
+
+        def _drain_queue():
+            """Drain any pending plan/step/tool events from event_queue."""
+            if event_queue is None:
+                return
+            import queue as _queue
+            while True:
+                try:
+                    ev = event_queue.get_nowait()
+                    ev_type = ev.pop("type", "tool")
+                    self._send_sse_event(ev_type, ev)
+                except _queue.Empty:
+                    break
+                except Exception:
+                    break
+
         streamed = False
         stream_fn = getattr(backend, "stream", None) if backend is not None else None
         if (_stream_enabled() and msgs is not None and callable(stream_fn)):
@@ -1701,7 +1773,15 @@ class Handler(BaseHTTPRequestHandler):
                                        temperature=temperature):
                     if piece:
                         streamed = True
-                        self._sse_chunk(piece, model, rid, meta)
+                        _drain_queue()
+                        self._send_sse_event("message", {
+                            "id": "chatcmpl-urai", "object": "chat.completion.chunk",
+                            "created": int(time.time()), "model": model,
+                            "request_id": rid, "urai": meta or {},
+                            "choices": [{"index": 0,
+                                         "delta": {"content": piece},
+                                         "finish_reason": None}]
+                        }) if event_queue is not None else self._sse_chunk(piece, model, rid, meta)
             except Exception:
                 # partial output already sent; only fall back if nothing went out
                 pass
@@ -1712,7 +1792,19 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     content = ""
             for tok in re.findall(r"\s*\S+|\s+", content or "") or ([content] if content else []):
-                self._sse_chunk(tok, model, rid, meta)
+                _drain_queue()
+                if event_queue is not None:
+                    self._send_sse_event("message", {
+                        "id": "chatcmpl-urai", "object": "chat.completion.chunk",
+                        "created": int(time.time()), "model": model,
+                        "request_id": rid, "urai": meta or {},
+                        "choices": [{"index": 0,
+                                     "delta": {"content": tok},
+                                     "finish_reason": None}]
+                    })
+                else:
+                    self._sse_chunk(tok, model, rid, meta)
+        _drain_queue()
         self._sse_chunk("", model, rid, meta, finish="stop")
         self.wfile.write(b"data: [DONE]\n\n")
         self.wfile.flush()

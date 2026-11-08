@@ -108,13 +108,19 @@ class LlamaServerBackend(Backend):
                     break
         return msgs
 
-    def complete(self, messages, max_tokens=256, temperature=0.2):
+    def complete(self, messages, max_tokens=256, temperature=0.2,
+                tools=None, tool_choice=None):
         msgs = self._prep(messages)
-        data = _post_json(self.base + "/v1/chat/completions", {
+        payload = {
             "model": self.model, "messages": msgs,
             "max_tokens": max_tokens, "temperature": temperature,
             "stream": False,
-        })
+        }
+        if tools:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+        data = _post_json(self.base + "/v1/chat/completions", payload)
         _msg = data["choices"][0]["message"]
         _content = _msg.get("content") or ""
         if not _content.strip() and _msg.get("reasoning_content"):
@@ -127,16 +133,22 @@ class LlamaServerBackend(Backend):
             out["timings"] = data["timings"]
         return out
 
-    def stream(self, messages, max_tokens=256, temperature=0.2):
+    def stream(self, messages, max_tokens=256, temperature=0.2,
+              tools=None, tool_choice=None):
         """True token streaming: pass llama-server's SSE through as it arrives.
         Yields content deltas; first delta arrives before generation finishes
         (TTFT < full-generation time)."""
         msgs = self._prep(messages)
-        payload = json.dumps({
+        body = {
             "model": self.model, "messages": msgs,
             "max_tokens": max_tokens, "temperature": temperature,
             "stream": True,
-        }).encode()
+        }
+        if tools:
+            body["tools"] = tools
+        if tool_choice is not None:
+            body["tool_choice"] = tool_choice
+        payload = json.dumps(body).encode()
         req = urllib.request.Request(
             self.base + "/v1/chat/completions", payload,
             {"Content-Type": "application/json"})

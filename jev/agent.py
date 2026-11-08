@@ -7,6 +7,7 @@ categorized (knowledge/reasoning/coding/context/tool/hallucination/
 instruction/verification) for the failure-analysis loop (mission §18).
 """
 
+import os
 import re
 import sys
 import time
@@ -40,6 +41,243 @@ SYSTEM = ("You are Urai, developed by Tynio LTD, a senior engineer runtime. Plan
           "browse pauses (never fails) on auth fields so the human can input them. "
           "After the tool result arrives, continue the task.")
 TOOL_RE = re.compile(r"```tool\s*\n(.*?)```", re.DOTALL)
+
+
+def _tools_schema() -> list:
+    """Return OpenAI function-calling tool objects for all available work tools."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Read the contents of a file at the given path.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "File path to read"},
+                    },
+                    "required": ["path"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "write_file",
+                "description": "Write content to a file, creating or overwriting it.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "File path to write"},
+                        "content": {"type": "string", "description": "Content to write"},
+                    },
+                    "required": ["path", "content"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "edit_file",
+                "description": "Edit a file by replacing old text with new text.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "File path to edit"},
+                        "old": {"type": "string", "description": "Text to replace"},
+                        "new": {"type": "string", "description": "Replacement text"},
+                        "replace_all": {"type": "boolean", "description": "Replace all occurrences"},
+                    },
+                    "required": ["path", "old", "new"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "run",
+                "description": "Run a shell command specified as an argument vector.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "argv": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Command and arguments as a list",
+                        },
+                    },
+                    "required": ["argv"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "web_search",
+                "description": "Search the web for information.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "top": {"type": "integer", "description": "Number of top results to return"},
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "web_fetch",
+                "description": "Fetch and extract text content from a URL.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "URL to fetch"},
+                    },
+                    "required": ["url"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "browse",
+                "description": "Control a browser to accomplish a goal via a sequence of steps.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "goal": {"type": "string", "description": "The browsing goal"},
+                        "steps": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "action": {"type": "string", "enum": ["goto", "click", "fill", "wait", "snapshot", "screenshot"]},
+                                    "url": {"type": "string"},
+                                    "selector": {"type": "string"},
+                                    "text": {"type": "string"},
+                                    "value": {"type": "string"},
+                                },
+                                "required": ["action"],
+                            },
+                            "description": "List of browser actions",
+                        },
+                    },
+                    "required": ["goal", "steps"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "see",
+                "description": "Analyze or describe an image.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "image": {"type": "string", "description": "Image path or URL"},
+                        "question": {"type": "string", "description": "Question about the image"},
+                    },
+                    "required": ["image"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "imagine",
+                "description": "Generate an image from a text prompt.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "prompt": {"type": "string", "description": "Image generation prompt"},
+                        "out": {"type": "string", "description": "Output file path"},
+                    },
+                    "required": ["prompt"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "mcp",
+                "description": "Call a tool on an MCP server.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "server": {"type": "string", "description": "MCP server name"},
+                        "tool": {"type": "string", "description": "Tool name on the server"},
+                        "args": {"type": "object", "description": "Arguments for the tool"},
+                    },
+                    "required": ["server", "tool", "args"],
+                },
+            },
+        },
+    ]
+
+
+def _plan_schema() -> list:
+    """Return OpenAI function-calling tool objects for plan management tools."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "create_plan",
+                "description": "Create a structured plan with a title, goal, and ordered steps.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Short plan title"},
+                        "goal": {"type": "string", "description": "Overall goal of the plan"},
+                        "steps": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "string", "description": "Unique step identifier"},
+                                    "description": {"type": "string", "description": "What this step does"},
+                                },
+                                "required": ["id", "description"],
+                            },
+                            "description": "Ordered list of plan steps",
+                        },
+                    },
+                    "required": ["title", "goal", "steps"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "complete_step",
+                "description": "Mark a plan step as completed or failed.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "step_id": {"type": "string", "description": "ID of the step to complete"},
+                        "success": {"type": "boolean", "description": "Whether the step succeeded"},
+                        "result": {"type": "string", "description": "Result or error message"},
+                    },
+                    "required": ["step_id", "success", "result"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "deliver_result",
+                "description": "Deliver the final answer and end the agent loop.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "answer": {"type": "string", "description": "The final answer to deliver"},
+                    },
+                    "required": ["answer"],
+                },
+            },
+        },
+    ]
 
 SAFETY_REPLY = {
     "self-harm": (
@@ -116,7 +354,8 @@ def extract_tool_calls(answer: str) -> list:
 
 def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
                 consistency: int = 1, plan: bool = False,
-                history: list = None, tier: str = "urai") -> dict:
+                history: list = None, tier: str = "urai",
+                event_queue=None) -> dict:
     t0 = time.time()
     trace = []
     from .router import apply_tier as _apply_tier
@@ -260,13 +499,21 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
     answer, fixes, tool_calls = "", 0, 0
     failure_kind = None
     proposals = []
+    _plan_state = {}  # local plan state for native tools path
+    _native = os.environ.get("URAI_NATIVE_TOOLS", "0") == "1"
     if plan:
         trace.append({"step": "plan-mode",
                       "note": "writes recorded, not applied"})
     while True:
         try:
             from . import cache as _cache
-            res = _cache.cached_complete(r["backend"], messages, max_tokens=512)
+            if _native:
+                _all_tools = _tools_schema() + _plan_schema()
+                res = _cache.cached_complete(r["backend"], messages,
+                                             max_tokens=512,
+                                             tools=_all_tools)
+            else:
+                res = _cache.cached_complete(r["backend"], messages, max_tokens=512)
             answer = res["content"]
         except Exception as e:
             if r["fallback"]:
@@ -278,6 +525,123 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
         trace.append({"step": "generate", "chars": len(answer),
                       "attempt": fixes, "cached": bool(res.get("cached")),
                       "cache_hit": res.get("cache_hit")})
+
+        # ── Native function-calling path (URAI_NATIVE_TOOLS=1)
+        import json as _json
+        if _native and res.get("tool_calls"):
+            tc = res["tool_calls"][0]
+            fn_name = tc.get("function", {}).get("name", "")
+            raw_args = tc.get("function", {}).get("arguments", "{}")
+            tool_call_id = tc.get("id", "")
+            try:
+                fn_args = _json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+            except Exception:
+                fn_args = {}
+            spec = {"tool": fn_name, "args": fn_args}
+
+            # Emit pre-call tool event
+            if event_queue is not None:
+                try:
+                    event_queue.put_nowait({
+                        "type": "tool",
+                        "tool_call_id": tool_call_id,
+                        "function_name": fn_name,
+                        "args_brief": str(fn_args)[:120],
+                        "status": "calling",
+                        "brief": "",
+                    })
+                except Exception:
+                    pass
+
+            # Handle plan tools inline
+            if fn_name == "create_plan":
+                steps_data = fn_args.get("steps", [])
+                _plan_state = {
+                    "title": fn_args.get("title", ""),
+                    "goal": fn_args.get("goal", ""),
+                    "steps": [{"id": s.get("id", ""), "description": s.get("description", ""),
+                               "status": "pending"} for s in steps_data],
+                }
+                if event_queue is not None:
+                    try:
+                        event_queue.put_nowait({
+                            "type": "plan",
+                            "title": _plan_state["title"],
+                            "goal": _plan_state["goal"],
+                            "steps": list(_plan_state["steps"]),
+                        })
+                    except Exception:
+                        pass
+                out = {"ok": True, "plan": _plan_state}
+                trace.append({"step": "plan-create", "title": _plan_state.get("title"),
+                               "n_steps": len(_plan_state.get("steps", []))})
+            elif fn_name == "complete_step":
+                step_id = fn_args.get("step_id", "")
+                success = bool(fn_args.get("success", True))
+                result_txt = fn_args.get("result", "")
+                status = "completed" if success else "failed"
+                for s in _plan_state.get("steps", []):
+                    if s["id"] == step_id:
+                        s["status"] = status
+                        break
+                if event_queue is not None:
+                    try:
+                        event_queue.put_nowait({
+                            "type": "step",
+                            "step_id": step_id,
+                            "status": status,
+                            "result": result_txt,
+                        })
+                    except Exception:
+                        pass
+                out = {"ok": True, "step_id": step_id, "status": status}
+                trace.append({"step": "plan-complete-step", "step_id": step_id, "success": success})
+            elif fn_name == "deliver_result":
+                answer = fn_args.get("answer", "")
+                if event_queue is not None:
+                    try:
+                        event_queue.put_nowait({
+                            "type": "tool",
+                            "tool_call_id": tool_call_id,
+                            "function_name": fn_name,
+                            "args_brief": str(fn_args)[:120],
+                            "status": "called",
+                            "brief": str(answer)[:200],
+                        })
+                    except Exception:
+                        pass
+                trace.append({"step": "deliver-result", "chars": len(answer)})
+                break
+            else:
+                # Regular tool call
+                if tool_calls >= MAX_TOOLS:
+                    trace.append({"step": "budget-exhausted", "kind": "tools"})
+                    break
+                tool_calls += 1
+                out = run_tool_call(spec, plan=plan)
+                if out.get("plan_only"):
+                    proposals.append(spec)
+                trace.append({"step": "tool", "tool": spec.get("tool"),
+                              "ok": out.get("ok"), "n": tool_calls})
+                if event_queue is not None:
+                    try:
+                        event_queue.put_nowait({
+                            "type": "tool",
+                            "tool_call_id": tool_call_id,
+                            "function_name": fn_name,
+                            "args_brief": str(fn_args)[:120],
+                            "status": "called",
+                            "brief": str(out)[:200],
+                        })
+                    except Exception:
+                        pass
+
+            messages.append({"role": "assistant", "content": answer,
+                             "tool_calls": res.get("tool_calls", [])})
+            messages.append({"role": "tool", "tool_call_id": tool_call_id,
+                             "content": _json.dumps(out)[:4000]})
+            answer = ""
+            continue
 
         # ReAct tool pass: execute at most one requested tool per turn,
         # feed the observation back, and let the model continue.
@@ -292,6 +656,18 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
             import json as _json
             trace.append({"step": "tool", "tool": spec.get("tool"),
                           "ok": out.get("ok"), "n": tool_calls})
+            if event_queue is not None:
+                try:
+                    event_queue.put_nowait({
+                        "type": "tool",
+                        "tool_call_id": "",
+                        "function_name": spec.get("tool", ""),
+                        "args_brief": str(spec.get("args", {}))[:120],
+                        "status": "called",
+                        "brief": str(out)[:200],
+                    })
+                except Exception:
+                    pass
             messages.append({"role": "assistant", "content": answer})
             messages.append({"role": "user", "content":
                 "Tool result:\n" + _json.dumps(out)[:4000] +
