@@ -28,11 +28,12 @@ subprocess.run(["unzip", "-q", "-o", qlib, "-d", "/kaggle/working/llama"], check
 q = "/kaggle/working/llama/llama-quantize"
 if not os.path.exists(q):
     q = "llama-quantize"
-OUT = "/kaggle/working/urai-4b-q4_k_m.zip"
-r = subprocess.run([q, gguf_f16, "/kaggle/working/urai-4b-q4_k_m.gguf", "Q4_K_M"],
-                   capture_output=True, text=True)
+OUT = "/kaggle/working/urai-4b-q4_k_m.gguf"
+r = subprocess.run([q, gguf_f16, OUT, "Q4_K_M"], capture_output=True, text=True)
 print(r.stdout[-400:], r.stderr[-400:])
 import zipfile
-with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
-    z.write("/kaggle/working/urai-4b-q4_k_m.gguf", "urai-4b-q4_k_m.gguf")
-print("zipped ->", OUT)
+OUTZ = OUT + ".zip"
+with zipfile.ZipFile(OUTZ, "w", zipfile.ZIP_DEFLATED) as z:
+    z.write(OUT, os.path.basename(OUT))
+os.remove(OUT)
+print("exported ->", OUTZ)
