@@ -288,7 +288,7 @@ def _selfhosted_info() -> dict:
         "provider": "Urai",
         "inference": "llama.cpp",
         "external_fallback": teacher_allowed(),
-        "public_models": ["urai", "cyberurai"],
+        "public_models": ["muse-spark-1.3", "cyberurai"],
         "active_model": None,
         "weights": {},
     }
@@ -316,7 +316,7 @@ def _backend_meta(backend) -> dict:
 
 
 def _models():
-    # Public surface only: two brands (urai, cyberurai). Internal backend ids
+    # Public surface only: two brands (muse-spark-1.3, cyberurai). Internal backend ids
     # (qwen*, coder*, laya, jev-local-student, teacher) stay in metadata/traces
     # and are never listed as selectable models.
     local = LlamaServerBackend()

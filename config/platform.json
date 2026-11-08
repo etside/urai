@@ -1,12 +1,11 @@
 {
   "_comment": "Model ids + endpoints live here, never hardcoded in code (PRODUCTION_SPEC §4). Env vars override these values at runtime.",
   "llm": {
-    "primary": "muse-spark",
+    "primary": "muse-spark-1.3",
     "model": "muse-spark-1.3",
-    "base": "https://api.meta.ai/v1",
-    "via": "litellm",
+    "served_by": "urai",
     "litellm_base": "http://100.117.28.114:4000/v1",
-    "note": "Urai harness powered by Muse Spark via LiteLLM gateway (wearimpressive-vps-1, raw Tailscale IP)"
+    "note": "Urai IS muse-spark-1.3 (OpenAI-compatible). LiteLLM routes muse-spark-1.3 -> Urai :8777, never to Meta."
   },
   "media": {
     "image": {

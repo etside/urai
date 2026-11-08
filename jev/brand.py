@@ -3,22 +3,26 @@
 
 There are exactly TWO public models:
 
-  urai       — one unified assistant. Internally it picks the right local
-               mode (fast · balanced · ultra) per request on the self-hosted
-               Urai runtime. An external teacher is offline-only and opt-in.
-  cyberurai  — separate cybersecurity specialist (latest threat knowledge,
-               threat-analysis + Android privacy guard).
+  muse-spark-1.3 — Urai's OpenAI-compatible model. Internally it picks the
+                   right local mode (fast · balanced · ultra) per request on
+                   the self-hosted Urai runtime. An external teacher is
+                   offline-only and opt-in.
+  cyberurai      — separate cybersecurity specialist (latest threat knowledge,
+                   threat-analysis + Android privacy guard).
 
-Everything else (qwen*, coder*, laya, jev-local-student, ...) is an internal
-backend id that must never leak as a primary model id — it only ever appears
-in traces/metadata. Legacy public ids (urai-fast / urai-ultra / urai-cyber /
-cyberurai-v1) are accepted as aliases and folded into the two.
+Everything else (urai, qwen*, coder*, laya, jev-local-student, ...) is an
+internal backend id that must never leak as a primary model id — it only ever
+appears in traces/metadata. Legacy public ids (urai / urai-fast / urai-ultra /
+urai-cyber / cyberurai-v1) are accepted as aliases and folded into the two.
+
+Urai IS the model: LiteLLM and other OpenAI clients call it as
+``muse-spark-1.3``; Urai never proxies public requests to Meta's Muse Spark.
 """
 
-PUBLIC = ("urai", "cyberurai")
+PUBLIC = ("muse-spark-1.3", "cyberurai")
 
 BRANDS = {
-    "urai": {
+    "muse-spark-1.3": {
         "tier": "urai",
         "desc": "Urai — one unified assistant (fast · balanced · ultra modes)",
         "modes": [
@@ -27,11 +31,11 @@ BRANDS = {
             {"id": "ultra", "desc": "verified depth, multi-step reasoning"},
         ],
         "internal": [
-            "jev-local-student", "local-student", "llama-local", "local",
+            "urai", "jev-local-student", "local-student", "llama-local", "local",
             "qwen3-4b", "qwen3-17b", "qwen3-4B-Q4_K_M", "qwen25vl-3b",
             "coder05-fast", "coder15-primary", "qwen2.5-coder",
             "laya", "urai-fast", "urai-ultra", "auto",
-            "muse-spark", "muse-spark-1.3", "teacher-api", "litellm",
+            "muse-spark", "teacher-api", "litellm",
         ],
     },
     "cyberurai": {
@@ -58,9 +62,9 @@ def brand_id(internal: str) -> str:
     if "cyber" in name:
         return "cyberurai"
     if any(k in name for k in ("qwen", "llama", "local", "student",
-                               "coder", "laya", "vl", "auto", "urai")):
-        return "urai"
-    return "urai"
+                               "coder", "laya", "vl", "auto", "urai", "muse")):
+        return "muse-spark-1.3"
+    return "muse-spark-1.3"
 
 
 def tier_of_brand(model: str) -> str:
