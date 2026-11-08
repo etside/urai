@@ -1319,7 +1319,8 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     r = route(user_text, tier=tier_of_brand(body.get("model", "urai")))
                 except Exception as e:
-                    return self._send({"error": str(e)[:300]}, 502)
+                    code = 503 if "503" in str(e) or "not loaded" in str(e) else 502
+                    return self._send({"error": str(e)[:300]}, code)
                 model = brand_id(body.get("model", r["backend"].name))
                 if body.get("stream"):
                     _record_use(ip, device, bool(body.get("_urai_authed")))

@@ -1,7 +1,7 @@
 {
   "tag": "first-party",
   "full": false,
-  "started": "2026-11-08T08:20:08Z",
+  "started": "2026-11-08T08:22:44Z",
   "identity": "Urai, developed by Tynio LTD",
   "checks": {
     "tool-write-read": {
@@ -38,7 +38,7 @@
     }
   },
   "calls": 0,
-  "total_s": 1.2,
+  "total_s": 0.4,
   "passed": 8,
   "total": 8
 }
