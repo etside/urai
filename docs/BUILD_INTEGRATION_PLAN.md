@@ -33,7 +33,7 @@ one wired, production system. No prototype stubs remain.
 | CLI | `jev/cli.py` single argparse with ~24 subcommands; remote-first, keyless install. |
 | APK | WebView shell + CyberUrai privacy-guard module; debug build in CI. |
 | Web UI | `app.html` (chat SPA, sidebar, harness drawer, modals, aurora+3D tilt) + `landing.html` (marketing, scroll-reveal). |
-| Training/media | Modal/GPU distill pipeline; `vision.py`, `imagine.py`, `video.py`, `analyze.py`, `mcp_*`, `plugins.py`. |
+| Training/media | Soup CI training pipeline; `vision.py`, `imagine.py`, `video.py`, `analyze.py`, `mcp_*`, `plugins.py`. |
 
 ### 1.2 Critical gaps that block "end-to-end production" (from the audits)
 
@@ -211,7 +211,7 @@ Legend — Status: **keep** (wired, fine) · **harden** (wired, needs fixes) ·
 | `bench.py` / `bench_harness.py` / `selfimprove.py` | Eval + self-improve | harden | gate in CI; surface in `/v1/benchmarks` UI |
 | `integrations.py` / `/v1/integrations` | Capability report | keep | render in Settings |
 | `skills/*` (11 packs) | Knowledge packs | keep | skill browser in sidebar |
-| `scripts/distill/*`, `scripts/train/*`, `modal/`, `kaggle/` | Training pipeline | keep | Modal default (done) |
+| `scripts/distill/*`, `scripts/train/*`, `config/soup_train.yaml`, `kaggle/` | Training pipeline | keep | Soup (weekly CI cron) |
 | `landing.html` | Public marketing | keep | dark/light + 3D polish |
 | `app.html` | Product webapp | harden | §7 rewrite of IA + theme |
 | `android/*` | APK shell + cyber guard | harden | §8.2 |
@@ -498,7 +498,7 @@ video (`wan3.0-video`, DashScope submit+poll, persist to `out/videos`). Missing
 keys fail honestly (`configured:false`) — never a fabricated result.
 `imagine.generate(provider=auto|seedream|local)` and
 `video.generate(provider=wan3|...)` route through them. MoE backbone training
-itself runs on Modal (~$1, user-initiated) — CI validates contracts only.
+itself runs via Soup CI (weekly cron, automated) — CI validates contracts only.
 | **P7 Edge + burn-in** | Cloudflare Tunnel/Access/WAF/PQC; SLO dashboards | DEPLOYMENT_PLAN gates |
 
 Verification is always remote: GitHub Actions matrices (cpu/cuda/hip), APK

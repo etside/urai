@@ -13,7 +13,7 @@ Companion to `docs/PRODUCTION_SPEC.md`. Everything here is executed **remotely**
 | Control | VPS `urai-1` (currently DO 4 vCPU/8 GB, `blr1`) | API, auth, router, harness, memory, scheduler, media relay |
 | Inference | same VPS CPU (default) → optional GPU node (CUDA/ROCm) | MoE backbone |
 | Media | Seedream 4.0 / Wan 3.0 (managed APIs) | image/video, persisted |
-| Train | Modal (default) / DO GPU (if ever) / Kaggle | Laya unified student |
+| Train | Soup CI (weekly cron + manual) / Kaggle (manual fallback) | Laya unified student |
 
 Target domain: `urai.daddyai.online` (prod), `api.urai.daddyai.online`
 (optional split), `admin.urai.daddyai.online` (Access-protected).
@@ -28,7 +28,7 @@ Target domain: `urai.daddyai.online` (prod), `api.urai.daddyai.online`
 - Alibaba Model Studio (Wan) **`DASHSCOPE_API_KEY`** + `WorkspaceId`/region.
 - DigitalOcean token (VPS lifecycle); Modal + Kaggle tokens (training).
 - Repo secrets already present (per operator): `DO_API_TOKEN`,
-  `MODAL_TOKEN_ID/SECRET`, `KAGGLE_USERNAME/KEY`, `URAI_MASTER_KEY`.
+  `KAGGLE_USERNAME/KEY`, `URAI_MASTER_KEY`.
 
 ---
 
@@ -94,7 +94,7 @@ cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS=<gfx1100> && cmake --build build -
 Register the node in `config/platform.json` (`accelerator.hosts`) so the router
 can target it; health-gate via `/health` + a canary prompt.
 
-Training node (Modal): `gh workflow run urai-train.yml -f tag=unified` after
+Training node (Soup): `gh workflow run urai-train-soup.yml -f tag=unified` after
 merge (spends ~$1) — or Actions → **Urai Train** → tag `unified`.
 
 ---
@@ -174,7 +174,7 @@ systemctl enable --now cloudflared
 ## 7. Secrets & rotation
 
 - Server: `/etc/urai/env` (0600, user `urai`); never in git/logs.
-- CI: GitHub Actions secrets (`DO_*`, `MODAL_*`, `KAGGLE_*`, `ARK_*`,
+- CI: GitHub Actions secrets (`DO_*`, `KAGGLE_*`, `ARK_*`,
   `DASHSCOPE_*`, keystore). `.gitignore` blocks `**/env`, `*.key`, `*.jks`.
 - Rotation runbook: issue new key → add to env/CI → reload service → revoke old
   (`/admin/keys`); rotate API tokens quarterly; rotate DO/Modal on team change.
@@ -184,7 +184,7 @@ systemctl enable --now cloudflared
 ## 8. CI/CD (no local builds)
 
 Workflows (existing): `urai-ci.yml`, `ci.yml` (v2), `android.yml`,
-`urai-train.yml`, `urai-gpu-run.yml`, `urai-gpu-check.yml`, `distill-vps.yml`.
+`urai-train-soup.yml`, `urai-gpu-check.yml`, `distill-vps.yml`.
 Add a **deploy** workflow:
 - Trigger: tag `v*` or manual.
 - Steps (on GitHub runners): lint + tests → build llama.cpp (matrix: cpu/cuda/hip)
@@ -236,7 +236,7 @@ Release, publish artifact.
 | Cloudflare (Pro/Business + Access) | $0–25 + Access seats |
 | Seedream 4.0 | ~$0.03 / image |
 | Wan 3.0 | per-second, per resolution (Prime = faster, higher rate) |
-| Modal training | ~$1 / run (T4) |
+| Soup training (GitHub Actions) | ~0 (free tier minutes) |
 
 ---
 

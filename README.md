@@ -136,8 +136,8 @@ GPU just makes it faster ([docs/TOOLS_AND_GPU.md](docs/TOOLS_AND_GPU.md)).
 - Never bind `0.0.0.0` without `URAI_API_KEY` (the CLI prints `auth=off` as a reminder).
 - All data routes need the key when set; `/health` + `/v1/models` stay public.
 - Prod: `URAI_CORS_ORIGIN=https://your.domain`; put Caddy/Cloudflare in front for TLS.
-- Secrets are env-only (`URAI_MASTER_KEY`, `DO_API_TOKEN`, `MODAL_TOKEN_ID`,
-  `MODAL_TOKEN_SECRET`, `ARK_API_KEY`, `DASHSCOPE_API_KEY`, ...) — never logged.
+- Secrets are env-only (`URAI_MASTER_KEY`, `DO_API_TOKEN`, `ARK_API_KEY`,
+  `DASHSCOPE_API_KEY`, ...) — never logged.
 - `urai model download` URLs are pinned in `model/registry.json`; weights live
   outside git (and on the `urai-deps` release).
 
@@ -178,11 +178,17 @@ free path actually used is a **Kaggle T4** kernel (Unsloth QLoRA, rank 16,
 python3 kaggle/train_qlora.py            # MAX_TRAIN_STEPS=300, URAI_BASE=...
 ```
 
-Modal is the scripted alternative (same adapter output):
+Soup is the automated training path (weekly CI + manual dispatch):
 
 ```bash
-bash scripts/train/modal_train.sh        # URAI_MODAL_GPU=T4|A100|L40S
+# Trigger via CI (recommended):
+gh workflow run urai-train-soup.yml --repo tukitattu/urai
+# Or run locally on a GPU box:
+bash scripts/train/soup_train.sh         # soup-cli[train]>=0.73.0
 ```
+
+Config: `config/soup_train.yaml`. Training runs automatically every Monday
+at 02:00 UTC via `.github/workflows/urai-train-soup.yml`.
 
 Merged adapters land on the `urai-deps` release. Details: [docs/TRAINING.md](docs/TRAINING.md),
 [docs/GPU_COMBINED_STRATEGY.md](docs/GPU_COMBINED_STRATEGY.md),
@@ -226,7 +232,7 @@ Every push also runs fast CI (`ci.yml`) and the integration matrix
 jev/      runtime package (nlp/vibe/router/context/tools/agent/server/backends/cache/retrieval/relays)
 bin/      urai + jev launchers
 docs/     architecture, plans, baselines, GPU/tools, dataset pipeline
-scripts/  hw baseline, distillation pipeline, training (modal/gpu)
+scripts/  hw baseline, distillation pipeline, training (soup/gpu)
 data/     raw_tasks seeds + verified sets (generated sets are reproducible)
 eval/     benchmarks + reports (all measured, nothing invented)
 model/    registry.json + GGUF slots (binaries live on the urai-deps release)
@@ -240,8 +246,8 @@ deploy/   Caddyfile · cloudflared · systemd
 
 The dev box (2-core Intel m3, ~3.2 GB RAM, no GPU) runs the runtime, data
 pipeline and eval harness — but cannot train weights and only lightly benches
-large models. Training/benching runs on remote GPUs (free Kaggle T4; Modal is
-the scripted alternative) and artifacts return as GGUF/adapter files recorded in `model/registry.json` and the
+large models. Training/benching runs on remote GPUs (free Kaggle T4; Soup CI is
+the automated weekly alternative) and artifacts return as GGUF/adapter files recorded in `model/registry.json` and the
 `urai-deps` release. Verification is always remote: GitHub Actions matrices
 (cpu/cuda/hip), the APK build+sign job, and the API/CLI integration tests.
 

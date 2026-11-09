@@ -82,7 +82,7 @@ Reference tokens stay **dense**; video tiles get VSA sparsity
 | Path | Where | Notes |
 |---|---|---|
 | **Kaggle T4 (path used)** | `kaggle/train_qlora.py`, `scripts/train/sft_unsloth.py`, [KAGGLE_NOW.md](KAGGLE_NOW.md) | free single-GPU QLoRA (rank 16, 4-bit); run the notebook with `distill-now.jsonl` as an input dataset. No repo secrets needed. |
-| Modal (optional) | `scripts/train/modal_train.sh`, `modal/modal_train.py`, workflow `urai-train.yml` | ephemeral remote GPU, `URAI_MODAL_GPU = T4 \| A100 \| L40S`, publishes adapter to the `urai-deps` release. Secrets: `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` |
+| **Soup (primary CI)** | `scripts/train/soup_train.sh`, `config/soup_train.yaml`, workflow `urai-train-soup.yml` | weekly cron + manual dispatch; QLoRA rank 16, stream_layers, publishes adapter to the `urai-deps` release. No extra secrets beyond `GITHUB_TOKEN`. |
 | DigitalOcean H100 | `scripts/train/gpu_train.sh`, workflow `urai-gpu-run.yml` | **contract-only**: DO account GPU limit is 0 (`docs/GPU_LIMIT_REQUEST.md`); script destroys droplets at the time cap |
 | GPU probe | workflow `urai-gpu-check.yml` | token-safe capability probe |
 
@@ -98,8 +98,8 @@ seq-len 2048, 300 steps default. Strategy: [GPU_COMBINED_STRATEGY.md](GPU_COMBIN
 | `android.yml` | push/PR (`android/**`), tags `v*` | builds **APK + AAB** (signed when `URAI_KEYSTORE_*` set), publishes to `urai-deps` |
 | `build.yml` | manual | builds llama.cpp + stable-diffusion.cpp, downloads weights, smoke + release bundle |
 | `ci.yml` / `urai-ci.yml` | push | fast compile + offline smoke |
-| `urai-train.yml` / `urai-modal-train.yml` | manual | Modal training |
-| `urai-gpu-check.yml` / `urai-gpu-run.yml` | manual | GPU capability / DO H100 run |
+| `urai-train-soup.yml` | `schedule: 0 2 * * 1` + manual | **Soup training (primary)** — weekly cron, manual dispatch |
+| `urai-gpu-check.yml` | manual | DO GPU capability probe |
 | `urai-bench.yml`, `urai-selfimprove.yml`, `urai-distill-free.yml`, `distill-vps.yml` | manual | benches, self-improve, distill |
 
 ## 7. Artifacts & registry
