@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Urai unified-student training with Soup — replaces modal_train.sh.
 #
-# Trains on the merged verified set, publishes the LoRA adapter to
-# the urai-deps release. No Modal, no DO, no local compute required
-# beyond the GitHub Actions GPU runner.
+# Trains on the merged verified set, exports a GGUF, and publishes the
+# LoRA adapter to the urai-deps release. No Modal, no DO, no local compute
+# required beyond the GitHub Actions GPU runner.
 #
 # Required env: (none — GH_TOKEN is optional for publish)
 # Optional:     URAI_TRAIN_TAG  (default unified; only "unified" supported)
@@ -19,8 +19,8 @@ echo "== merging verified dataset: tag=$TAG =="
 python3 scripts/train/merge_verified.py
 rows=$(wc -l < data/verified/unified.jsonl)
 echo "unified dataset: $rows rows"
-if [ "$rows" -lt 10 ]; then
-  echo "::error::unified.jsonl has only $rows rows — run the distill pipeline first."
+if [ "$rows" -lt 50 ]; then
+  echo "::error::unified.jsonl has only $rows rows — need at least 50 to train."
   exit 1
 fi
 
@@ -28,11 +28,18 @@ fi
 echo "== installing soup-cli[train]>=0.73.0 =="
 python3 -m pip install -q "soup-cli[train]>=0.73.0"
 
+# Patch MAX_STEPS into the YAML config (soup train does not support --set)
+echo "== patching config: max_steps=${MAX_STEPS} =="
+sed -i "s/max_steps:.*$/max_steps: ${MAX_STEPS}/" config/soup_train.yaml
+
 # Train
 echo "== soup train: tag=$TAG max_steps=$MAX_STEPS =="
-soup train --config config/soup_train.yaml \
-  --set "training.max_steps=$MAX_STEPS" \
-  --yes
+soup train --config config/soup_train.yaml --yes
+
+# Export GGUF for the llama.cpp / registry serving stack
+echo "== exporting GGUF (q4_k_m) =="
+mkdir -p model
+soup export --format gguf --quant q4_k_m --out model/urai-latest.gguf
 
 echo "== packaging adapter =="
 tar -czf "/tmp/adapters-${TAG}-soup.tgz" "adapters/unified-soup"
