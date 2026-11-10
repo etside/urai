@@ -139,7 +139,8 @@ def extract_tool_calls(answer: str) -> list:
 
 def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
                 consistency: int = 1, plan: bool = False,
-                history: list = None, tier: str = "urai") -> dict:
+                history: list = None, tier: str = "urai",
+                session_id: str = "", system_override: str = "") -> dict:
     t0 = time.time()
     trace = []
     from .router import apply_tier as _apply_tier
@@ -155,7 +156,8 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
                           history=history or [])
     trace.append({"step": "context", "est_tokens": ctx["est_tokens"],
                   "dropped_history": ctx["dropped_history"]})
-    messages = [{"role": "system", "content": SYSTEM}] + to_messages(ctx)
+    _sys_content = system_override if system_override else SYSTEM
+    messages = [{"role": "system", "content": _sys_content}] + to_messages(ctx)
     # Repo conventions: AGENTS.md auto-load (OpenCode-style).
     try:
         from .tools import WORKSPACE as _WS
@@ -239,6 +241,17 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
             if out.get("plan_only"):
                 proposals.append(spec)
             import json as _json
+            # Emit observable event for the Studio event log
+            if session_id:
+                try:
+                    from . import events as _ev
+                    _ev.emit(session_id, "tool_call", agent_id="agent",
+                             tool=spec.get("tool", ""),
+                             input_summary=str(spec.get("args", ""))[:200],
+                             output_summary=str(out)[:200],
+                             status=out.get("ok", False))
+                except Exception:
+                    pass
             trace.append({"step": "tool", "tool": spec.get("tool"),
                           "ok": out.get("ok"), "n": tool_calls})
             messages.append({"role": "assistant", "content": answer})

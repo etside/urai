@@ -11,6 +11,13 @@ Raises RuntimeError if no backend is available.
 from __future__ import annotations
 import os
 
+# Load .env so cloud keys are available when called from CLI or scripts
+try:
+    from .envfile import load as _load_env
+    _load_env()
+except Exception:
+    pass
+
 
 def _get_backend():
     from .backends import LlamaServerBackend, CloudAPIBackend, TeacherAPIBackend
@@ -18,7 +25,7 @@ def _get_backend():
     if local.healthy():
         return local
     if os.environ.get("OPENROUTER_API_KEY"):
-        return CloudAPIBackend(provider="openrouter")
+        return CloudAPIBackend()
     if os.environ.get("TEACHER_API_KEY"):
         return TeacherAPIBackend()
     raise RuntimeError(

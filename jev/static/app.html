@@ -262,6 +262,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
   padding:1px 7px;font-variant-numeric:tabular-nums;
 }
 
+/* ── Artifact pane ───────────────────────────────────────────────────────── */
+.artifact-pane{border:1px solid var(--border2);border-radius:10px;overflow:hidden;margin:8px 0}
+.artifact-toolbar{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:var(--bg3);border-bottom:1px solid var(--border2)}
+/* ── Mode selector ───────────────────────────────────────────────────────── */
+.mode-btn.active{background:var(--accent-bg)!important;color:var(--accent)!important;border-color:var(--accent)!important}
+
 /* ── API Keys panel ─────────────────────────────────────────────────────── */
 #keys-panel{padding:24px;overflow-y:auto}
 .panel-header{font-size:1.2rem;font-weight:700;margin-bottom:6px}
@@ -511,6 +517,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
       API Keys
     </button>
+    <button class="sb-tab" onclick="showPanel('code',this)" data-panel="code">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      Code
+    </button>
+    <button class="sb-tab" onclick="showPanel('goals',this);loadGoals()" data-panel="goals">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Goals
+    </button>
   </div>
   <div class="sb-section">Recent</div>
   <div class="sb-hist" id="hist-list"></div>
@@ -563,10 +577,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
             <input type="file" accept="image/*" style="display:none" onchange="attachImage(this)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
           </label>
+          <label class="icon-btn" title="Attach PDF">
+            <input type="file" accept=".pdf" style="display:none" onchange="attachPDF(this)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </label>
           <button id="send-btn" onclick="sendChat()" title="Send">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
           </button>
         </div>
+      </div>
+      <div id="file-chips" style="display:flex;flex-wrap:wrap;gap:4px;padding:0 4px;margin-top:4px"></div>
+      <div id="mode-selector" style="display:flex;gap:4px;padding:4px 0">
+        <button class="mode-btn active" data-mode="instant" onclick="setMode('instant')" style="padding:3px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);font-size:.78rem;cursor:pointer">⚡ Instant</button>
+        <button class="mode-btn" data-mode="thinking" onclick="setMode('thinking')" style="padding:3px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);font-size:.78rem;cursor:pointer">🤔 Think</button>
+        <button class="mode-btn" data-mode="contemplating" onclick="setMode('contemplating')" style="padding:3px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);font-size:.78rem;cursor:pointer">🧠 Contemplate</button>
       </div>
       <div id="token-counter"></div>
     </div>
@@ -650,6 +674,41 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
       </div>
       <div style="font-weight:600;font-size:.88rem;margin-bottom:10px;color:var(--text2)">Active keys</div>
       <div class="keys-list" id="keys-list"></div>
+    </div>
+  </div>
+
+  <!-- Code Interpreter panel -->
+  <div class="panel" id="panel-code">
+    <div style="padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;height:100%;box-sizing:border-box">
+      <div class="panel-header">Code Interpreter</div>
+      <div class="panel-sub">Run Python, JavaScript, or Bash code — Docker-sandboxed when available.</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="code-lang" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);font-size:.84rem;color:var(--text)">
+          <option value="python">Python</option>
+          <option value="javascript">JavaScript</option>
+          <option value="bash">Bash</option>
+        </select>
+        <button class="btn-primary" onclick="runCode()">▶ Run</button>
+      </div>
+      <textarea id="code-source" rows="10" placeholder="# Enter code here…&#10;import math&#10;print(math.pi)" style="font-family:var(--mono,monospace);font-size:.85rem;padding:12px;border-radius:10px;border:1px solid var(--border2);background:var(--bg);color:var(--text);resize:vertical;width:100%;box-sizing:border-box"></textarea>
+      <pre id="code-output" style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:.82rem;white-space:pre-wrap;min-height:60px;max-height:200px;overflow-y:auto">(output will appear here)</pre>
+      <div id="code-images"></div>
+    </div>
+  </div>
+
+  <!-- Goals panel -->
+  <div class="panel" id="panel-goals">
+    <div style="padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:14px">
+      <div class="panel-header">Goals Agent</div>
+      <div class="panel-sub">Create long-horizon goals. Urai plans steps and executes them in the background.</div>
+      <div class="pill-card" style="display:flex;flex-direction:column;gap:10px">
+        <input id="goal-title" type="text" placeholder="Goal title…" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--bg);font-size:.88rem;color:var(--text);outline:none"/>
+        <input id="goal-deadline" type="text" placeholder="Deadline (e.g. 2025-12-31)…" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--bg);font-size:.88rem;color:var(--text);outline:none"/>
+        <textarea id="goal-constraints" rows="2" placeholder="Constraints (optional)…" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--bg);font-size:.88rem;color:var(--text);outline:none;resize:vertical"></textarea>
+        <button class="btn-primary" onclick="createGoal()">+ Create Goal</button>
+      </div>
+      <div id="goals-list"><div style="color:var(--text3);font-size:.88rem">Loading…</div></div>
+      <button class="btn-ghost" onclick="loadGoals()">↻ Refresh</button>
     </div>
   </div>
 
@@ -739,6 +798,23 @@ ollama run my-model</pre>
         </div>
       </div>
 
+      <!-- Integrations -->
+      <div class="settings-section">
+        <h3>Integrations</h3>
+        <div class="setting-desc" style="margin-bottom:12px">Connect Google Calendar/Gmail or Microsoft Outlook. OAuth tokens stored locally.</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div><div class="setting-label">Google Calendar &amp; Gmail</div><div id="integ-status-google" style="font-size:.78rem;color:var(--text3)">○ Not connected</div></div>
+            <button class="btn-ghost" style="font-size:.8rem;padding:5px 12px" onclick="connectIntegration('google')">Connect</button>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div><div class="setting-label">Microsoft Outlook</div><div id="integ-status-outlook" style="font-size:.78rem;color:var(--text3)">○ Not connected</div></div>
+            <button class="btn-ghost" style="font-size:.8rem;padding:5px 12px" onclick="connectIntegration('outlook')">Connect</button>
+          </div>
+        </div>
+        <button class="btn-ghost" style="margin-top:10px;font-size:.8rem" onclick="loadIntegrations()">↻ Refresh status</button>
+      </div>
+
       <!-- Rate limit -->
       <div class="settings-section">
         <h3>Rate limit status</h3>
@@ -747,6 +823,15 @@ ollama run my-model</pre>
 
     </div>
   </div>
+</div>
+
+<!-- Event log sidebar -->
+<div id="event-log-sidebar" style="display:none;position:fixed;right:0;top:0;bottom:0;width:280px;background:var(--bg);border-left:1px solid var(--border);z-index:100;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.15)">
+  <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+    <span style="font-weight:600;font-size:.88rem">Agent Events</span>
+    <button onclick="closeEventLog()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:1.1rem">✕</button>
+  </div>
+  <div id="event-log-rows" style="flex:1;overflow-y:auto;font-size:.78rem"></div>
 </div>
 
 <!-- Agent chat modal -->
@@ -791,6 +876,10 @@ let S = {
   attachedImage: null,
   activeAgentId: null,
   ctxWindow: 32768,
+  mode: 'instant',        // 'instant' | 'thinking' | 'contemplating'
+  attachedFiles: [],      // [{id, filename, pages}]
+  promptTokens: 0,
+  completionTokens: 0,
 };
 
 // ── Init ────────────────────────────────────────────────────────────────────
@@ -831,13 +920,37 @@ function showPanel(name, btn) {
   document.getElementById('panel-' + name).classList.add('active');
   document.querySelectorAll('.sb-tab').forEach(t => t.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  const titles = {chat:'Chat',vibe:'Vibe Code',wiki:'Wiki',agents:'Agents',keys:'API Keys',settings:'Settings'};
+  const titles = {chat:'Chat',vibe:'Vibe Code',wiki:'Wiki',agents:'Agents',keys:'API Keys',settings:'Settings',code:'Code Interpreter',goals:'Goals Agent'};
   document.getElementById('panel-title').textContent = titles[name] || name;
   if (name === 'keys') loadKeys();
   if (name === 'agents') loadAgents();
-  if (name === 'settings') { loadRateStatus(); loadModels(); updateCompatBlock(); }
+  if (name === 'settings') { loadRateStatus(); loadModels(); updateCompatBlock(); loadIntegrations(); }
+  if (name === 'goals') loadGoals();
   // close drawer on mobile after selecting a panel
   if (_isMobile()) closeSidebarMobile();
+}
+
+// ── Context window loader ─────────────────────────────────────────────────
+async function loadCtxWindow() {
+  try {
+    const r = await api('/v1/info');
+    S.ctxWindow = r.ctx_window || 32768;
+  } catch {}
+}
+
+function updateTokenCounter() {
+  const el = document.getElementById('token-counter');
+  if (!el) return;
+  const total = S.promptTokens + S.completionTokens;
+  if (!total) { el.textContent = ''; return; }
+  const pct = Math.round((total / S.ctxWindow) * 100);
+  el.textContent = total.toLocaleString() + ' / ' + S.ctxWindow.toLocaleString() + ' tokens (' + pct + '%)';
+}
+
+// ── Mode selector ─────────────────────────────────────────────────────────
+function setMode(mode) {
+  S.mode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
 }
 
 function togglePill(btn) {
@@ -1068,6 +1181,40 @@ function attachImage(input) {
   reader.readAsDataURL(f);
 }
 
+// ── PDF file attachment ───────────────────────────────────────────────────────
+async function attachPDF(input) {
+  const f = input.files[0];
+  if (!f) return;
+  showToast('Uploading ' + f.name + '…');
+  const formData = new FormData();
+  formData.append('file', f, f.name);
+  try {
+    const headers = {};
+    if (S.key) headers['Authorization'] = 'Bearer ' + S.key;
+    const r = await fetch(S.url + '/v1/files', {method: 'POST', headers, body: formData});
+    const data = await r.json();
+    if (data.id) {
+      S.attachedFiles.push({id: data.id, filename: data.filename, pages: data.pages});
+      renderFileChips();
+      showToast('PDF attached: ' + data.filename + ' (' + (data.pages||'?') + ' pages)');
+    } else {
+      showToast('Upload failed: ' + (data.error || 'unknown'), true);
+    }
+  } catch(e) { showToast('PDF upload failed: ' + e.message, true); }
+  input.value = '';
+}
+
+function renderFileChips() {
+  let el = document.getElementById('file-chips');
+  if (!el) return;
+  el.innerHTML = S.attachedFiles.map((f, i) =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:3px 8px;font-size:.78rem;color:var(--text2)">
+      📄 ${esc(f.filename)} ${f.pages ? '('+f.pages+' pp)' : ''}
+      <button onclick="S.attachedFiles.splice(${i},1);renderFileChips()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:.9rem;padding:0 2px">✕</button>
+    </span>`
+  ).join('');
+}
+
 async function sendChat() {
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
@@ -1093,7 +1240,11 @@ async function sendChat() {
     messages: msgs,
     max_tokens: S.maxTokens,
     stream: S.streaming,
+    mode: S.mode,
   };
+  if (S.attachedFiles.length) {
+    payload.file_ids = S.attachedFiles.map(f => f.id);
+  }
   if (S.attachedImage) {
     payload.messages = msgs.map((m, i) => i === msgs.length-1 ? {
       role:'user',
@@ -1102,26 +1253,42 @@ async function sendChat() {
     S.attachedImage = null;
   }
 
-  // Thinking mode → /v1/reason
-  const endpoint = S.thinking ? '/v1/reason' : '/v1/chat/completions';
+  // Mode selector determines endpoint/behavior
+  // thinking pill still works as legacy shortcut
+  const effectiveMode = S.thinking ? 'thinking' : S.mode;
+  const endpoint = effectiveMode === 'thinking' ? '/v1/reason' : '/v1/chat/completions';
 
   // Show thinking indicator
   const thinkId = 'think-' + Date.now();
   appendThinking(thinkId);
 
+  // Show contemplating progress indicator
+  if (effectiveMode === 'contemplating') {
+    appendThinking(thinkId + '-c', '🧠 Consulting 3 agents…');
+  }
+
   try {
-    if (S.streaming && !S.thinking) {
+    if (S.streaming && effectiveMode === 'instant') {
       await streamResponse(endpoint, payload, thinkId);
     } else {
       const data = await api(endpoint, {method:'POST', body: JSON.stringify(payload),
         headers:{'Content-Type':'application/json','Authorization':'Bearer '+(S.key||'')}});
       removeThinking(thinkId);
-      const answer = S.thinking
+      removeThinking(thinkId + '-c');
+      const answer = (effectiveMode === 'thinking')
         ? (data.answer || data.content || '')
         : (data.choices?.[0]?.message?.content || data.answer || '');
       appendMsg('assistant', answer);
       S.msgs.push({role:'assistant', content:answer});
-      if (S.thinking && data.thinking) appendThinkingTrace(data.thinking);
+      // Token tracking
+      const usage = data.usage || {};
+      S.promptTokens = usage.prompt_tokens || 0;
+      S.completionTokens = usage.completion_tokens || 0;
+      updateTokenCounter();
+      if ((effectiveMode === 'thinking') && data.thinking) appendThinkingTrace(data.thinking);
+      if (effectiveMode === 'contemplating' && data.thinking_traces) {
+        appendContemplatingTraces(data.thinking_traces);
+      }
     }
   } catch(e) {
     removeThinking(thinkId);
@@ -1174,6 +1341,11 @@ async function streamResponse(endpoint, payload, thinkId) {
   }
   finalizeStreamMsg(msgId, full);
   S.msgs.push({role:'assistant', content:full});
+  // Update token counter from last SSE data chunk usage
+  updateTokenCounter();
+  // Clear attached files after send
+  S.attachedFiles = [];
+  renderFileChips();
 }
 
 function appendMsg(role, content) {
@@ -1221,12 +1393,16 @@ function finalizeStreamMsg(id, text) {
   }
 }
 
-function appendThinking(id) {
+function appendThinking(id, label) {
   const el = document.getElementById('msgs');
   const div = document.createElement('div');
   div.className = 'msg msg-ai';
   div.id = id;
-  div.innerHTML = '<div class="bubble"><div class="thinking-dots"><span></span><span></span><span></span></div></div>';
+  if (label) {
+    div.innerHTML = `<div class="bubble"><span style="color:var(--text3);font-size:.84rem">${esc(label)}</span></div>`;
+  } else {
+    div.innerHTML = '<div class="bubble"><div class="thinking-dots"><span></span><span></span><span></span></div></div>';
+  }
   el.appendChild(div);
   el.scrollTop = el.scrollHeight;
 }
@@ -1241,9 +1417,50 @@ function appendThinkingTrace(trace) {
   el.scrollTop = el.scrollHeight;
 }
 
+function appendContemplatingTraces(traces) {
+  if (!traces || !traces.length) return;
+  const el = document.getElementById('msgs');
+  const div = document.createElement('div');
+  div.className = 'msg msg-ai';
+  const labels = ['🔬 Analytical', '🎨 Creative', '🤔 Skeptical'];
+  const rows = traces.map((t, i) =>
+    `<details><summary style="cursor:pointer;font-size:.82rem;color:var(--text3)">${labels[i]||'Branch '+i}</summary><div style="font-size:.81rem;color:var(--text2);white-space:pre-wrap;padding:8px;max-height:200px;overflow-y:auto">${esc(t)}</div></details>`
+  ).join('');
+  div.innerHTML = `<details style="max-width:85%"><summary style="cursor:pointer;padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:12px;font-size:.82rem;color:var(--text3)">🧠 3-agent thinking traces</summary><div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-top:6px">${rows}</div></details>`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
 function formatContent(text) {
   if (!text) return '';
-  // Code blocks
+  // HTML/artifact blocks → sandboxed iframe
+  text = text.replace(/```(?:artifact|html)\n([\s\S]*?)```/g, (_, html) => {
+    const escaped = html.replace(/"/g, '&quot;');
+    const id = 'art-' + Math.random().toString(36).slice(2);
+    return `<div class="artifact-pane" id="${id}">
+      <div class="artifact-toolbar">
+        <span style="font-size:.78rem;color:var(--text3)">HTML Artifact</span>
+        <div style="display:flex;gap:6px">
+          <button class="copy-btn" onclick="document.getElementById('${id}').querySelector('iframe').contentWindow.document.open();navigator.clipboard.writeText(document.getElementById('${id}').querySelector('iframe').srcdoc||'')">Copy</button>
+          <button class="copy-btn" onclick="var w=window.open();w.document.write(document.getElementById('${id}').querySelector('iframe').srcdoc)">Full</button>
+          <button class="copy-btn" onclick="var a=document.createElement('a');a.download='artifact.html';a.href='data:text/html;charset=utf-8,'+encodeURIComponent(document.getElementById('${id}').querySelector('iframe').getAttribute('srcdoc')||'');a.click()">Download</button>
+        </div>
+      </div>
+      <iframe sandbox="allow-scripts" srcdoc="${escaped}" style="width:100%;height:300px;border:none;border-radius:0 0 10px 10px"></iframe>
+    </div>`;
+  });
+  // Check for vision grounding JSON {"objects":[...]}
+  const bboxMatch = text.match(/\{"objects"\s*:\s*\[[\s\S]*?\]\s*\}/);
+  if (bboxMatch) {
+    try {
+      const parsed = JSON.parse(bboxMatch[0]);
+      if (parsed.objects && parsed.objects.length) {
+        const bboxHtml = renderBboxOverlay(parsed.objects);
+        text = text.replace(bboxMatch[0], bboxHtml);
+      }
+    } catch {}
+  }
+  // Code blocks (regular)
   text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
     `<pre><code class="language-${lang||'plaintext'}">${esc(code.trim())}</code></pre>`);
   // Inline code
@@ -1253,6 +1470,19 @@ function formatContent(text) {
   // Line breaks
   text = text.replace(/\n/g, '<br>');
   return text;
+}
+
+function renderBboxOverlay(objects) {
+  const colors = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899'];
+  const items = objects.map((o, i) => {
+    const [x1,y1,x2,y2] = o.bbox || [0,0,0,0];
+    const c = colors[i % colors.length];
+    const left = x1/10, top = y1/10, w = (x2-x1)/10, h = (y2-y1)/10;
+    return `<div style="position:absolute;left:${left}%;top:${top}%;width:${w}%;height:${h}%;border:2px solid ${c};border-radius:2px;pointer-events:none">
+      <span style="position:absolute;top:-18px;left:0;background:${c};color:#fff;font-size:10px;padding:1px 4px;border-radius:3px;white-space:nowrap">${esc(o.label||'')} ${o.count>1?'×'+o.count:''}</span>
+    </div>`;
+  }).join('');
+  return `<div style="position:relative;display:inline-block;border:1px solid var(--border);border-radius:8px;overflow:hidden;max-width:100%">${items}</div>`;
 }
 
 function addCopyButton(pre) {
@@ -1440,6 +1670,149 @@ async function sendAgentMsg() {
     hist.innerHTML += `<div><div style="background:var(--card);border:1px solid var(--border);padding:9px 13px;border-radius:4px 14px 14px 14px;font-size:.85rem;max-width:90%">${formatContent(r.response||'')}</div></div>`;
   } catch(e) { hist.innerHTML += `<div style="color:var(--red);font-size:.82rem">Error: ${esc(e.message)}</div>`; }
   hist.scrollTop = hist.scrollHeight;
+}
+
+// ── Agent event log ──────────────────────────────────────────────────────────
+let _eventSource = null;
+function openEventLog(sessionId) {
+  const sidebar = document.getElementById('event-log-sidebar');
+  if (!sidebar) return;
+  sidebar.style.display = 'flex';
+  if (_eventSource) _eventSource.close();
+  _eventSource = new EventSource(S.url + '/v1/agent/' + sessionId + '/events');
+  _eventSource.onmessage = (e) => {
+    try {
+      const ev = JSON.parse(e.data);
+      appendEventRow(ev);
+    } catch {}
+  };
+}
+function closeEventLog() {
+  if (_eventSource) { _eventSource.close(); _eventSource = null; }
+  const sidebar = document.getElementById('event-log-sidebar');
+  if (sidebar) sidebar.style.display = 'none';
+}
+function appendEventRow(ev) {
+  const el = document.getElementById('event-log-rows');
+  if (!el) return;
+  const icon = ev.type === 'tool_call' ? '🔧' : ev.type === 'goal_step' ? '🎯' : '📌';
+  const status = ev.status === true || ev.status === 'ok' ? '✓' : '✗';
+  const row = document.createElement('div');
+  row.style.cssText = 'padding:6px 10px;border-bottom:1px solid var(--border);font-size:.78rem;cursor:pointer';
+  row.innerHTML = `<span style="opacity:.7">${icon}</span> <strong>${esc(ev.tool||ev.type)}</strong> <span style="color:var(--text3)">${status}</span>`;
+  row.title = 'In: ' + (ev.input_summary||'') + '\nOut: ' + (ev.output_summary||'');
+  el.appendChild(row);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Goals ────────────────────────────────────────────────────────────────────
+async function loadGoals() {
+  try {
+    const r = await api('/v1/goals');
+    const el = document.getElementById('goals-list');
+    if (!el) return;
+    const goals = r.goals || [];
+    el.innerHTML = goals.length ? goals.map(g => `
+      <div class="pill-card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div>
+            <div style="font-weight:600;font-size:.92rem">${esc(g.title)}</div>
+            <div style="font-size:.78rem;color:var(--text3);margin-top:2px">Deadline: ${esc(g.deadline||'—')} · Status: ${esc(g.status||'active')}</div>
+          </div>
+          <button class="btn-danger" style="font-size:.75rem;padding:4px 10px" onclick="deleteGoal('${g.id}')">Delete</button>
+        </div>
+        <div style="margin-top:8px">
+          ${(g.steps||[]).map(s => `
+            <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border)">
+              <span style="font-size:.75rem;padding:2px 7px;border-radius:8px;background:var(--bg3);color:${s.status==='done'?'var(--accent)':s.status==='awaiting_approval'?'var(--orange,#f90)':'var(--text3)'}">${esc(s.status||'pending')}</span>
+              <span style="font-size:.82rem;flex:1">${esc(s.description||'')}</span>
+              ${s.status==='awaiting_approval'?`<button class="btn-primary" style="font-size:.75rem;padding:4px 10px" onclick="approveStep('${g.id}','${s.id}')">Approve</button>`:''}
+            </div>`).join('')}
+        </div>
+      </div>`).join('') : '<div style="color:var(--text3);font-size:.88rem">No goals yet. Create one above.</div>';
+  } catch(e) {
+    const el = document.getElementById('goals-list');
+    if (el) el.innerHTML = '<div style="color:var(--text3);font-size:.85rem">Could not load goals: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function createGoal() {
+  const title = document.getElementById('goal-title').value.trim();
+  const deadline = document.getElementById('goal-deadline').value.trim();
+  const constraints = document.getElementById('goal-constraints').value.trim();
+  if (!title) return showToast('Title required', true);
+  try {
+    const r = await api('/v1/goals', {method:'POST', body:JSON.stringify({title,deadline,constraints}), headers:{'Content-Type':'application/json','Authorization':'Bearer '+(S.key||'')}});
+    document.getElementById('goal-title').value = '';
+    document.getElementById('goal-deadline').value = '';
+    document.getElementById('goal-constraints').value = '';
+    loadGoals();
+    showToast('Goal created');
+  } catch(e) { showToast('Failed: ' + e.message, true); }
+}
+
+async function approveStep(goalId, stepId) {
+  try {
+    await api('/v1/goals/'+goalId+'/approve/'+stepId, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(S.key||'')}});
+    loadGoals();
+    showToast('Step approved');
+  } catch(e) { showToast('Failed: ' + e.message, true); }
+}
+
+async function deleteGoal(id) {
+  if (!confirm('Delete this goal?')) return;
+  try {
+    await fetch(S.url+'/v1/goals/'+id, {method:'DELETE', headers:{'Authorization':'Bearer '+(S.key||'')}});
+    loadGoals();
+    showToast('Goal deleted');
+  } catch(e) { showToast('Failed: ' + e.message, true); }
+}
+
+// ── Code Interpreter ──────────────────────────────────────────────────────────
+async function runCode() {
+  const source = document.getElementById('code-source').value.trim();
+  const language = document.getElementById('code-lang').value;
+  if (!source) return showToast('No code to run', true);
+  const outEl = document.getElementById('code-output');
+  const imgEl = document.getElementById('code-images');
+  if (outEl) outEl.textContent = '⟳ Running…';
+  if (imgEl) imgEl.innerHTML = '';
+  try {
+    const r = await api('/v1/code/execute', {method:'POST', body:JSON.stringify({source,language}), headers:{'Content-Type':'application/json','Authorization':'Bearer '+(S.key||'')}});
+    if (outEl) {
+      const out = [(r.stdout||''), r.stderr ? '\n--- stderr ---\n'+(r.stderr||'') : ''].join('').trim();
+      outEl.textContent = out || (r.ok ? '(no output)' : 'Error: exit ' + r.exit_code);
+      outEl.style.color = r.ok ? 'var(--text)' : 'var(--red)';
+    }
+    if (imgEl && r.images && r.images.length) {
+      imgEl.innerHTML = r.images.map(b64 =>
+        `<img src="data:image/png;base64,${b64}" style="max-width:100%;border-radius:8px;margin-top:8px">`
+      ).join('');
+    }
+  } catch(e) {
+    if (outEl) { outEl.textContent = 'Error: ' + e.message; outEl.style.color = 'var(--red)'; }
+  }
+}
+
+// ── Integrations ──────────────────────────────────────────────────────────────
+async function loadIntegrations() {
+  try {
+    const r = await api('/v1/integrations');
+    const connected = r.connected_accounts || {};
+    ['google','outlook'].forEach(svc => {
+      const el = document.getElementById('integ-status-'+svc);
+      if (el) el.textContent = connected[svc] ? '● Connected' : '○ Not connected';
+      if (el) el.style.color = connected[svc] ? 'var(--accent)' : 'var(--text3)';
+    });
+  } catch {}
+}
+
+async function connectIntegration(svc) {
+  try {
+    const r = await api('/v1/integrations/'+svc+'/auth');
+    if (r.url) window.open(r.url, '_blank');
+    else showToast('Auth URL not available — set up OAuth credentials in .env', true);
+  } catch(e) { showToast('Failed: ' + e.message, true); }
 }
 
 // ── Rate status ───────────────────────────────────────────────────────────────

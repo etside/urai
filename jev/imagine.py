@@ -27,6 +27,13 @@ import time
 import urllib.request
 from pathlib import Path
 
+# Load .env so OPENROUTER_API_KEY is available when called from CLI or scripts
+try:
+    from .envfile import load as _load_env
+    _load_env()
+except Exception:
+    pass
+
 ROOT = Path(__file__).resolve().parents[1]
 SD_BIN = ROOT / "third_party" / "stable-diffusion.cpp" / "build" / "bin" / "sd-cli"
 OUT_DIR = ROOT / "out" / "images"
@@ -110,6 +117,32 @@ def _openrouter_generate(prompt: str, width: int = 512, height: int = 512) -> di
         return {"ok": False, "error": f"Image extraction failed: {e}"}
 
 
+def _pollinations_generate(prompt: str, width: int = 512, height: int = 512,
+                            seed: int = 7) -> dict:
+    """Generate image via Pollinations.ai (free, no API key needed).
+
+    Returns {"ok", "path"|"error", "provider"}.
+    """
+    import urllib.parse
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    dest = OUT_DIR / f"urai-{stamp}-poll-s{seed}.png"
+    url = (f"https://image.pollinations.ai/prompt/"
+           f"{urllib.parse.quote(prompt)}?width={width}&height={height}"
+           f"&seed={seed}&nologo=true")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Urai/1.3"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            dest.write_bytes(r.read())
+        if dest.exists() and dest.stat().st_size > 1000:
+            return {"ok": True, "path": str(dest), "prompt": prompt,
+                    "provider": "pollinations", "model": "pollinations-free",
+                    "size": [width, height], "seed": seed}
+        return {"ok": False, "error": "Pollinations returned empty/invalid image"}
+    except Exception as e:
+        return {"ok": False, "error": f"Pollinations request failed: {e}"}
+
+
 def status() -> dict:
     from . import models_registry as reg
     m = reg.load()["models"]["sd-turbo"]
@@ -164,7 +197,18 @@ def generate(prompt: str, out: str = None, steps: int = None,
             f"Run: urai model download sd-turbo (or set OPENROUTER_API_KEY for cloud)."
         )
 
-    # --- Cloud fallback (OpenRouter) ---
+    # --- Cloud fallback: Pollinations (free, no key) → OpenRouter (paid) ---
+    cloud_err = ""
+    if not os.environ.get("URAI_DISABLE_POLLINATIONS"):
+        res = _pollinations_generate(prompt, w, h, seed)
+        if res["ok"]:
+            if out:
+                import shutil
+                shutil.copy(res["path"], out)
+                res["path"] = out
+            return res
+        cloud_err = res["error"]
+
     if os.environ.get("OPENROUTER_API_KEY"):
         res = _openrouter_generate(prompt, w, h)
         if res["ok"]:
@@ -173,7 +217,7 @@ def generate(prompt: str, out: str = None, steps: int = None,
                 shutil.copy(res["path"], out)
                 res["path"] = out
             return res
-        return {"ok": False,
-                "error": f"Local: {local_err} | Cloud: {res['error']}"}
+        cloud_err = f"{cloud_err} | OpenRouter: {res['error']}"
 
-    return {"ok": False, "error": local_err}
+    return {"ok": False,
+            "error": f"Local: {local_err} | Cloud: {cloud_err or 'no cloud provider available'}"}

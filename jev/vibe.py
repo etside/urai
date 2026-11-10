@@ -18,6 +18,13 @@ from __future__ import annotations
 import json, os, re, subprocess, sys, time
 from pathlib import Path
 
+# Load .env so cloud keys are available when called from CLI
+try:
+    from .envfile import load as _load_env
+    _load_env()
+except Exception:
+    pass
+
 # --- Safety patterns (from clawd-code audit) ---
 _DANGEROUS = [
     re.compile(r'\bsudo\b', re.I),
@@ -145,6 +152,8 @@ def vibe_session(task: str, workspace: str | None = None,
             result = complete(backend, msgs, max_tokens=1024, temperature=0.2)
             reply = result['content'].strip()
         except Exception as e:
+            steps.append({'step': step + 1, 'type': 'error',
+                          'content': f'Backend error: {e}'})
             break
 
         # Parse tool call from reply

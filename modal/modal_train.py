@@ -13,7 +13,7 @@ import os
 
 import modal
 
-TAG = os.environ.get("URAI_TRAIN_TAG", "distill-now")
+TAG = os.environ.get("URAI_TRAIN_TAG", "distill-master")
 DATA_PATH = f"data/verified/{TAG}.jsonl"
 
 image = (

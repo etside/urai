@@ -849,6 +849,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         if p in ("/", "/app", "/app/", "/app.html", "/index.html", "/welcome", "/welcome/") or p.startswith("/app/") or p == "/superadmin" or p.lstrip("/") in _STATIC_ASSETS:
             return self._static()
+        # SSE agent event stream: GET /v1/agent/<session_id>/events
+        if p.startswith("/v1/agent/") and p.endswith("/events"):
+            sid = p[len("/v1/agent/"):-len("/events")]
+            return self._agent_events_sse(sid)
         self._send({"error": "not found"}, 404)
 
     # ---------------- POST ----------------
@@ -1687,6 +1691,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._send({"score": score, "hits": hits,
                                "expected": expected, **result})
 
+        # Agent event cancel: POST /v1/agent/<session_id>/cancel
+        if p.startswith("/v1/agent/") and p.endswith("/cancel"):
+            sid = p[len("/v1/agent/"):-len("/cancel")]
+            from . import events as _ev
+            _ev.cancel(sid)
+            return self._send({"ok": True, "cancelled": sid})
+
         return self._send({"error": "not found"}, 404)
 
     # ---------------- DELETE ----------------
@@ -1729,6 +1740,35 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(r, 200 if r.get("ok") else 404)
 
         return self._send({"error": "not found"}, 404)
+
+    def _agent_events_sse(self, session_id: str):
+        """SSE stream of agent events for a given session_id.
+
+        Sends buffered events immediately, then polls every 0.5s for new ones.
+        Exits cleanly on client disconnect (BrokenPipeError).
+        """
+        from . import events as _ev
+        import json as _json
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Accel-Buffering", "no")
+        self._cors()
+        self.end_headers()
+        since = 0.0
+        try:
+            while True:
+                evts = _ev.get_events(session_id, since_ts=since)
+                for e in evts:
+                    since = max(since, e["timestamp"])
+                    line = _json.dumps(e)
+                    self.wfile.write(f"data: {line}\n\n".encode())
+                self.wfile.flush()
+                time.sleep(0.5)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except Exception:
+            pass
 
     def _stream(self, content, model):
         """Buffer-then-stream (legacy path for non-backend callers)."""

@@ -448,8 +448,10 @@ class CloudAPIBackend(Backend):
                               "total_tokens": pt + ct}}
         _msg = data["choices"][0]["message"]
         content = _msg.get("content") or ""
-        if not content.strip() and _msg.get("reasoning_content"):
-            content = _msg["reasoning_content"]
+        if not content.strip():
+            # Reasoning models (e.g. muse-spark-open) may put output in reasoning fields
+            content = (_msg.get("reasoning_content") or
+                       _msg.get("reasoning") or "")
         out = {"content": content, "backend": self.name, "model": self._model_id}
         if isinstance(data.get("usage"), dict):
             out["usage"] = data["usage"]
