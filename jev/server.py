@@ -853,6 +853,28 @@ class Handler(BaseHTTPRequestHandler):
         if p.startswith("/v1/agent/") and p.endswith("/events"):
             sid = p[len("/v1/agent/"):-len("/events")]
             return self._agent_events_sse(sid)
+        # Goals (FEAT-6)
+        if p == "/v1/goals":
+            from .goals import list_goals as _gl
+            return self._send({"ok": True, "goals": _gl()})
+        if p.startswith("/v1/goals/") and not p.endswith("/approve/"):
+            gid = p[len("/v1/goals/"):]
+            from .goals import get_goal as _gg
+            g = _gg(gid)
+            if g is None:
+                return self._send({"error": "goal not found"}, 404)
+            return self._send(g)
+        # Files (FEAT-8)
+        if p == "/v1/files":
+            from .files import list_files as _fl
+            return self._send({"ok": True, "data": _fl()})
+        # Integrations auth (FEAT-9)
+        if p == "/v1/integrations/google/auth":
+            from .integrations.google import get_auth_url as _gurl
+            return self._send(_gurl())
+        if p == "/v1/integrations/outlook/auth":
+            from .integrations.outlook import get_auth_url as _ourl
+            return self._send(_ourl())
         self._send({"error": "not found"}, 404)
 
     # ---------------- POST ----------------
@@ -1047,6 +1069,73 @@ class Handler(BaseHTTPRequestHandler):
             max_tokens = body.get("max_tokens", 256)
             temperature = float(body.get("temperature", 0.2))
             req_model = body.get("model", "urai")
+            mode = body.get("mode", "instant")
+            session_id = body.get("session_id", "")
+
+            # FEAT-8: file_ids — prepend extracted file text as context
+            file_ids = body.get("file_ids", [])
+            if file_ids and isinstance(file_ids, list):
+                try:
+                    from .files import get_file_text as _gft
+                    ctx_parts = []
+                    for fid in file_ids:
+                        txt = _gft(str(fid))
+                        if txt:
+                            ctx_parts.append(f"[Document: {fid}]\n{txt}")
+                    if ctx_parts:
+                        msgs = [{"role": "system",
+                                 "content": "Attached document context:\n" +
+                                 "\n\n".join(ctx_parts)}] + msgs
+                except Exception:
+                    pass
+
+            # FEAT-4: Contemplating mode — parallel multi-agent reasoning
+            if mode == "contemplating":
+                from .contemplate import contemplate as _ct
+                res = _ct(msgs, max_tokens=max_tokens, session_id=session_id)
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                return self._send({
+                    "id": "chatcmpl-urai", "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": req_model,
+                    "choices": [{"index": 0,
+                                 "message": {"role": "assistant",
+                                             "content": res.get("answer", "")},
+                                 "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 0, "completion_tokens": 0,
+                              "total_tokens": 0, "cost": 0},
+                    "reasoning_mode": "contemplating",
+                    "thinking_traces": res.get("thinking_traces", []),
+                    "judge_trace": res.get("judge_trace", {}),
+                    "elapsed_s": res.get("elapsed_s", 0),
+                    "urai": {"tokens_remaining": body.get("_urai_remaining", 0),
+                             "auth": body.get("_urai_reason", "free")},
+                })
+
+            # FEAT-4: Thinking mode — uses reason.chain_of_thought
+            if mode == "thinking":
+                try:
+                    from .reason import reason as _reason
+                    res = _reason(msgs, max_tokens=max_tokens,
+                                  temperature=temperature)
+                    _record_use(ip, device, bool(body.get("_urai_authed")))
+                    return self._send({
+                        "id": "chatcmpl-urai", "object": "chat.completion",
+                        "created": int(time.time()),
+                        "model": req_model,
+                        "choices": [{"index": 0,
+                                     "message": {"role": "assistant",
+                                                 "content": res.get("content",
+                                                                    res.get("answer", ""))},
+                                     "finish_reason": "stop"}],
+                        "usage": res.get("usage") or {},
+                        "reasoning_mode": "thinking",
+                        "urai": {"tokens_remaining": body.get("_urai_remaining", 0),
+                                 "auth": body.get("_urai_reason", "free")},
+                    })
+                except Exception as e:
+                    _m_inc('errors')
+                    return self._send({"error": str(e)[:300]}, 502)
 
             if _has_multimodal(msgs):
                 # Video/audio understanding → Muse Spark Open (hosted, 1M ctx)
@@ -1173,6 +1262,7 @@ class Handler(BaseHTTPRequestHandler):
                               "finish_reason": "stop"}],
                 "usage": usage_out or {"prompt_tokens": 0, "completion_tokens": 0,
                                        "total_tokens": 0, "cost": 0},
+                "reasoning_mode": mode,
                 "urai": {"tokens_remaining": body.get("_urai_remaining", 0),
                           "auth": body.get("_urai_reason", "free"),
                           "cached": False}}
@@ -1698,6 +1788,88 @@ class Handler(BaseHTTPRequestHandler):
             _ev.cancel(sid)
             return self._send({"ok": True, "cancelled": sid})
 
+        # ── FEAT-2: Sandboxed code execution ──────────────────────────────
+        if p == "/v1/code/execute":
+            source = body.get("source", "")
+            language = body.get("language", "python")
+            capture_images = bool(body.get("capture_images", True))
+            from .sandbox import execute as _exec
+            from . import events as _ev
+            result = _exec(source, language=language,
+                           capture_images=capture_images)
+            _ev.emit(body.get("session_id", ""), "code_execute", "sandbox",
+                      tool="code_execute", input_summary=source[:200],
+                      output_summary=str(result.get("stdout", ""))[:200],
+                      status=result.get("ok", False))
+            _record_use(ip, device, bool(body.get("_urai_authed")))
+            return self._send(result)
+
+        # ── FEAT-3: Web artifacts save ─────────────────────────────────────
+        if p == "/v1/artifact/save":
+            kind = body.get("kind", "html")
+            content = body.get("content", "")
+            name = body.get("name", "")
+            from .tools import artifact as _art
+            result = _art(kind=kind, content=content, name=name)
+            return self._send(result)
+
+        # ── FEAT-6: Goals API ─────────────────────────────────────────────
+        if p == "/v1/goals":
+            title = body.get("title", "")
+            if not title:
+                return self._send({"error": "title required"}, 400)
+            from .goals import create_goal as _cg
+            return self._send(_cg(title, body.get("deadline", ""),
+                                   body.get("constraints", "")))
+        if p.startswith("/v1/goals/") and "/approve/" in p:
+            parts = p[len("/v1/goals/"):].split("/approve/")
+            if len(parts) == 2:
+                gid, sid = parts[0], parts[1]
+                from .goals import approve_step as _as
+                return self._send(_as(gid, sid))
+
+        # ── FEAT-8: File upload (multipart or base64) ─────────────────────
+        if p == "/v1/files":
+            ctype_hdr = self.headers.get("Content-Type", "")
+            if "multipart/form-data" in ctype_hdr:
+                import cgi, io as _io
+                n = int(self.headers.get("Content-Length", 0) or 0)
+                raw = self.rfile.read(n)
+                environ = {"REQUEST_METHOD": "POST",
+                           "CONTENT_TYPE": ctype_hdr,
+                           "CONTENT_LENGTH": str(n)}
+                form = cgi.FieldStorage(fp=_io.BytesIO(raw), environ=environ,
+                                        keep_blank_values=True)
+                if "file" in form:
+                    item = form["file"]
+                    data_bytes = item.file.read()
+                    filename = item.filename or "upload.bin"
+                    from .files import save_upload as _su
+                    _record_use(ip, device, bool(body.get("_urai_authed", False)))
+                    return self._send(_su(filename, data_bytes))
+                return self._send({"error": "no file field in form"}, 400)
+            # JSON body with base64
+            b64 = body.get("file", "") or body.get("data", "")
+            filename = body.get("filename", "upload.bin")
+            if not b64:
+                return self._send({"error": "file or data required"}, 400)
+            import base64 as _b64
+            try:
+                data_bytes = _b64.b64decode(b64)
+            except Exception:
+                return self._send({"error": "invalid base64"}, 400)
+            from .files import save_upload as _su
+            _record_use(ip, device, bool(body.get("_urai_authed")))
+            return self._send(_su(filename, data_bytes))
+
+        # ── FEAT-9: Integration OAuth callbacks ───────────────────────────
+        if p == "/v1/integrations/google/callback":
+            from .integrations.google import handle_callback as _gc
+            return self._send(_gc(body.get("code", "")))
+        if p == "/v1/integrations/outlook/callback":
+            from .integrations.outlook import handle_callback as _oc
+            return self._send(_oc(body.get("code", "")))
+
         return self._send({"error": "not found"}, 404)
 
     # ---------------- DELETE ----------------
@@ -1738,6 +1910,21 @@ class Handler(BaseHTTPRequestHandler):
             from .routines import delete_routine as _dr
             r = _dr(routine_id)
             return self._send(r, 200 if r.get("ok") else 404)
+
+        if p.startswith("/v1/goals/"):
+            goal_id = p[len("/v1/goals/"):].strip()
+            if not goal_id:
+                return self._send({"error": "goal id required"}, 400)
+            from .goals import delete_goal as _dg
+            r = _dg(goal_id)
+            return self._send(r, 200 if r.get("ok") else 404)
+
+        if p == "/v1/integrations/google":
+            from .integrations.google import disconnect as _gd
+            return self._send(_gd())
+        if p == "/v1/integrations/outlook":
+            from .integrations.outlook import disconnect as _od
+            return self._send(_od())
 
         return self._send({"error": "not found"}, 404)
 

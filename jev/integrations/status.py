@@ -11,7 +11,7 @@ import os
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _http_ok(url: str, timeout: int = 5) -> bool:
@@ -66,6 +66,12 @@ def report() -> dict:
         {"name": "GPU training (DO/Modal/Kaggle)", "kind": "account",
          "status": "pipelines armed; DO limit 0, Modal needs card, Kaggle free",
          "detail": "accounts speed up training; CPU path always works"},
+        {"name": "Google Calendar + Gmail", "kind": "account",
+         "status": "connected" if _google_connected() else "not connected",
+         "detail": "OAuth via google-auth-oauthlib"},
+        {"name": "Outlook Calendar + Mail", "kind": "account",
+         "status": "connected" if _outlook_connected() else "not connected",
+         "detail": "OAuth via msal"},
     ]
     core_ok = all(i["kind"] == "local-keyless" or True for i in items)
     keyless_ok = all(i["status"] != "degraded (teacher down)"
@@ -74,3 +80,13 @@ def report() -> dict:
     return {"ok": True, "integrated_as_urai": keyless_ok,
             "core_keyless": core_ok, "items": items,
             "identity": "Urai, developed by Tynio LTD"}
+
+
+def _google_connected() -> bool:
+    token = ROOT / "data" / "integrations" / "google_token.json"
+    return token.exists()
+
+
+def _outlook_connected() -> bool:
+    token = ROOT / "data" / "integrations" / "outlook_token.json"
+    return token.exists()

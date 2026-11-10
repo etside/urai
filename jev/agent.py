@@ -37,6 +37,7 @@ SYSTEM = ("You are Urai, an AI developed by Tynio LTD. "
           "  run {argv:[...]}  run_code {source, language?}  analyze {target}\n"
           "  web_search {query}  web_fetch {url}  research {query, depth?}\n"
           "  see {image, question?}  imagine {prompt, out?}\n"
+          "  vision_ground {image, query?}  code_execute {source, language?}\n"
           "  artifact {kind, content, name?}  (kind: code|markdown|html|svg|csv|json)\n"
           "  remember {text, kind?}  recall {query, top?}\n"
           "  mcp {server, tool, args}  browse {goal, steps:[...]}\n"
@@ -112,6 +113,17 @@ def run_tool_call(spec: dict, plan: bool = False,
             from . import vision
             return vision.see(args.get("image", ""), args.get("question",
                              "Describe this image in detail."))
+        if name == "vision_ground":
+            from . import vision
+            return vision.ground(args.get("image", ""),
+                                 args.get("query", "Find all objects"))
+        if name == "code_execute":
+            from .sandbox import execute as _exec
+            return _exec(
+                args.get("source", ""),
+                language=args.get("language", "python"),
+                capture_images=bool(args.get("capture_images", True)),
+            )
         if name == "imagine":
             from . import imagine
             return imagine.generate(args.get("prompt", ""), args.get("out"),

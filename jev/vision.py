@@ -82,3 +82,36 @@ def see(image_path, question="Describe this image in detail.",
         return {"ok": False,
                 "error": f"{str(e)[:200]} — is the vision model up? "
                          f"run: urai model use qwen25vl-3b && urai serve start"}
+
+
+def ground(image_path, query="Find all objects", max_tokens=512,
+           temperature=0.2) -> dict:
+    """Visual grounding: ask the VL model for bounding boxes.
+
+    Returns {ok, objects: [{label, count, bbox}], raw_answer}.
+    bbox coords are 0-1000 normalized (Qwen2.5-VL native format).
+    """
+    import re
+    prompt = (
+        f"Find all {query} in this image. "
+        "Return ONLY valid JSON, no other text:\n"
+        '{"objects": [{"label": str, "count": int, '
+        '"bbox": [x1,y1,x2,y2]}]}\n'
+        "x/y are 0-1000 normalized coordinates."
+    )
+    res = see(image_path, question=prompt, max_tokens=max_tokens,
+              temperature=temperature)
+    if not res.get("ok"):
+        return {"ok": False, "error": res.get("error", "vision failed"),
+                "objects": [], "raw_answer": ""}
+    raw = res.get("answer", "")
+    # Extract JSON block from the answer
+    objects = []
+    try:
+        m = re.search(r'\{.*\}', raw, re.DOTALL)
+        if m:
+            parsed = json.loads(m.group(0))
+            objects = parsed.get("objects", [])
+    except Exception:
+        pass
+    return {"ok": True, "objects": objects, "raw_answer": raw}

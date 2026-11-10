@@ -391,6 +391,36 @@ def cmd_routines(args):
     return 0
 
 
+def cmd_goal(args):
+    from . import goals as gl
+    if args.action == "list":
+        rows = gl.list_goals()
+        for g in rows:
+            done = sum(1 for s in g.get("steps", []) if s.get("status") == "done")
+            total = len(g.get("steps", []))
+            print(f"{g.get('id','?'):<10} {g.get('title','')[:30]:<32} "
+                  f"steps={done}/{total}  status={g.get('status','active')}")
+        if not rows:
+            print("no goals — create one:  urai goal add \"Build a landing page\" --deadline 7d")
+        return 0
+    if args.action == "add":
+        if not args.title:
+            sys.exit("usage: urai goal add <title> [--deadline D] [--constraints C]")
+        _json_out(gl.create_goal(args.title, args.deadline, args.constraints))
+        return 0
+    if args.action == "approve":
+        if not args.title or not args.step_id:
+            sys.exit("usage: urai goal approve <goal-id> --step-id <step-id>")
+        _json_out(gl.approve_step(args.title, args.step_id))
+        return 0
+    if args.action == "delete":
+        if not args.title:
+            sys.exit("usage: urai goal delete <goal-id>")
+        _json_out(gl.delete_goal(args.title))
+        return 0
+    return 0
+
+
 _TUI_HELP = """commands:
   /help              this help
   /clear             clear the conversation
@@ -617,6 +647,15 @@ def main(argv=None):
     p.add_argument("value", nargs="?", default="", help="name (create) / id")
     p.add_argument("--prompt", default="")
     p.add_argument("--schedule", default="manual")
+
+    p = sub.add_parser("goal", help="proactive goals agent")
+    p.add_argument("action", nargs="?", default="list",
+                   choices=["list", "add", "approve", "delete"])
+    p.add_argument("title", nargs="?", default="",
+                   help="goal title (add) or goal id (approve/delete)")
+    p.add_argument("--deadline", default="")
+    p.add_argument("--constraints", default="")
+    p.add_argument("--step-id", default="", help="step id (approve)")
 
     sub.add_parser("tui", help="interactive terminal UI over the local API")
 
@@ -994,6 +1033,8 @@ def main(argv=None):
         return cmd_agents(args)
     if args.cmd == "routines":
         return cmd_routines(args)
+    if args.cmd == "goal":
+        return cmd_goal(args)
     if args.cmd == "tui":
         return cmd_tui(args)
 

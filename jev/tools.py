@@ -749,5 +749,70 @@ TOOL_SCHEMAS += [
     {"type":"function","function":{"name":"chart","description":"Generate a chart from data","parameters":{"type":"object","properties":{"data":{},"kind":{"type":"string","enum":["bar","line","pie","scatter","histogram"],"default":"bar"},"title":{"type":"string","default":""},"xlabel":{"type":"string","default":""},"ylabel":{"type":"string","default":""}},"required":["data"]}}},
     {"type":"function","function":{"name":"appshot","description":"Capture screen and ask Urai to describe it","parameters":{"type":"object","properties":{"question":{"type":"string","default":"What do you see?"},"region":{"type":"array","items":{"type":"integer"}}}}}},
     {"type":"function","function":{"name":"plan","description":"Create and execute a structured multi-step plan for complex tasks","parameters":{"type":"object","properties":{"task":{"type":"string"},"budget_tokens":{"type":"integer","default":2048}},"required":["task"]}}},
+    {"type":"function","function":{"name":"code_execute","description":"Execute code in a sandboxed environment (Docker or subprocess). Captures matplotlib images.","parameters":{"type":"object","properties":{"source":{"type":"string"},"language":{"type":"string","enum":["python","javascript","bash"],"default":"python"},"capture_images":{"type":"boolean","default":True}},"required":["source"]}}},
+    {"type":"function","function":{"name":"vision_ground","description":"Visual grounding: find objects in an image and return bounding boxes","parameters":{"type":"object","properties":{"image":{"type":"string"},"query":{"type":"string","default":"Find all objects"}},"required":["image"]}}},
+    {"type":"function","function":{"name":"calendar_list_events","description":"List upcoming calendar events from connected Google/Outlook","parameters":{"type":"object","properties":{"days":{"type":"integer","default":7}}}}},
+    {"type":"function","function":{"name":"calendar_create_event","description":"Create a calendar event in connected Google/Outlook","parameters":{"type":"object","properties":{"title":{"type":"string"},"start":{"type":"string"},"end":{"type":"string"},"description":{"type":"string","default":""}},"required":["title","start","end"]}}},
+    {"type":"function","function":{"name":"gmail_read","description":"Read recent Gmail messages","parameters":{"type":"object","properties":{"max":{"type":"integer","default":10},"query":{"type":"string","default":""}}}}},
+    {"type":"function","function":{"name":"gmail_send","description":"Send a Gmail message","parameters":{"type":"object","properties":{"to":{"type":"string"},"subject":{"type":"string"},"body":{"type":"string"}},"required":["to","subject","body"]}}},
+    {"type":"function","function":{"name":"outlook_mail_read","description":"Read recent Outlook mail messages","parameters":{"type":"object","properties":{"max":{"type":"integer","default":10}}}}},
+    {"type":"function","function":{"name":"outlook_mail_send","description":"Send an Outlook mail message","parameters":{"type":"object","properties":{"to":{"type":"string"},"subject":{"type":"string"},"body":{"type":"string"}},"required":["to","subject","body"]}}},
 ]
+
+
+# ── FEAT-2: Sandboxed code execution ──────────────────────────────────────────
+def _code_execute(source, language="python", capture_images=True):
+    from .sandbox import execute as _exec
+    return _exec(source, language=language, capture_images=capture_images)
+
+# ── FEAT-5: Visual grounding ──────────────────────────────────────────────────
+def _vision_ground(image, query="Find all objects"):
+    from .vision import ground as _g
+    return _g(image, query=query)
+
+# ── FEAT-9: Calendar / Email integration tools ───────────────────────────────
+def _calendar_list_events(days=7):
+    """List events from whichever integration is connected."""
+    from .integrations import google as _g, outlook as _o
+    g = _g.calendar_list_events(days=days)
+    if g.get("ok"):
+        return g
+    o = _o.calendar_list_events(days=days)
+    if o.get("ok"):
+        return o
+    return g if g.get("error") and "not connected" not in str(g.get("error","")) else o
+
+def _calendar_create_event(title, start, end, description=""):
+    from .integrations import google as _g, outlook as _o
+    g = _g.calendar_create_event(title, start, end, description)
+    if g.get("ok"):
+        return g
+    return _o.calendar_create_event(title, start, end, description)
+
+def _gmail_read(max=10, query=""):
+    from .integrations import google as _g
+    return _g.gmail_read(max=max, query=query)
+
+def _gmail_send(to, subject, body):
+    from .integrations import google as _g
+    return _g.gmail_send(to, subject, body)
+
+def _outlook_mail_read(max=10):
+    from .integrations import outlook as _o
+    return _o.mail_read(max=max)
+
+def _outlook_mail_send(to, subject, body):
+    from .integrations import outlook as _o
+    return _o.mail_send(to, subject, body)
+
+TOOLS.update({
+    "code_execute":      _code_execute,
+    "vision_ground":     _vision_ground,
+    "calendar_list_events": _calendar_list_events,
+    "calendar_create_event": _calendar_create_event,
+    "gmail_read":        _gmail_read,
+    "gmail_send":        _gmail_send,
+    "outlook_mail_read": _outlook_mail_read,
+    "outlook_mail_send": _outlook_mail_send,
+})
 

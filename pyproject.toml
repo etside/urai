@@ -42,6 +42,16 @@ memory = [
 aws = [
     "boto3>=1.34.0",
 ]
+# PDF text extraction
+pdf = [
+    "pymupdf>=1.24.0",
+]
+# Calendar + email OAuth integrations
+integrations = [
+    "google-auth-oauthlib>=1.2.0",
+    "google-api-python-client>=2.131.0",
+    "msal>=1.28.0",
+]
 # Web server (production)
 server = [
     "uvicorn[standard]>=0.30.0",
@@ -57,7 +67,7 @@ train = [
 ]
 # Full install
 all = [
-    "urai[local,browser,vision,chart,memory,aws,server]",
+    "urai[local,browser,vision,chart,memory,aws,server,pdf,integrations]",
 ]
 # Dev tools
 dev = [

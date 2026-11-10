@@ -263,6 +263,12 @@ def _tick():
                 _rda()
             except Exception:
                 pass
+            # Proactive goals agent (FEAT-6)
+            try:
+                from .goals import tick as _goals_tick
+                _goals_tick()
+            except Exception:
+                pass
         except Exception:
             pass
         time.sleep(TICK_S)
