@@ -80,6 +80,43 @@
       "kind": "chat",
       "hf": "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"
     },
+    "qwen3-8b": {
+      "path": "model/base/Qwen3-8B-Q4_K_M.gguf",
+      "params": "8B",
+      "quant": "Q4_K_M",
+      "role": "primary",
+      "kind": "chat",
+      "hf": "https://huggingface.co/ggml-org/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf",
+      "pp_toks": 8,
+      "tg_toks": 4,
+      "ram_mb": 5500,
+      "context_length": 40960
+    },
+    "qwen3-14b": {
+      "path": "model/base/Qwen3-14B-Q4_K_M.gguf",
+      "params": "14B",
+      "quant": "Q4_K_M",
+      "role": "primary",
+      "kind": "chat",
+      "hf": "https://huggingface.co/ggml-org/Qwen3-14B-GGUF/resolve/main/Qwen3-14B-Q4_K_M.gguf",
+      "pp_toks": 6,
+      "tg_toks": 3,
+      "ram_mb": 9500,
+      "context_length": 40960
+    },
+    "qwen3-32b": {
+      "path": "model/base/Qwen3-32B-Q4_K_M.gguf",
+      "params": "32B",
+      "quant": "Q4_K_M",
+      "role": "ultra",
+      "kind": "chat",
+      "hf": "https://huggingface.co/ggml-org/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q4_K_M.gguf",
+      "pp_toks": 5,
+      "tg_toks": 2,
+      "ram_mb": 20000,
+      "context_length": 40960,
+      "note": "Best local reasoning quality. Needs 20GB+ RAM or GPU."
+    },
     "embed-small": {
       "path": "model/base/nomic-embed-text-v1.5.Q4_K_M.gguf",
       "params": "137M",

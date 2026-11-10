@@ -229,6 +229,24 @@ def run_agent(task: str, files: dict = None, budget_tokens: int = 2048,
     if plan:
         trace.append({"step": "plan-mode",
                       "note": "writes recorded, not applied"})
+
+    # Cloud consult: on hard tasks (level 3-4), Urai can query a cloud
+    # model (Muse Spark 816B / DeepSeek / Claude) as a research tool,
+    # incorporate the result into its own reasoning, then answer in Urai's voice.
+    if r.get("cloud_consult") and r["level"] >= 3:
+        try:
+            from .router import cloud_consult as _cc
+            _ctx_msgs = messages[-3:] if len(messages) >= 3 else messages
+            _ctx = " ".join(m.get("content", "")[:500] for m in _ctx_msgs
+                            if isinstance(m.get("content"), str))
+            consult = _cc(task, context=_ctx)
+            if consult:
+                messages.append({"role": "system",
+                                 "content": consult})
+                trace.append({"step": "cloud-consult",
+                              "model": consult[:60]})
+        except Exception as e:
+            trace.append({"step": "cloud-consult-skip", "error": str(e)[:120]})
     while True:
         try:
             res = r["backend"].complete(messages, max_tokens=512)

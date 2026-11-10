@@ -249,11 +249,13 @@ TIERS = {
         "skills_extra": [], "level_cap": 4, "stream": False,
         "cloud_consult": False,
     },
-    # Ultra: consistency sampling (3 runs, best answer), stream, verify always
+    # Ultra: consistency sampling (3 runs, best answer), stream, verify always.
+    # Cloud consult ON: Urai can call Muse Spark (816B) / DeepSeek / Claude
+    # mid-reasoning for hard tasks. The final answer is still Urai's voice.
     "urai-ultra": {
         "consistency": 3, "max_tokens": 1024, "verify": True,
         "skills_extra": [], "level_cap": 4, "stream": True,
-        "cloud_consult": False,  # still Urai — just sampled 3 times
+        "cloud_consult": True,
     },
     # Cyber: security skills forced, always verify
     "urai-cyber": {
