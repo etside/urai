@@ -1,0 +1,10 @@
+{
+  "teacher": "self-local",
+  "total": 28,
+  "kept": 27,
+  "rejected": 1,
+  "dupes": 0,
+  "reject_reasons": {
+    "leaked-bearer-token": 1
+  }
+}

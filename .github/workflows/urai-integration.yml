@@ -1,0 +1,179 @@
+<<<<<<< HEAD
+=======
+# Urai integration tests — API contract + CLI + offline self-test.
+# Stdlib only: no model weights, no installs, deterministic (mock backend).
+>>>>>>> tukitattu/main
+name: Urai Integration
+
+on:
+  push:
+<<<<<<< HEAD
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Smoke test API
+        run: |
+          python3 - <<'EOF'
+          import requests, sys
+          try:
+              r = requests.get("http://52.66.18.45:8777/v1/models", timeout=10,
+                               headers={"Authorization": "Bearer urai_e3sbJn3XztLzDS3nahrJPnYKdbDRiRpY"})
+              print("API status:", r.status_code)
+              if r.status_code == 200:
+                  print("PASS: API reachable")
+              else:
+                  print("WARN: unexpected status", r.status_code)
+          except Exception as e:
+              print("WARN: API not reachable:", e)
+          EOF
+
+  deploy-ec2:
+    name: Deploy to EC2
+    needs: smoke
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        env:
+          EC2_SSH_KEY: ${{secrets.EC2_SSH_KEY}}
+        run: |
+          echo "$EC2_SSH_KEY" > /tmp/urai-deploy.pem
+          chmod 600 /tmp/urai-deploy.pem
+          ssh -o StrictHostKeyChecking=no \
+              -i /tmp/urai-deploy.pem \
+              ubuntu@52.66.18.45 \
+              "cd /home/ubuntu/urai && git pull origin main && sudo systemctl restart urai || echo restart-skipped"
+          rm -f /tmp/urai-deploy.pem
+
+  # Pages is deployed by .github/workflows/pages.yml from jev/static/.
+  # This workflow used to deploy ./studio (which does not exist), producing an
+  # empty artifact that raced with the real deploy and left the site at 404.
+=======
+    branches: ["feat/unified-urai-surface"]
+  pull_request:
+    branches: ["feat/unified-urai-surface"]
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: API contract against a locally-started (mock) server
+  # ---------------------------------------------------------------------------
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Start Urai API (deterministic mock backend)
+        env:
+          URAI_API_KEY: testkey
+          URAI_FORCE_MOCK: "1"
+          URAI_AUTH_GET: "1"
+          URAI_PORT: "8771"
+          JEV_LLAMA_URL: "http://127.0.0.1:9"
+          URAI_EMBED_URL: "http://127.0.0.1:9"
+          URAI_DATA_DIR: ${{ runner.temp }}/urai-data
+        run: |
+          python3 -m jev.server > /tmp/urai-server.log 2>&1 &
+          echo $! > /tmp/urai-server.pid
+          python3 - <<'PY'
+          import sys, time, urllib.request
+          for _ in range(30):
+              try:
+                  urllib.request.urlopen("http://127.0.0.1:8771/health", timeout=2)
+                  print("server is up")
+                  sys.exit(0)
+              except Exception:
+                  time.sleep(1)
+          print("server never became healthy", file=sys.stderr)
+          sys.exit(1)
+          PY
+          echo "----- server log -----"; cat /tmp/urai-server.log
+
+      - name: Run API integration test
+        env:
+          URAI_BASE: http://127.0.0.1:8771
+          URAI_API_KEY: testkey
+        run: python3 scripts/integration/api_test.py
+
+      - name: Server log on failure
+        if: failure()
+        run: cat /tmp/urai-server.log || true
+
+      - name: Stop Urai API
+        if: always()
+        run: kill "$(cat /tmp/urai-server.pid)" 2>/dev/null || true
+
+  # ---------------------------------------------------------------------------
+  # Job 2: CLI surface — compile + nlp/vibe module CLIs + help
+  # ---------------------------------------------------------------------------
+  cli:
+    name: cli
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile every jev module
+        run: python3 -m py_compile jev/*.py
+
+      - name: Unit tests (nlp / vibe / pipeline)
+        run: python3 -m unittest discover -s tests -t . -v
+
+      - name: nlp CLI detects negative sentiment
+        run: |
+          out=$(python3 -m jev.nlp "this is broken and I'm frustrated, fix asap")
+          echo "$out"
+          echo "$out" | grep -q '"negative"'
+
+      - name: vibe CLI emits a style directive
+        run: |
+          out=$(python3 -m jev.vibe "thanks, great work")
+          echo "$out"
+          echo "$out" | grep -q 'directive'
+
+      - name: CLI help
+        run: bin/urai --help
+
+  # ---------------------------------------------------------------------------
+  # Job 3: offline self-test — nlp / vibe / profile / retrieval, no network
+  # ---------------------------------------------------------------------------
+  selftest:
+    name: selftest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Offline smoke self-test
+        run: python3 scripts/smoke_urai.py --offline
+>>>>>>> tukitattu/main

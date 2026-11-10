@@ -1,0 +1,11 @@
+{
+  "2026-11-10": {
+    "openrouter": {
+      "prompt_tokens": 152,
+      "completion_tokens": 64,
+      "estimated_usd": 0.0,
+      "requests": 1,
+      "last_model": "muse-spark-open"
+    }
+  }
+}

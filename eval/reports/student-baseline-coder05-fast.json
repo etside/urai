@@ -1,0 +1,93 @@
+{
+ "model": "coder05-fast",
+ "n": 10,
+ "mean_score": 0.2,
+ "results": [
+  {
+   "id": "py-retry-01",
+   "score": 0.0,
+   "passed": 0,
+   "checks": 1,
+   "failures": [
+    "syntax-error: expected 'except' or 'finally' block (<candidate>, line 22)"
+   ]
+  },
+  {
+   "id": "py-retry-01-dup",
+   "score": 0.0,
+   "passed": 0,
+   "checks": 1,
+   "failures": [
+    "syntax-error: expected 'except' or 'finally' block (<candidate>, line 21)"
+   ]
+  },
+  {
+   "id": "sql-ledger-01",
+   "score": 0.0,
+   "passed": 0,
+   "checks": 0,
+   "failures": [
+    "private-home-path"
+   ]
+  },
+  {
+   "id": "debug-trace-01",
+   "score": 0.0,
+   "passed": 0,
+   "checks": 0,
+   "failures": [
+    "private-home-path"
+   ]
+  },
+  {
+   "id": "tool-git-01",
+   "score": 0.0,
+   "passed": 0,
+   "checks": 0,
+   "failures": [
+    "private-home-path"
+   ]
+  },
+  {
+   "id": "api-idem-01",
+   "score": 0.0,
+   "passed": 0,
+   "checks": 0,
+   "failures": [
+    "private-home-path"
+   ]
+  },
+  {
+   "id": "sec-auth-01",
+   "score": 1.0,
+   "passed": 1,
+   "checks": 1,
+   "failures": []
+  },
+  {
+   "id": "ts-ws-01",
+   "score": 0.0,
+   "passed": 0,
+   "checks": 0,
+   "failures": [
+    "private-home-path"
+   ]
+  },
+  {
+   "id": "evil-eval-bad",
+   "score": 1.0,
+   "passed": 1,
+   "checks": 1,
+   "failures": []
+  },
+  {
+   "id": "json-schema-01",
+   "score": 0.0,
+   "passed": 1,
+   "checks": 1,
+   "failures": [
+    "private-home-path"
+   ]
+  }
+ ]
+}

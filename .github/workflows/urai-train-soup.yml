@@ -1,0 +1,108 @@
+name: Urai Train — Soup (unified student, weekly cron)
+
+# Canonical GPU training entry point.
+# Replaces: urai-modal-train.yml, urai-train.yml, urai-gpu-run.yml
+#
+# Merges data/verified/**/*.jsonl -> unified.jsonl, then fine-tunes
+# unsloth/Qwen3-4B-bnb-4bit with Soup (QLoRA rank 16, stream_layers).
+# Exports GGUF (q4_k_m) and publishes the adapter to the urai-deps release.
+#
+# Secrets required: none beyond GITHUB_TOKEN (auto-provided).
+# Optional secrets: HF_TOKEN (for future HF Hub push).
+
+on:
+  schedule:
+    - cron: "0 2 * * 1"    # Monday 02:00 UTC every week
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Dataset tag (unified = merge all verified rows)"
+        required: false
+        default: "unified"
+      max_steps:
+        description: "Max training steps (0 = use epochs from config)"
+        required: false
+        default: "300"
+
+permissions:
+  contents: write
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Count and validate training rows
+        id: count_rows
+        run: |
+          python3 scripts/train/merge_verified.py
+          rows=$(wc -l < data/verified/unified.jsonl)
+          echo "row_count=$rows" >> "$GITHUB_OUTPUT"
+          echo "Merged $rows rows"
+          if [ "$rows" -lt 50 ]; then
+            echo "::error::Only $rows rows in unified.jsonl — need at least 50"
+            exit 1
+          fi
+
+      - name: Train with Soup
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          URAI_TRAIN_TAG: ${{ inputs.tag || 'unified' }}
+          MAX_TRAIN_STEPS: ${{ inputs.max_steps || '300' }}
+        run: bash scripts/train/soup_train.sh
+
+      - name: Upload GGUF artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-gguf-${{ inputs.tag || 'unified' }}-${{ github.run_number }}
+          path: model/urai-latest.gguf
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload adapter artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: urai-adapter-unified-soup
+          path: adapters/unified-soup/
+          if-no-files-found: ignore
+
+      - name: Commit adapter_info.json
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ROWS=${{ steps.count_rows.outputs.row_count }}
+          STEPS="${{ inputs.max_steps || '300' }}"
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          TAG="${{ inputs.tag || 'unified' }}"
+
+          mkdir -p adapters/unified-soup
+          cat > adapters/unified-soup/adapter_info.json <<EOF
+          {
+            "date": "$DATE",
+            "rows": $ROWS,
+            "steps": $STEPS,
+            "tag": "$TAG",
+            "base_model": "unsloth/Qwen3-4B-bnb-4bit",
+            "method": "lora",
+            "run_id": "${{ github.run_id }}",
+            "run_number": ${{ github.run_number }}
+          }
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add adapters/unified-soup/adapter_info.json
+          git diff --cached --quiet && echo "No metadata changes" || \
+            git commit -m "chore: update adapter_info.json [rows=$ROWS steps=$STEPS tag=$TAG] [skip ci]"
+          git push origin HEAD:main || echo "Push skipped (no changes)"

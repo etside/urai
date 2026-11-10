@@ -1,0 +1,73 @@
+{"ts": "2026-11-09T16:33:38.887026", "level": "info", "msg": "=================================================="}
+{"ts": "2026-11-09T16:33:38.888784", "level": "info", "msg": "Starting Urai self-training cycle"}
+{"ts": "2026-11-09T16:33:38.888885", "level": "info", "msg": "Generating new distill data..."}
+{"ts": "2026-11-09T16:33:39.058150", "level": "info", "msg": "Data ready: 0 rows in distill-master.jsonl"}
+{"ts": "2026-11-09T16:33:40.445831", "level": "info", "msg": "soup data inspect: File not found: /home/kp/data/verified/distill-master.jsonl"}
+{"ts": "2026-11-09T16:33:41.243599", "level": "info", "msg": "Modal training dispatched successfully"}
+{"ts": "2026-11-09T16:33:41.244136", "level": "warning", "msg": "Bench script not found, skipping eval"}
+{"ts": "2026-11-09T16:33:41.244271", "level": "info", "msg": "Cycle complete"}
+{"ts": "2026-11-09T16:33:41.244369", "level": "info", "msg": "=================================================="}
+{"ts": "2026-11-09T16:33:57.810171", "level": "info", "msg": "=================================================="}
+{"ts": "2026-11-09T16:33:57.810554", "level": "info", "msg": "Starting Urai self-training cycle"}
+{"ts": "2026-11-09T16:33:57.810679", "level": "info", "msg": "Generating new distill data..."}
+{"ts": "2026-11-09T16:33:57.928419", "level": "info", "msg": "Data ready: 735 rows in distill-master.jsonl"}
+{"ts": "2026-11-09T16:33:59.166438", "level": "info", "msg": "soup data inspect: Inspecting /home/kp/urai-work/data/verified/distill-master.jsonl...\n\n                                 Dataset Stats                                  \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"}
+{"ts": "2026-11-09T16:33:59.166976", "level": "info", "msg": "Dispatching Modal training via: modal_train.py"}
+{"ts": "2026-11-09T16:34:02.936087", "level": "warning", "msg": "Modal dispatch failed (exit 1): \u256d\u2500 Error \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 local file /home/kp/urai-work/data/verified/distill-now.jsonl does not exist \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n"}
+{"ts": "2026-11-09T16:34:02.936364", "level": "info", "msg": "Modal unavailable, attempting local soup train..."}
+{"ts": "2026-11-09T16:34:02.936652", "level": "info", "msg": "Checking GPU availability for local soup train..."}
+{"ts": "2026-11-09T16:34:37.414441", "level": "info", "msg": "=================================================="}
+{"ts": "2026-11-09T16:34:37.414670", "level": "info", "msg": "Starting Urai self-training cycle"}
+{"ts": "2026-11-09T16:34:37.414749", "level": "info", "msg": "Generating new distill data..."}
+{"ts": "2026-11-09T16:34:37.524144", "level": "info", "msg": "Data ready: 735 rows in distill-master.jsonl"}
+{"ts": "2026-11-09T16:34:38.589991", "level": "info", "msg": "soup data inspect: Inspecting /home/kp/urai-work/data/verified/distill-master.jsonl...\n\n                                 Dataset Stats                                  \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"}
+{"ts": "2026-11-09T16:34:38.590546", "level": "info", "msg": "Dispatching Modal training via: modal_train.py"}
+{"ts": "2026-11-09T16:34:45.255028", "level": "warning", "msg": "Modal dispatch failed (exit 1): \u256d\u2500 Error \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 Please add a payment method to use T4 GPU functions.                         \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n"}
+{"ts": "2026-11-09T16:34:45.255208", "level": "info", "msg": "Modal unavailable, attempting local soup train..."}
+{"ts": "2026-11-09T16:34:45.255387", "level": "info", "msg": "Checking GPU availability for local soup train..."}
+{"ts": "2026-11-09T16:34:45.256090", "level": "warning", "msg": "nvidia-smi not found \u2014 no GPU on this VPS. Training runs on Modal/Kaggle."}
+{"ts": "2026-11-09T16:34:45.256252", "level": "warning", "msg": "Bench script not found, skipping eval"}
+{"ts": "2026-11-09T16:34:45.256349", "level": "info", "msg": "Cycle complete"}
+{"ts": "2026-11-09T16:34:45.256409", "level": "info", "msg": "=================================================="}
+{"ts": "2026-11-09T16:44:55.121511", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-09T16:44:55.122313", "level": "info", "msg": "Urai self-training cycle START"}
+{"ts": "2026-11-09T16:44:55.122409", "level": "info", "msg": "Scraping GitHub for Kaggle/Tailscale/LiteLLM training patterns..."}
+{"ts": "2026-11-09T16:55:27.104037", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-09T16:55:27.105111", "level": "info", "msg": "Urai self-training cycle START"}
+{"ts": "2026-11-09T16:55:27.105280", "level": "info", "msg": "Scraping GitHub for Kaggle/Tailscale/LiteLLM training patterns..."}
+{"ts": "2026-11-09T16:56:08.836342", "level": "info", "msg": "Scraped 49 rows from GitHub -> distill-ghsoup.jsonl"}
+{"ts": "2026-11-09T16:56:08.836511", "level": "info", "msg": "Generating base distill data..."}
+{"ts": "2026-11-09T16:56:08.960580", "level": "info", "msg": "Master dataset: 735 rows"}
+{"ts": "2026-11-09T16:56:08.985061", "level": "info", "msg": "Merged: +49 new rows from gh-soup. Master now 595 rows."}
+{"ts": "2026-11-09T16:56:10.444836", "level": "info", "msg": "soup validate: Inspecting /home/kp/urai-work/data/verified/distill-master.jsonl...                                   Dataset Stats"}
+{"ts": "2026-11-09T16:56:10.444969", "level": "info", "msg": "Preparing Kaggle training dispatch..."}
+{"ts": "2026-11-09T16:56:11.979179", "level": "info", "msg": "Kaggle CLI ready: Kaggle CLI 2.2.5"}
+{"ts": "2026-11-09T16:56:11.980102", "level": "info", "msg": "Ready to push 595 rows to Kaggle dataset sherikhtj/urai-distill-v0-2"}
+{"ts": "2026-11-09T16:56:39.767684", "level": "info", "msg": "Kaggle dataset pushed successfully"}
+{"ts": "2026-11-09T16:56:39.768501", "level": "info", "msg": "Testing Urai API via LiteLLM..."}
+{"ts": "2026-11-09T16:56:49.373899", "level": "info", "msg": "LiteLLM test: \u001b[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new\u001b[0m\nLiteLLM.Info: If you need to debug th"}
+{"ts": "2026-11-09T16:56:49.374042", "level": "info", "msg": "Urai self-training cycle COMPLETE"}
+{"ts": "2026-11-09T16:56:49.374107", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-09T18:00:02.222706", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-09T18:00:02.225200", "level": "info", "msg": "Urai self-training cycle START"}
+{"ts": "2026-11-09T18:00:02.225461", "level": "info", "msg": "Scraping GitHub for Kaggle/Tailscale/LiteLLM training patterns..."}
+{"ts": "2026-11-09T18:00:50.564326", "level": "warning", "msg": "Scraper error: Traceback (most recent call last):\n  File \"/usr/lib/python3/dist-packages/urllib3/connectionpool.py\", line 534, in _make_request\n    response = conn.getresponse()\n  File \"/usr/lib/python3/dist-package"}
+{"ts": "2026-11-09T18:00:50.564476", "level": "info", "msg": "Generating base distill data..."}
+{"ts": "2026-11-09T18:00:50.672727", "level": "info", "msg": "Master dataset: 735 rows"}
+{"ts": "2026-11-09T18:00:50.698654", "level": "info", "msg": "Merged: +49 new rows from gh-soup. Master now 595 rows."}
+{"ts": "2026-11-09T19:46:46.587518", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-09T19:46:46.588187", "level": "info", "msg": "Urai self-training cycle START"}
+{"ts": "2026-11-09T19:46:46.588448", "level": "info", "msg": "Scraping GitHub for Kaggle/Tailscale/LiteLLM training patterns..."}
+{"ts": "2026-11-09T19:47:27.655552", "level": "warning", "msg": "Scraper error: Traceback (most recent call last):\n  File \"/usr/lib/python3/dist-packages/urllib3/connectionpool.py\", line 534, in _make_request\n    response = conn.getresponse()\n  File \"/usr/lib/python3/dist-package"}
+{"ts": "2026-11-09T19:47:27.655731", "level": "info", "msg": "Generating base distill data..."}
+{"ts": "2026-11-09T19:47:27.780876", "level": "info", "msg": "Master dataset: 735 rows"}
+{"ts": "2026-11-09T19:47:27.815758", "level": "info", "msg": "Merged: +49 new rows from gh-soup. Master now 595 rows."}
+{"ts": "2026-11-09T19:47:29.419870", "level": "info", "msg": "soup validate: Inspecting /home/kp/urai-work/data/verified/distill-master.jsonl...                                   Dataset Stats"}
+{"ts": "2026-11-09T19:47:29.420003", "level": "info", "msg": "Preparing Kaggle training dispatch..."}
+{"ts": "2026-11-09T19:47:31.665850", "level": "info", "msg": "Kaggle CLI ready: Kaggle CLI 2.2.5"}
+{"ts": "2026-11-09T19:47:31.667984", "level": "info", "msg": "Ready to push 595 rows to Kaggle dataset sherikhtj/urai-distill-v0-2"}
+{"ts": "2026-11-09T19:47:58.219609", "level": "info", "msg": "Kaggle dataset pushed successfully"}
+{"ts": "2026-11-09T19:47:58.219788", "level": "info", "msg": "Testing Urai API via LiteLLM..."}
+{"ts": "2026-11-09T19:48:08.085606", "level": "info", "msg": "LiteLLM test: \u001b[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new\u001b[0m\nLiteLLM.Info: If you need to debug th"}
+{"ts": "2026-11-09T19:48:08.092814", "level": "info", "msg": "Urai self-training cycle COMPLETE"}
+{"ts": "2026-11-09T19:48:08.092954", "level": "info", "msg": "======================================================="}

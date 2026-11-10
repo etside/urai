@@ -1,0 +1,41 @@
+# Urai Soup Training Config
+# Model: Qwen3-0.6B fine-tuned as Urai
+# Run: soup train --config soup.yaml
+# On Kaggle T4x2 or Modal A10G
+
+base: unsloth/Qwen3-0.6B-bnb-4bit
+task: sft
+backend: unsloth  # 2-5x faster; pip install "soup-cli[fast]" on GPU node
+
+data:
+  train: ../data/verified/distill-master.jsonl
+  format: alpaca
+  val_split: 0.05
+
+training:
+  epochs: 2
+  lr: 2e-4
+  batch_size: 2
+  gradient_accumulation_steps: 4
+  seed: 3407
+  quantization: 4bit
+  stream_layers: false   # set true only if VRAM < 8GB
+  lora:
+    r: 16
+    alpha: 16
+    dropout: 0
+    target_modules:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+      - gate_proj
+      - up_proj
+      - down_proj
+
+eval:
+  # Gate: only ship if pass rate >= 0.70
+  gate: 0.70
+  task_eval: ../eval/bench-tasks.jsonl
+
+output: ../model/urai-soup-adapter

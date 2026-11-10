@@ -1,0 +1,21 @@
+{
+  "tag": "weekly",
+  "probes": 10,
+  "passed": 0,
+  "failed": 10,
+  "by_kind": {
+    "tool": 4,
+    "reasoning": 4,
+    "instruction": 2
+  },
+  "tasks_written": 0,
+  "calls": 0,
+  "bench_window": [
+    {
+      "file": "bench-harness-cyber.json",
+      "acc": {}
+    }
+  ],
+  "regression": null,
+  "safety": "data-only output; no serving-code changes, no deploys, no credential storage, previews PII-scrubbed"
+}

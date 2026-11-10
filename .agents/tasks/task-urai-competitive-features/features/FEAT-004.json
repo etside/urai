@@ -1,0 +1,28 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Web Artifacts (HTML Artifact Canvas): Client-side detection of ```html and ```artifact code blocks in assistant messages. Render HTML artifacts in a sandboxed iframe split-pane (chat left, canvas right). Add Fullscreen, Copy, Download buttons. Add POST /v1/artifact/save endpoint for persistence. Independent of other FEATs — no new Python modules needed.",
+  "status": "pending",
+  "steps": [
+    "Edit jev/static/app.html formatContent() function: add detection for ```html and ```artifact code blocks before the existing code block regex. When found, instead of rendering a <pre><code> block, call renderArtifact(content) which returns a div.artifact-container HTML string. Store detected artifacts in window._artifacts[] array.",
+    "Edit jev/static/app.html CSS: add .artifact-container styles: full-width box with iframe, toolbar row (Fullscreen / Copy / Download buttons), border-radius matching --radius, shadow. Add .artifact-split class for the chat split-pane layout when artifact is active: display:flex; .msgs-pane: flex 1, min-width 0; .artifact-pane: flex 1, min-width 300px. Add mobile breakpoint to collapse to single column.",
+    "Edit jev/static/app.html renderArtifact(html, id) function: creates <iframe sandbox='allow-scripts allow-same-origin' srcdoc='...'> with the HTML content. Buttons: Fullscreen opens the iframe in a modal overlay; Copy puts HTML in clipboard; Download triggers a Blob URL download. Each artifact gets a stable id (md5-lite hash of content).",
+    "Edit jev/static/app.html: add activateArtifactSplit(artifactHtml) that shows the split-pane layout. When a message containing an artifact is rendered, call this. Add dismissArtifact() that hides the split-pane and returns to full-width chat.",
+    "Edit jev/server.py do_POST: add 'if p == \"/v1/artifact/save\":' block. Parse {content, kind, name}. Call tools.artifact(kind, content, name). Return {ok, artifact_id, path, url: '/v1/artifact/'+artifact_id}. Add 'GET /v1/artifact/<id>' to do_GET that reads from data/artifacts/ and returns the content."
+  ],
+  "acceptance_criteria": [
+    "python3 scripts/smoke_urai.py passes all checks",
+    "Sending a message containing ```html\\n<h1>Hello Artifacts</h1>\\n``` in Studio chat causes an iframe to appear in the split-pane showing the rendered HTML",
+    "Fullscreen button opens the artifact in a modal overlay",
+    "Download button triggers file download of the HTML",
+    "Copy button copies raw HTML to clipboard",
+    "POST /v1/artifact/save returns {ok:true, artifact_id:...}"
+  ],
+  "verification": [
+    "python3 scripts/smoke_urai.py",
+    "python3 -c \"import jev.server; print('server imports ok')\"",
+    "grep -c 'artifact' jev/static/app.html"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

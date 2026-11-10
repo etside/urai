@@ -1,0 +1,38 @@
+# Urai unified-student training config (Soup >=0.73.0)
+# Replaces Modal-based training. Run via:
+#   soup train --config config/soup_train.yaml
+# or via CI: .github/workflows/urai-train-soup.yml
+
+base: unsloth/Qwen3-4B-bnb-4bit
+
+task: sft
+
+data:
+  train: data/verified/unified.jsonl   # produced by merge_verified.py
+  format: alpaca
+  val_split: 0.05
+
+training:
+  max_steps: 300          # ~1h on T4; set to 0 to use epochs instead
+  epochs: 1               # used only when max_steps == 0
+  lr: 2.0e-4
+  batch_size: 2
+  gradient_accumulation_steps: 4
+  seq_len: 2048
+  optim: adamw_8bit
+  lora:
+    r: 16
+    alpha: 16
+    dropout: 0.0
+    target_modules:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+      - gate_proj
+      - up_proj
+      - down_proj
+  quantization: 4bit
+  stream_layers: true      # BETA: streams frozen base layer-by-layer, validated for Qwen3 NF4
+
+output: adapters/unified-soup

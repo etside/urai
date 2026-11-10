@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Observable Agent Event Log: New jev/events.py with per-session in-memory ring buffer. Wire emit() into agent.py and vibe.py tool calls. Add GET /v1/agent/<session_id>/events SSE endpoint and POST /v1/agent/<session_id>/cancel. Add collapsible event log sidebar in Studio Vibe/Agent panels. This FEAT has no dependencies and is listed second because it is used by FEAT-003 through FEAT-006.",
+  "status": "pending",
+  "steps": [
+    "Create jev/events.py: import collections, threading, time. _store: dict[str, collections.deque] protected by threading.Lock. _cancelled: set of session_ids. Functions: emit(session_id, type, agent_id, tool, input_summary, output_summary, status) — appends {timestamp:time.time(), type, agent_id, tool, input_summary:str[:200], output_summary:str[:200], status} to deque(maxlen=500). get_events(session_id, since_ts=0.0) -> list — returns events with timestamp > since_ts. clear(session_id). is_cancelled(session_id) -> bool. cancel(session_id). No external deps.",
+    "Edit jev/agent.py: import jev.events as _events at top (lazy: inside run_agent function to avoid circular). After run_tool_call() returns result, call _events.emit(session_id=kwargs.get('session_id',''), type='tool_call', agent_id='agent', tool=spec.get('tool',''), input_summary=str(spec.get('args',''))[:200], output_summary=str(result)[:200], status=bool(result.get('ok',False))). Add session_id kwarg to run_agent() signature.",
+    "Edit jev/vibe.py: in _exec_tool(), after execution, call events.emit() with type='vibe_tool', agent_id='vibe', tool=name, input/output summaries. Import lazily inside the function.",
+    "Edit jev/server.py do_GET: add block matching p.startswith('/v1/agent/') and '/events' in p. Extract session_id from path. Set SSE headers (Content-Type: text/event-stream, Cache-Control: no-cache, X-Accel-Buffering: no). Send buffered events first as 'data: {json}\\n\\n'. Then poll get_events(sid, since_ts) every 0.5s in a while True loop, write new events, update since_ts. Break on BrokenPipeError/ConnectionResetError. Edit do_POST: add '/v1/agent/<sid>/cancel' → calls events.cancel(sid).",
+    "Edit jev/static/app.html: in the Vibe and Agents panels, add a collapsible event log sidebar div. After starting a vibe/agent run (POST /vibe or /agent), open an EventSource to /v1/agent/{sessionId}/events. Each incoming event appended as a row: icon (tool_call=🔧, vibe_tool=⚡), tool name, status badge (✅/❌), timestamp. Click to expand shows input_summary and output_summary. Add a Cancel button that POSTs to /v1/agent/{sessionId}/cancel."
+  ],
+  "acceptance_criteria": [
+    "python3 scripts/smoke_urai.py passes all checks",
+    "python3 -c \"from jev.events import emit, get_events, cancel, is_cancelled; emit('s1','tool_call','a','web_search','q','r',True); assert len(get_events('s1'))==1\" runs without error",
+    "curl -N http://localhost:8777/v1/agent/test/events returns SSE stream (200 text/event-stream)",
+    "Event log sidebar renders in Studio Vibe panel"
+  ],
+  "verification": [
+    "python3 scripts/smoke_urai.py",
+    "python3 -c \"from jev.events import emit, get_events; emit('s1','tool_call','a','t','i','o',True); evs=get_events('s1'); assert evs[0]['tool']=='t'; print('events ok')\"",
+    "python3 -c \"import jev.agent; print('agent imports ok')\"",
+    "python3 -c \"import jev.vibe; print('vibe imports ok')\""
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

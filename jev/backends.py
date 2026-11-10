@@ -1,0 +1,797 @@
+#!/usr/bin/env python3
+"""Backends: anything that can complete a prompt. Stdlib only.
+
+  MockBackend          offline deterministic (tests, no-model dev)
+  LlamaServerBackend   local llama-server OpenAI endpoint (fast/primary local)
+  TeacherAPIBackend    external OpenAI-compatible API (legacy alias kept)
+  CloudAPIBackend      registry-driven cloud (Kimi K2, DeepSeek, Claude, GPT-4o-mini, …)
+  EmbeddingBackend     local embedding server (llama-server --embedding, :8081)
+
+Backend selection lives in router.py; this file only executes.
+
+Streaming:
+  All backends that support it implement stream_complete() which yields
+  raw SSE chunk strings (the part after "data: ").  The server calls
+  stream_complete() directly when body.stream=true.
+
+Probe cache:
+  Each remote backend probes its health endpoint once per process and
+  caches the result.  Failed backends are retried after PROBE_TTL_S.
+  GPU availability is probed via torch once and cached.
+"""
+
+from __future__ import annotations
+import json
+import os
+import threading
+import time
+import urllib.error
+import urllib.request
+
+# ── Probe cache ────────────────────────────────────────────────────────────────
+
+PROBE_TTL_S = int(os.environ.get("URAI_PROBE_TTL", "120"))  # re-probe interval
+
+_probe_cache: dict[str, tuple[bool, float]] = {}  # key -> (ok, expires_at)
+_probe_lock = threading.Lock()
+
+
+def _probe_cached(key: str, fn, ttl: int = PROBE_TTL_S) -> bool:
+    """Run fn() at most once per ttl seconds; cache ok/fail."""
+    now = time.monotonic()
+    with _probe_lock:
+        entry = _probe_cache.get(key)
+        if entry and now < entry[1]:
+            return entry[0]
+    try:
+        fn()
+        ok = True
+    except Exception:
+        ok = False
+    with _probe_lock:
+        _probe_cache[key] = (ok, now + ttl)
+    return ok
+
+
+def _gpu_available() -> bool:
+    """True if CUDA is reachable (probed once per process lifetime)."""
+    def check():
+        import torch  # type: ignore
+        if not torch.cuda.is_available():
+            raise RuntimeError("no cuda")
+    return _probe_cached("cuda", check, ttl=3600)
+
+
+# ── HTTP helpers ───────────────────────────────────────────────────────────────
+
+def _post_json(url: str, payload: dict, key: str | None = None,
+               timeout: int = 900) -> dict:
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = "Bearer " + key
+    req = urllib.request.Request(url, json.dumps(payload).encode(), headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.load(resp)
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode()[:400]
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"HTTP {e.code}: {detail}")
+
+
+def _stream_post(url: str, payload: dict, key: str | None = None,
+                 timeout: int = 120):
+    """POST with stream=True; yields raw SSE lines from the response."""
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = "Bearer " + key
+    payload = dict(payload)
+    payload["stream"] = True
+    req = urllib.request.Request(url, json.dumps(payload).encode(), headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            for raw in resp:
+                line = raw.decode("utf-8", errors="replace").rstrip("\n")
+                if line.startswith("data: "):
+                    yield line[6:]
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode()[:400]
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"HTTP {e.code}: {detail}")
+
+
+# ── Base ───────────────────────────────────────────────────────────────────────
+
+class Backend:
+    name = "base"
+
+    def complete(self, messages: list, max_tokens: int = 256,
+                 temperature: float = 0.2) -> dict:
+        raise NotImplementedError
+
+    def healthy(self) -> bool:
+        return True
+
+    def stream_complete(self, messages: list, max_tokens: int = 256,
+                        temperature: float = 0.2):
+        """Yield SSE data payloads (str).  Default: buffer complete() then chunk."""
+        res = self.complete(messages, max_tokens, temperature)
+        content = res.get("content", "")
+        model = res.get("model", self.name)
+        for i in range(0, max(len(content), 1), 64):
+            piece = content[i:i + 64]
+            yield json.dumps({
+                "id": "chatcmpl-urai", "object": "chat.completion.chunk",
+                "model": model,
+                "choices": [{"index": 0,
+                              "delta": {"content": piece},
+                              "finish_reason": None}]})
+        yield json.dumps({
+            "id": "chatcmpl-urai", "object": "chat.completion.chunk",
+            "model": model,
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
+
+
+# ── Mock ───────────────────────────────────────────────────────────────────────
+
+class MockBackend(Backend):
+    name = "mock"
+
+    def complete(self, messages, max_tokens=256, temperature=0.2):
+        last = messages[-1]["content"] if messages else ""
+        return {"content": f"[mock] received {len(last)} chars; "
+                           "configure a real backend for output.",
+                "backend": self.name, "mock": True}
+
+
+# ── Local llama-server ─────────────────────────────────────────────────────────
+
+class LlamaServerBackend(Backend):
+    """Local llama-server (llama.cpp) — fast/primary student host.
+
+    GPU path: llama-server itself handles GPU via n_gpu_layers.
+    We just check CUDA availability to pick the best local model tier.
+    """
+
+    name = "llama-local"
+
+    def __init__(self, base: str | None = None, model: str | None = None):
+        self.base = (base or os.environ.get("JEV_LLAMA_URL",
+                                            "http://127.0.0.1:8080")).rstrip("/")
+        if model is None:
+            model = os.environ.get("JEV_LLAMA_MODEL")
+        if model is None:
+            try:
+                from . import models_registry as _reg
+                model = _reg.load().get("active")
+            except Exception:
+                model = None
+        self.model = model or "local-student"
+
+    def healthy(self) -> bool:
+        def _probe():
+            try:
+                return urllib.request.urlopen(
+                    self.base + "/health", timeout=5).read()
+            except urllib.error.HTTPError as e:
+                if e.code != 404:
+                    raise
+                # OpenAI-compatible servers such as Ollama have no /health;
+                # fall back to the model list as a liveness probe.
+                return urllib.request.urlopen(
+                    self.base + "/v1/models", timeout=5).read()
+        return _probe_cached(f"llama:{self.base}", _probe)
+
+    def complete(self, messages, max_tokens=256, temperature=0.2):
+        msgs = [dict(m) for m in messages]
+        if "qwen3" in self.model.lower() and \
+                os.environ.get("URAI_THINKING") != "1":
+            for m in reversed(msgs):
+                if m.get("role") == "user" and isinstance(m.get("content"), str):
+                    m["content"] = m["content"].rstrip() + "\n/no_think"
+                    break
+        data = _post_json(self.base + "/v1/chat/completions", {
+            "model": self.model, "messages": msgs,
+            "max_tokens": max_tokens, "temperature": temperature,
+            "stream": False,
+        })
+        _msg = data["choices"][0]["message"]
+        _content = _msg.get("content") or ""
+        if not _content.strip() and _msg.get("reasoning_content"):
+            _content = _msg["reasoning_content"]
+        out = {"content": _content, "backend": self.name, "model": self.model}
+        if isinstance(data.get("usage"), dict):
+            out["usage"] = data["usage"]
+        if isinstance(data.get("timings"), dict):
+            out["timings"] = data["timings"]
+        return out
+
+    def stream_complete(self, messages, max_tokens=256, temperature=0.2):
+        """True streaming via llama-server SSE."""
+        msgs = [dict(m) for m in messages]
+        if "qwen3" in self.model.lower() and \
+                os.environ.get("URAI_THINKING") != "1":
+            for m in reversed(msgs):
+                if m.get("role") == "user" and isinstance(m.get("content"), str):
+                    m["content"] = m["content"].rstrip() + "\n/no_think"
+                    break
+        yield from _stream_post(self.base + "/v1/chat/completions", {
+            "model": self.model, "messages": msgs,
+            "max_tokens": max_tokens, "temperature": temperature,
+        })
+
+
+# ── Embedding backend ──────────────────────────────────────────────────────────
+
+class EmbeddingBackend(Backend):
+    """Local embedding server (llama-server --embedding, :8081)."""
+
+    name = "embed-local"
+
+    def __init__(self, base: str | None = None, model: str | None = None):
+        self.base = (base or os.environ.get("URAI_EMBED_URL",
+                                            "http://127.0.0.1:8081")).rstrip("/")
+        self.model = model or os.environ.get("URAI_EMBED_MODEL", "local-embed")
+
+    def healthy(self) -> bool:
+        return _probe_cached(
+            f"embed:{self.base}",
+            lambda: urllib.request.urlopen(self.base + "/health", timeout=5).read())
+
+    def embed(self, inputs):
+        if isinstance(inputs, str):
+            inputs = [inputs]
+        data = _post_json(self.base + "/v1/embeddings",
+                          {"model": self.model, "input": inputs})
+        return [d["embedding"] for d in data["data"]]
+
+    def complete(self, messages, max_tokens=256, temperature=0.2):
+        raise NotImplementedError("embedding backend has no chat; use .embed()")
+
+
+# ── Cloud API backend ──────────────────────────────────────────────────────────
+
+class CloudAPIBackend(Backend):
+    """Registry-driven cloud backend.
+
+    Reads model/registry.json entries with api_only=true.  Selects the
+    best available backend in priority order:
+        muse-spark-open (OPENROUTER_API_KEY) → kimi-k2 (MOONSHOT_API_KEY)
+        → deepseek-r2 (DEEPSEEK_API_KEY)
+        → claude-haiku (ANTHROPIC_API_KEY) → gpt-4o-mini (OPENAI_API_KEY)
+
+    Health is probed once and cached (PROBE_TTL_S seconds).
+    Skips VPS/remote if key absent or probe fails — never hard-errors.
+    Supports true streaming via _stream_post.
+    """
+
+    # Provider → (env_var, endpoint_key, chat_path, auth_header_style)
+    # auth_header_style: "bearer" | "x-api-key" (Anthropic)
+    _PROVIDERS = {
+        "openrouter": ("OPENROUTER_API_KEY", "endpoint", "/chat/completions", "bearer"),
+        "moonshot":   ("MOONSHOT_API_KEY",   "endpoint", "/chat/completions", "bearer"),
+        "deepseek":   ("DEEPSEEK_API_KEY",   "endpoint", "/chat/completions", "bearer"),
+        "openai":     ("OPENAI_API_KEY",     "endpoint", "/chat/completions", "bearer"),
+        "anthropic":  ("ANTHROPIC_API_KEY",  "endpoint", "/messages",         "x-api-key"),
+    }
+
+    # Preferred order (best reasoning → cheapest). Muse Spark Open first —
+    # 1M context, multimodal, agentic tool-calling (OpenRouter gateway).
+    _PRIORITY = ["muse-spark-open", "kimi-k2", "deepseek-r2", "claude-haiku", "gpt-4o-mini", "muse-wonder"]
+    _BEDROCK_FALLBACK = True  # use BedrockBackend if all registry cloud unavailable
+
+    def __init__(self, model_id: str | None = None):
+        """model_id: registry key like 'kimi-k2'.  None = auto-select best available."""
+        self._reg_entry: dict | None = None
+        self._model_id: str | None = None
+        self._key: str | None = None
+        self._base: str | None = None
+        self._chat_path: str = "/chat/completions"
+        self._auth_style: str = "bearer"
+
+        if model_id:
+            entry = self._load_entry(model_id)
+            if entry:
+                self._configure(model_id, entry)
+        else:
+            self._auto_select()
+
+    def _load_entry(self, mid: str) -> dict | None:
+        try:
+            from pathlib import Path as _P
+            reg_path = _P(__file__).resolve().parents[1] / "model" / "registry.json"
+            reg = json.loads(reg_path.read_text())
+            return reg["models"].get(mid)
+        except Exception:
+            return None
+
+    def _configure(self, mid: str, entry: dict):
+        provider = entry.get("provider", "")
+        pconf = self._PROVIDERS.get(provider)
+        if not pconf:
+            return
+        env_var, endpoint_key, chat_path, auth_style = pconf
+        key = os.environ.get(env_var, "")
+        if not key:
+            return
+        self._model_id = mid
+        self._reg_entry = entry
+        self._key = key
+        self._base = entry.get(endpoint_key, "").rstrip("/")
+        # OpenRouter registry entry may omit endpoint — fall back to env
+        if not self._base and provider == "openrouter":
+            self._base = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+        # OpenRouter model id override
+        if provider == "openrouter":
+            self._reg_entry = dict(entry)
+            self._reg_entry["model_id"] = os.environ.get("OPENROUTER_MODEL", entry.get("model_id", "meta/muse-spark-open"))
+        self._chat_path = chat_path
+        self._auth_style = auth_style
+        self.name = f"cloud:{provider}/{mid}"
+
+    def _auto_select(self):
+        for mid in self._PRIORITY:
+            entry = self._load_entry(mid)
+            if not entry:
+                continue
+            self._configure(mid, entry)
+            if self._key:
+                # quick check: at least key is set; probe() does network check
+                return
+        # nothing configured
+        self._model_id = None
+
+    @property
+    def available(self) -> bool:
+        return bool(self._model_id and self._key and self._base)
+
+    def healthy(self) -> bool:
+        if not self.available:
+            return False
+        # Anthropic has no /health; just verify key is non-empty
+        if self._auth_style == "x-api-key":
+            return bool(self._key)
+        return _probe_cached(
+            f"cloud:{self._model_id}",
+            lambda: urllib.request.urlopen(
+                self._base + "/models", timeout=8).read())
+
+    def _build_payload(self, messages, max_tokens, temperature, stream=False):
+        entry = self._reg_entry or {}
+        model_api_id = entry.get("model_id", self._model_id or "")
+        if self._auth_style == "x-api-key":
+            # Anthropic messages API format
+            system_msgs = [m["content"] for m in messages if m.get("role") == "system"]
+            user_msgs = [m for m in messages if m.get("role") != "system"]
+            payload: dict = {
+                "model": model_api_id,
+                "max_tokens": max_tokens,
+                "messages": user_msgs,
+                "stream": stream,
+            }
+            if system_msgs:
+                payload["system"] = "\n".join(system_msgs)
+            return payload
+        payload = {
+            "model": model_api_id,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": stream,
+        }
+        # Muse Spark Open via OpenRouter: reasoning control + OpenRouter headers
+        if (self._reg_entry or {}).get("provider") == "openrouter":
+            eff = os.environ.get("URAI_REASONING_EFFORT", "medium")
+            if eff in ("low", "medium", "high", "xhigh"):
+                payload["reasoning_effort"] = eff
+        return payload
+
+    def _headers(self) -> dict:
+        h = {"Content-Type": "application/json"}
+        if self._auth_style == "x-api-key":
+            h["x-api-key"] = self._key or ""
+            h["anthropic-version"] = "2023-06-01"
+        else:
+            h["Authorization"] = f"Bearer {self._key}"
+        if (self._reg_entry or {}).get("provider") == "openrouter":
+            h["HTTP-Referer"] = os.environ.get("URAI_PUBLIC_URL", "https://etside.github.io/urai/")
+            h["X-Title"] = "Urai"
+        return h
+
+    def complete(self, messages, max_tokens=256, temperature=0.2) -> dict:
+        if not self.available:
+            raise RuntimeError("No cloud backend configured "
+                               "(set OPENROUTER_API_KEY / MOONSHOT_API_KEY / DEEPSEEK_API_KEY / "
+                               "ANTHROPIC_API_KEY / OPENAI_API_KEY)")
+        # Budget guard — raises BudgetExceeded if daily limit hit
+        try:
+            from .cloud_budget import check_budget as _cb
+            _provider = (self._reg_entry or {}).get('provider', '')
+            _cb(_provider)
+        except ImportError:
+            pass
+        url = self._base + self._chat_path
+        payload = self._build_payload(messages, max_tokens, temperature, stream=False)
+        req = urllib.request.Request(url, json.dumps(payload).encode(), self._headers())
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.load(resp)
+        except urllib.error.HTTPError as e:
+            try:
+                detail = e.read().decode()[:400]
+            except Exception:
+                detail = ""
+            raise RuntimeError(f"Cloud {self.name} HTTP {e.code}: {detail}")
+
+        provider = (self._reg_entry or {}).get('provider', '')
+        if self._auth_style == "x-api-key":
+            # Anthropic response shape
+            content_blocks = data.get("content", [])
+            text = " ".join(b.get("text", "") for b in content_blocks
+                            if b.get("type") == "text")
+            usage = data.get("usage", {})
+            pt = usage.get("input_tokens", 0)
+            ct = usage.get("output_tokens", 0)
+            try:
+                from .cloud_budget import record_usage as _ru
+                _ru(provider, pt, ct, self._model_id or '')
+            except Exception:
+                pass
+            return {"content": text, "backend": self.name,
+                    "model": self._model_id,
+                    "usage": {"prompt_tokens": pt,
+                              "completion_tokens": ct,
+                              "total_tokens": pt + ct}}
+        _msg = data["choices"][0]["message"]
+        content = _msg.get("content") or ""
+        if not content.strip():
+            # Reasoning models (e.g. muse-spark-open) may put output in reasoning fields
+            content = (_msg.get("reasoning_content") or
+                       _msg.get("reasoning") or "")
+        out = {"content": content, "backend": self.name, "model": self._model_id}
+        if isinstance(data.get("usage"), dict):
+            out["usage"] = data["usage"]
+            try:
+                from .cloud_budget import record_usage as _ru
+                _ru(provider,
+                    data['usage'].get('prompt_tokens', 0),
+                    data['usage'].get('completion_tokens', 0),
+                    self._model_id or '')
+            except Exception:
+                pass
+        return out
+
+    def stream_complete(self, messages, max_tokens=256, temperature=0.2):
+        """True SSE streaming from cloud provider."""
+        if not self.available:
+            raise RuntimeError("No cloud backend configured")
+        url = self._base + self._chat_path
+        payload = self._build_payload(messages, max_tokens, temperature, stream=True)
+        headers = self._headers()
+        req = urllib.request.Request(url, json.dumps(payload).encode(), headers)
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                for raw in resp:
+                    line = raw.decode("utf-8", errors="replace").rstrip("\n")
+                    if line.startswith("data: "):
+                        chunk = line[6:]
+                        if chunk == "[DONE]":
+                            break
+                        if self._auth_style == "x-api-key":
+                            # Re-encode Anthropic delta → OpenAI chunk shape
+                            try:
+                                ev = json.loads(chunk)
+                                delta_text = ""
+                                if ev.get("type") == "content_block_delta":
+                                    delta_text = ev.get("delta", {}).get("text", "")
+                                elif ev.get("type") == "message_delta":
+                                    pass  # finish event, skip
+                                else:
+                                    continue
+                                yield json.dumps({
+                                    "id": "chatcmpl-urai",
+                                    "object": "chat.completion.chunk",
+                                    "model": self._model_id,
+                                    "choices": [{"index": 0,
+                                                 "delta": {"content": delta_text},
+                                                 "finish_reason": None}]})
+                            except Exception:
+                                continue
+                        else:
+                            yield chunk  # already OpenAI SSE format
+        except urllib.error.HTTPError as e:
+            try:
+                detail = e.read().decode()[:400]
+            except Exception:
+                detail = ""
+            raise RuntimeError(f"Cloud stream {self.name} HTTP {e.code}: {detail}")
+
+
+# ── Muse Spark Open (hosted, OpenRouter) ──────────────────────────────────────
+
+class MuseBackend(Backend):
+    """Muse Spark Open via OpenRouter — hosted brain when no local model fits.
+
+    Used when the local llama-server is unavailable AND URAI_CLOUD_FALLBACK=1
+    (default on in public/free mode). Keeps Urai's identity: a Urai system
+    prompt is prepended and the backend is labelled 'muse-spark-open'.
+
+    Fallback chain (in order):
+      1. meta/muse-spark-open          — paid Muse; 1M ctx, multimodal
+      2. vercel AI Gateway (byok id)   — free-tier gateway, no daily cap
+      3. groq (Llama 3.3 70B)          — free, card-free OpenAI-compatible
+      4. portkey (whole catalog)       — free tier, no card required
+      5. nvidia/nemotron-3-ultra-550b  — OR free 550B text teacher
+      6. nvidia/nemotron-3.5-super-vl  — OR free multimodal teacher
+      7. local LlamaServerBackend      — offline student
+    """
+
+    name = "muse-spark-open"
+
+    def __init__(self):
+        from . import muse as _muse
+        self._muse = _muse
+        self.model = _muse.MODEL_ID
+        self.ctx = 1048576
+        try:
+            from . import vercelai as _vercel
+            self._vercel = _vercel
+        except Exception:
+            self._vercel = None
+        try:
+            from . import portkey as _portkey
+            self._portkey = _portkey
+        except Exception:
+            self._portkey = None
+        try:
+            from . import groq as _groq
+            self._groq = _groq
+        except Exception:
+            self._groq = None
+        self.chain = ["meta/muse-spark-open"]
+        # Gateway tiers sit right behind Muse when their keys are configured.
+        if self._vercel and self._vercel.available():
+            self.chain.append(f"vercel/{self._vercel.MODEL_ID}")
+        if self._groq and self._groq.available():
+            self.chain.append(f"groq/{self._groq.MODEL_ID}")
+        if self._portkey and self._portkey.available():
+            self.chain.append(f"portkey/{self._portkey.PORTKEY_MODEL}")
+        self.chain += [
+            "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "nvidia/nemotron-3.5-super-vl:free",
+        ]
+
+    def healthy(self) -> bool:
+        if self._muse.available():
+            return True
+        if self._vercel and self._vercel.available():
+            return True
+        if self._groq and self._groq.available():
+            return True
+        return bool(self._portkey and self._portkey.available())
+
+    def _with_identity(self, messages):
+        msgs = [dict(m) for m in messages]
+        if not any(m.get("role") == "system" for m in msgs):
+            msgs.insert(0, {"role": "system", "content": self._muse.SYSTEM_PROMPT})
+        return msgs
+
+    def _dispatch(self, model):
+        """Return (client_fn, effort) for one chain link."""
+        if model.startswith("vercel/"):
+            # model id is what follows the prefix
+            vid = model[len("vercel/"):]
+            v = self._vercel
+            def call(messages, max_tokens, temperature):
+                return v.complete(self._with_identity(messages),
+                                  max_tokens=max(max_tokens, 2048),
+                                  temperature=temperature, model=vid)
+            return call, None
+        if model.startswith("groq/"):
+            gid = model[len("groq/"):]
+            g = self._groq
+            def call(messages, max_tokens, temperature):
+                return g.complete(self._with_identity(messages),
+                                  max_tokens=max(max_tokens, 2048),
+                                  temperature=temperature, model=gid)
+            return call, None
+        if model.startswith("portkey/"):
+            pid = model[len("portkey/"):]
+            p = self._portkey
+            def call(messages, max_tokens, temperature):
+                return p.complete(self._with_identity(messages),
+                                  max_tokens=max(max_tokens, 2048),
+                                  temperature=temperature, model=pid)
+            return call, None
+        effort = os.environ.get("URAI_REASONING_EFFORT", "medium") \
+            if model.startswith("meta/") else None
+        def call(messages, max_tokens, temperature):
+            return self._muse.complete(
+                self._with_identity(messages),
+                max_tokens=max(max_tokens, 2048),
+                temperature=temperature,
+                reasoning_effort=effort,
+                model=model,
+            )
+        return call, effort
+
+    def _call(self, model, messages, max_tokens, temperature):
+        call, _ = self._dispatch(model)
+        return call(messages, max_tokens, temperature)
+
+    def complete(self, messages, max_tokens=256, temperature=0.2):
+        last_err = None
+        for model in self.chain:
+            try:
+                res = self._call(model, messages, max_tokens, temperature)
+                return {
+                    "content": res.get("content") or res.get("reasoning_content") or "",
+                    "reasoning_content": res.get("reasoning_content", ""),
+                    "backend": self.name,
+                    "model": res.get("model", model),
+                    "usage": res.get("usage", {}),
+                    "teacher": res.get("model", model),
+                }
+            except Exception as e:
+                last_err = e
+                # 402 / 429 / 5xx on one provider → try the next teacher.
+                continue
+        # All hosted teachers down → local student
+        local = LlamaServerBackend()
+        if local.healthy():
+            out = local.complete(messages, max_tokens, temperature)
+            out["backend"] = f"{self.name}->{local.name}"
+            out["degraded"] = str(last_err)[:200] if last_err else ""
+            return out
+        raise last_err or RuntimeError("no backend available")
+
+    def stream_complete(self, messages, max_tokens=256, temperature=0.2):
+        """True SSE streaming down the teacher chain, then the local student.
+
+        OpenRouter can reject a stream before the first byte (402 out of credits,
+        429 rate limit, 5xx upstream).  Only fall back when nothing has been
+        emitted yet, so the client never sees two answers spliced together.
+        """
+        for model in self.chain:
+            emitted = False
+            try:
+                if model.startswith("vercel/"):
+                    vid = model[len("vercel/"):]
+                    chunks = self._vercel.stream(
+                        self._with_identity(messages),
+                        max_tokens=max(max_tokens, 2048),
+                        temperature=temperature, model=vid)
+                elif model.startswith("groq/"):
+                    gid = model[len("groq/"):]
+                    chunks = self._groq.stream(
+                        self._with_identity(messages),
+                        max_tokens=max(max_tokens, 2048),
+                        temperature=temperature, model=gid)
+                elif model.startswith("portkey/"):
+                    pid = model[len("portkey/"):]
+                    chunks = self._portkey.stream(
+                        self._with_identity(messages),
+                        max_tokens=max(max_tokens, 2048),
+                        temperature=temperature, model=pid)
+                else:
+                    effort = os.environ.get("URAI_REASONING_EFFORT", "medium") \
+                        if model.startswith("meta/") else None
+                    chunks = self._muse.stream(
+                        self._with_identity(messages),
+                        max_tokens=max(max_tokens, 2048),
+                        temperature=temperature,
+                        reasoning_effort=effort,
+                        model=model,
+                    )
+                for chunk in chunks:
+                    emitted = True
+                    yield chunk
+                return
+            except Exception:
+                if emitted:
+                    raise
+                continue
+        local = LlamaServerBackend()
+        if not local.healthy():
+            raise RuntimeError("no backend available")
+        yield from local.stream_complete(messages, max_tokens, temperature)
+
+
+# ── TeacherAPIBackend — legacy alias ───────────────────────────────────────────
+
+class TeacherAPIBackend(Backend):
+    """External fallback (OpenRouter / Gemini-OAI / any OpenAI endpoint).
+    Kept for backward compatibility.  New code should use CloudAPIBackend.
+    """
+
+    name = "teacher-api"
+
+    def __init__(self):
+        self.base = os.environ["TEACHER_BASE_URL"].rstrip("/")
+        self.key = os.environ["TEACHER_API_KEY"]
+        self.model = os.environ.get("TEACHER_MODEL", "")
+
+    def healthy(self) -> bool:
+        return bool(self.base and self.key and self.model)
+
+    def complete(self, messages, max_tokens=512, temperature=0.2):
+        data = _post_json(self.base + "/chat/completions", {
+            "model": self.model, "messages": messages,
+            "max_tokens": max_tokens, "temperature": temperature,
+        }, key=self.key)
+        _msg = data["choices"][0]["message"]
+        _content = _msg.get("content") or ""
+        if not _content.strip() and _msg.get("reasoning_content"):
+            _content = _msg["reasoning_content"]
+        out = {"content": _content,
+               "backend": self.name, "model": self.model}
+        if isinstance(data.get("usage"), dict):
+            out["usage"] = data["usage"]
+        if isinstance(data.get("timings"), dict):
+            out["timings"] = data["timings"]
+        return out
+
+    def stream_complete(self, messages, max_tokens=512, temperature=0.2):
+        yield from _stream_post(self.base + "/chat/completions", {
+            "model": self.model, "messages": messages,
+            "max_tokens": max_tokens, "temperature": temperature,
+        }, key=self.key)
+
+
+# ── AWS Bedrock backend ────────────────────────────────────────────────────────
+
+class BedrockBackend(Backend):
+    """AWS Bedrock — Nova Micro (cheapest) or Claude Haiku.
+    Requires model access enabled in AWS Console → Bedrock → Model access.
+    Skipped silently if IAM not configured or model access not granted.
+    """
+
+    # Preference order: cheapest first
+    _MODEL_PRIORITY = [
+        "amazon.nova-micro-v1:0",
+        "amazon.nova-lite-v1:0",
+        "anthropic.claude-3-haiku-20240307-v1:0",
+    ]
+
+    def __init__(self, model_id: str | None = None):
+        self._model_id = model_id or self._MODEL_PRIORITY[0]
+        self.name = f"bedrock:{self._model_id}"
+
+    def healthy(self) -> bool:
+        return _probe_cached(
+            "bedrock",
+            self._probe_fn,
+            ttl=300)
+
+    def _probe_fn(self):
+        from .aws import bedrock_available as _ba
+        if not _ba():
+            raise RuntimeError("Bedrock not accessible")
+
+    def complete(self, messages, max_tokens=256, temperature=0.2) -> dict:
+        try:
+            from .aws import bedrock_complete as _bc
+            return _bc(messages, model_id=self._model_id,
+                       max_tokens=max_tokens, temperature=temperature)
+        except Exception as e:
+            raise RuntimeError(f"BedrockBackend: {e}")
+
+    def stream_complete(self, messages, max_tokens=256, temperature=0.2):
+        # Bedrock Converse streaming requires AWS SDK; buffer for now
+        res = self.complete(messages, max_tokens, temperature)
+        content = res.get("content", "")
+        for i in range(0, max(len(content), 1), 64):
+            yield json.dumps({
+                "id": "chatcmpl-urai", "object": "chat.completion.chunk",
+                "model": self._model_id,
+                "choices": [{"index": 0,
+                              "delta": {"content": content[i:i+64]},
+                              "finish_reason": None}]})
+        yield json.dumps({
+            "id": "chatcmpl-urai", "object": "chat.completion.chunk",
+            "model": self._model_id,
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})

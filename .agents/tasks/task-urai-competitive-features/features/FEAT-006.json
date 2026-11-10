@@ -1,0 +1,26 @@
+{
+  "id": "FEAT-006",
+  "type": "feat",
+  "description": "Muse Spark-style Vision (Visual Grounding): Extend jev/vision.py with ground() function for structured object detection with bounding boxes. Add vision_ground agent tool. Show bounding box SVG overlays in Studio when vision response includes bbox data. Depends on FEAT-002 (events.py) for tool event emission.",
+  "status": "pending",
+  "steps": [
+    "Edit jev/vision.py: add function ground(image_path, query='Find all objects', max_tokens=512, temperature=0.1) -> dict. Uses _data_url() to prepare image. Sends to llama-server with specialized prompt: 'You are a vision model that detects objects. For the query: \"{query}\", analyze this image and return ONLY valid JSON in exactly this format: {\"objects\": [{\"label\": \"object name\", \"count\": 1, \"bbox\": [x1, y1, x2, y2]}]} where bbox coordinates are integers 0-1000 (normalized, 0=top-left, 1000=bottom-right). Return JSON only, no prose.' After getting response, parse JSON using re.search for {\\\\{.*\\\\}} pattern with re.DOTALL. If parse fails, return {ok:False, error:'model did not return valid JSON', raw_answer:answer}. On success return {ok:True, objects:[...], raw_answer:answer}.",
+    "Edit jev/tools.py: add function vision_ground(image, query='Find all objects') that calls vision.ground(image, query) (lazy import). Register in TOOLS dict and TOOL_SCHEMAS list. Schema: {name:'vision_ground', description:'Detect objects in an image and return bounding boxes as normalized 0-1000 coords', parameters:{image:{type:'string',description:'base64 data URL or file path'}, query:{type:'string',default:'Find all objects'}}, required:['image']}. Edit jev/agent.py run_tool_call(): add dispatch for 'vision_ground': return tools.TOOLS['vision_ground'](image=args.get('image',''), query=args.get('query','Find all objects')). Emit event via _events.emit().",
+    "Edit jev/server.py do_POST: add 'if p == \"/v1/vision/ground\":' block. Parse {image, query}. Call vision.ground(image, query). Return result. Subject to auth gate.",
+    "Edit jev/static/app.html: in the chat message rendering, after displaying an image (when user attaches an image), check if the assistant response content contains parseable JSON with 'objects' array and 'bbox' fields. If yes, call renderBboxOverlay(imageEl, objects). Function renderBboxOverlay(imgEl, objects): creates an SVG element overlaid on the image using position:absolute, same dimensions as the image. For each object, draw a <rect> with x/y/width/height calculated from normalized bbox coords (scale to actual image display size). Add a <text> label above each rect with label + count. Use different colors per label (hash label name to hue). SVG overlay is positioned absolute over the image using a wrapper div position:relative."
+  ],
+  "acceptance_criteria": [
+    "python3 scripts/smoke_urai.py passes all checks",
+    "python3 -c \"from jev.vision import ground; r=ground('/nonexistent.png','cats'); assert 'ok' in r; print('ground ok')\"",
+    "vision_ground appears in GET /v1/tools response",
+    "POST /v1/vision/ground with a valid image and query returns {ok, objects:[]} or graceful error",
+    "Studio renders bounding box SVG overlay when vision response JSON contains bbox data"
+  ],
+  "verification": [
+    "python3 scripts/smoke_urai.py",
+    "python3 -c \"from jev.vision import ground; r=ground('/nonexistent.png','test'); print('vision.ground ok:', r.get('ok') or r.get('error'))\"",
+    "python3 -c \"from jev.tools import TOOLS; assert 'vision_ground' in TOOLS; print('vision_ground tool registered')\""
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

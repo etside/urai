@@ -1,0 +1,12 @@
+{
+  "teacher": "mock-v1",
+  "total": 10,
+  "kept": 5,
+  "rejected": 4,
+  "dupes": 1,
+  "reject_reasons": {
+    "score-below-threshold": 3,
+    "leaked-password": 1,
+    "unsafe-eval": 1
+  }
+}

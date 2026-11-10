@@ -1,0 +1,10 @@
+{
+  "teacher": "mock-v1",
+  "total": 228,
+  "kept": 41,
+  "rejected": 96,
+  "dupes": 91,
+  "reject_reasons": {
+    "score-below-threshold": 96
+  }
+}

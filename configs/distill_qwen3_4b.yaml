@@ -1,0 +1,49 @@
+# Urai v1.04 fine-tune config
+base_model: urai-qwen3-06b          # start from existing Urai weight
+output_name: urai-v1.04
+quantization: Q4_K_M
+max_seq_len: 4096
+batch_size: 4
+gradient_accumulation_steps: 8
+learning_rate: 2.0e-5
+num_epochs: 3
+warmup_steps: 100
+eval_steps: 500
+save_steps: 500
+tasks:
+  - vibe-code
+  - llm-tools
+  - agent
+  - memory
+  - mcp
+  - vision
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, v_proj, k_proj, o_proj]
+data:
+  train: data/finetune/v1.04/train.jsonl
+  eval: data/finetune/v1.04/eval.jsonl
+
+optimizations:
+  flash_attention2: true
+  gradient_checkpointing: true
+  qlora: true
+  packing: true
+  dtype: fp16          # T4 doesn't support bf16; override to bf16 on A100/A10G
+  dataloader_workers: 4
+  pin_memory: true
+
+aws:
+  spot: true
+  instance_type: g4dn.xlarge
+  region: ap-south-1
+  availability_zone: ap-south-1b
+  max_spot_price: "0.50"
+  s3_bucket: urai-data-089737991855-ap-south-1
+  s3_prefix: urai-v1.04
+  key_pair: urai-deploy
+  security_group: sg-0026bb40fd666fae5
+  subnet: subnet-0c91881e2cd9340ac

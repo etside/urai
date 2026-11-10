@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-008",
+  "type": "feat",
+  "description": "PDF as First-Class Input: New jev/files.py for PDF upload and text extraction using PyMuPDF (fitz) with pypdfium2 fallback. POST /v1/files and GET /v1/files endpoints. PDF extracted text injected into chat context via file_ids in /v1/chat/completions. Drag-drop PDF in Studio shows file chip with page count. New 'pdf' extra in pyproject.toml. Independent of other FEATs.",
+  "status": "pending",
+  "steps": [
+    "Create jev/files.py: import uuid, json, time, base64, hashlib, shutil from stdlib. UPLOADS_DIR = Path(data/uploads). Functions: extract_pdf_text(data_bytes: bytes, filename='') -> dict: try import fitz (pymupdf); if ImportError try import pypdfium2; if both fail return {ok:False, error:'No PDF library: pip install pymupdf OR pypdfium2'}. With fitz: doc=fitz.open(stream=data_bytes, filetype='pdf'); text='\\n\\n'.join(page.get_text() for page in doc); return {ok:True, text:text, pages:len(doc), title:doc.metadata.get('title','')}. With pypdfium2 as fallback. save_upload(filename, data_bytes)->dict: generates uuid-prefixed filename, saves to UPLOADS_DIR, records metadata in UPLOADS_DIR/index.json, returns {id, filename, size, uploaded_at, pages, text_preview}. list_files()->list: reads UPLOADS_DIR/index.json. get_file_text(file_id)->str|None: reads stored text from UPLOADS_DIR/{id}-{name}.txt. delete_file(file_id)->bool.",
+    "Edit jev/server.py do_POST: add 'if p == \"/v1/files\":' block. Parse multipart/form-data using the existing cgi.FieldStorage pattern from the STT handler (line ~1250). Extract file field. If filename ends with .pdf or content starts with b'%PDF', call files.extract_pdf_text(data_bytes). Call files.save_upload(filename, data_bytes). Return {id, object:'file', filename, bytes:len(data_bytes), pages, created_at, text_preview:text[:200]}. Edit do_GET: add '/v1/files' -> {data: files.list_files()}. Add '/v1/files/<id>/content' -> returns text content. Edit /v1/chat/completions handler: if body contains file_ids list, prepend extracted texts as a system message: 'Context from uploaded files:\\n\\n{texts}'. Lazily import jev.files.",
+    "Edit jev/static/app.html: in the chat input area, add a file input element (type=file, accept=.pdf, hidden). Add a drag-drop zone overlay on the chat messages area that activates when user drags a file. On file select/drop, call uploadPDF(file): POST to /v1/files with FormData. Show a file chip in the input area: 📄 filename (N pages). Store file_id in pendingFiles array. When sending chat message, include file_ids: pendingFiles in the POST body. After send, clear pendingFiles and remove chips. Style the file chip: small pill with filename, page count badge, ✕ remove button.",
+    "Edit pyproject.toml: add optional extra 'pdf' = ['pymupdf>=1.24.0']. Note: pymupdf uses AGPL for the combined binary — alternative is 'pypdfium2>=4.28.0' (Apache 2.0, BSD). Document both options with a comment. Primary dep in the pdf extra is pymupdf; add a comment suggesting pypdfium2 for strict Apache 2.0 compliance. Update 'all' extra to include 'pdf'. Edit Dockerfile if present: add RUN pip install pymupdf."
+  ],
+  "acceptance_criteria": [
+    "python3 scripts/smoke_urai.py passes all checks",
+    "python3 -c \"from jev.files import extract_pdf_text, list_files, save_upload; print('files imports ok')\"",
+    "GET /v1/files returns {data: []} (empty list)",
+    "POST /v1/files with a PDF file (multipart) returns {id, filename, pages, text_preview}",
+    "PDF chip appears in Studio chat when a .pdf file is dragged in",
+    "Sending a chat message with a file_id causes the server to prepend extracted text to the messages"
+  ],
+  "verification": [
+    "python3 scripts/smoke_urai.py",
+    "python3 -c \"from jev.files import extract_pdf_text, list_files; assert isinstance(list_files(), list); print('files ok')\"",
+    "python3 -c \"import jev.server; print('server imports ok after files addition')\""
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

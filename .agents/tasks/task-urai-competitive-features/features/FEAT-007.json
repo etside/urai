@@ -1,0 +1,28 @@
+{
+  "id": "FEAT-007",
+  "type": "feat",
+  "description": "Proactive Goals Agent: New jev/goals.py with Goal/GoalStep dataclasses, file-based persistence in data/goals/, multi-step plan creation via run_agent(), scheduler integration via sched.py tick, approval queue for external actions. REST API: GET/POST/DELETE /v1/goals*. CLI: urai goal add/list/approve. Studio Goals panel. Depends on FEAT-002 (events.py).",
+  "status": "pending",
+  "steps": [
+    "Create jev/goals.py: import json, os, uuid, time, re from stdlib. dataclass GoalStep: {id:str, description:str, status:str ('pending'/'running'/'done'/'failed'/'awaiting_approval'), result:str, requires_approval:bool, approved_at:float}. dataclass Goal: {id:str, title:str, deadline:str, constraints:str, steps:list[GoalStep], status:str ('active'/'completed'/'paused'), created_at:float}. GOALS_DIR = Path(data/goals). APPROVAL_FILE = GOALS_DIR/approval_queue.json. Functions: _load(id), _save(goal), list_goals()->list[dict], get_goal(id)->dict|None, delete_goal(id). create_goal(title, deadline='', constraints='')->dict: calls agent.run_agent(plan_prompt) to get JSON step list, creates Goal, saves. approve_step(goal_id, step_id)->dict. _requires_approval(description:str)->bool: returns True if any keyword in ['browser','email','send','post to','payment','delete','rm ','tweet','publish','book'] is in description.lower(). tick()->None: load all active goals, for each find first pending step, if requires_approval and not approved set status awaiting_approval and save to approval queue, else run step via agent.run_agent(step.description), update step status, emit events. Wrap everything in try/except to never crash the scheduler.",
+    "Edit jev/sched.py _tick() function (the scheduler loop): after the existing routine job loop, add: try:\\n    from .goals import tick as _goals_tick\\n    _goals_tick()\\nexcept Exception as _ge:\\n    pass",
+    "Edit jev/server.py do_GET: add '/v1/goals' -> goals.list_goals(). Add '/v1/goals/<id>' -> goals.get_goal(id). Edit do_POST: add '/v1/goals' -> goals.create_goal(body.get('title',''), body.get('deadline',''), body.get('constraints','')). Add '/v1/goals/<goal_id>/approve/<step_id>' -> goals.approve_step(goal_id, step_id). Edit do_DELETE: add '/v1/goals/<id>' -> goals.delete_goal(id). All lazily import goals module.",
+    "Edit jev/cli.py: add sub-parser 'goal' with actions: 'add' (required positional title, optional --deadline, --constraints), 'list', 'approve' (required --goal-id, required --step-id). Wire to goals.py functions. Print results as formatted JSON.",
+    "Edit jev/static/app.html: add 'Goals' tab to sb-nav (icon: 🎯). Panel #panel-goals contains: Create Goal form (title input, deadline date input, constraints textarea, Create button -> POST /v1/goals). Goals list below: each goal card shows title, status chip (active=green/paused=orange/completed=gray), deadline, progress bar (done_steps/total_steps). Click to expand shows step list: each step row has status icon, description text, and Approve button (for awaiting_approval steps -> POST /v1/goals/{id}/approve/{step_id}). Auto-refresh goals list every 10s with setInterval. Add delete button on each goal card."
+  ],
+  "acceptance_criteria": [
+    "python3 scripts/smoke_urai.py passes all checks",
+    "python3 -c \"from jev.goals import list_goals, create_goal, approve_step, delete_goal; print('goals imports ok')\"",
+    "GET /v1/goals returns {goals: []}",
+    "POST /v1/goals with {title:'Test goal', deadline:'2025-12-31', constraints:'no external calls'} returns a goal object with steps array",
+    "python3 -m jev.cli goal --help shows add, list, approve actions",
+    "Studio Goals panel renders with create form and empty goals list"
+  ],
+  "verification": [
+    "python3 scripts/smoke_urai.py",
+    "python3 -c \"from jev.goals import list_goals, create_goal; assert isinstance(list_goals(), list); print('goals ok')\"",
+    "python3 -c \"import jev.cli; print('cli imports ok')\""
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

@@ -1,0 +1,122 @@
+<<<<<<< HEAD
+# Urai v3 — Caddy reverse proxy with automatic HTTPS
+# 1. Set your domain: replace urai.example.com
+# 2. Point DNS A record to this VPS IP
+# 3. systemctl reload caddy   (or docker compose --profile https up -d)
+
+{
+    # Global options
+    email admin@example.com    # for Let's Encrypt notifications
+    admin off                  # disable Caddy admin API in production
+}
+
+urai.example.com {
+    # Reverse proxy to Urai API
+    reverse_proxy 127.0.0.1:8777 {
+        # Health check
+        health_uri      /health
+        health_interval 30s
+        health_timeout  10s
+
+        # Pass real client IP
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+    }
+
+    # Rate limiting (requires caddy-ratelimit module or use basic):
+    # Limit expensive endpoints — 20 req/min per IP
+    @expensive {
+        path /v1/chat/completions /v1/audio/* /v1/images/* /v1/videos/* /agent /v1/research
+    }
+    # Uncomment after: xcaddy build --with github.com/mholt/caddy-ratelimit
+    # rate_limit @expensive {
+    #     zone chat_zone {
+    #         key {remote_host}
+    #         events 20
+    #         window 1m
+    #     }
+    # }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+
+    # Compression
+    encode gzip zstd
+
+    # Logs
+    log {
+        output file /var/log/caddy/urai.log {
+            roll_size 50mb
+            roll_keep 5
+        }
+        format json
+    }
+=======
+# Caddy front for Urai. With Cloudflare Tunnel the origin has no public port;
+# Caddy still terminates TLS for non-tunnelled/local access and adds headers.
+#
+#   1. (tunnel mode) run cloudflared -> http://127.0.0.1:8777, skip TLS here
+#   2. (direct mode) point DNS at the VPS, edit the domain below, then:
+#        cp deploy/Caddyfile /etc/caddy/Caddyfile
+#        systemctl reload caddy
+ai.example.com {
+	encode zstd gzip
+
+	# security headers (app also sets its own; belt and braces at the edge)
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(self), camera=(self)"
+		-Server
+	}
+
+	# TLS 1.3 only; post-quantum key agreement is negotiated by Cloudflare in
+	# front of this (X25519MLKEM768). Caddy matches with min TLS 1.3 here.
+	tls {
+		protocols tls1.3
+	}
+
+	# rate-limit expensive/media endpoints (requires the caddy ratelimit module)
+	# rate_limit {
+	# 	zone imagine { key {remote_host} events 10 window 1m }
+	# 	zone chat    { key {remote_host} events 60 window 1m }
+	# }
+
+	# internal surfaces are NEVER served on the public host — they live behind
+	# the admin hostname + Cloudflare Access (Zero Trust). The app also
+	# master-gates them; this is belt and braces.
+	@internal path /admin/* /superadmin/* /trace /metrics
+	respond @internal 404
+
+	reverse_proxy 127.0.0.1:8777 {
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
+
+# Admin host: reachable only through Cloudflare Tunnel + a Cloudflare Access
+# application (SSO + device posture). Even so, the app requires the master key.
+admin.urai.daddyai.online {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		-Server
+	}
+	tls {
+		protocols tls1.3
+	}
+	reverse_proxy 127.0.0.1:8777 {
+		header_up X-Forwarded-Proto {scheme}
+	}
+>>>>>>> tukitattu/main
+}

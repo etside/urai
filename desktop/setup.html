@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Urai — setup</title>
+<style>
+  :root { --bg:#FAF9F7; --card:#FFFFFF; --text:#111; --muted:#6b6b6b;
+          --border:#e6e2dc; --accent:#0A84FF; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:
+         radial-gradient(1200px 600px at 20% 0%, #eef5ff 0%, transparent 60%),
+         radial-gradient(900px 500px at 100% 100%, #f3f0ff 0%, transparent 55%),
+         var(--bg);
+         color:var(--text); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+         display:grid; place-items:center; padding:32px; }
+  .card { width:min(720px,100%); background:var(--card); border:1px solid var(--border);
+          border-radius:28px; padding:32px; box-shadow:0 30px 80px -30px rgba(0,0,0,.25); }
+  h1 { margin:0 0 6px; font-size:1.5rem; letter-spacing:-.02em; }
+  h1 .dot { color:var(--accent); }
+  p { color:var(--muted); margin:0 0 14px; }
+  ol { margin:0 0 18px; padding-left:20px; color:var(--text); }
+  li { margin:7px 0; }
+  code, pre { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.86em; }
+  code { background:#f2f0ec; border:1px solid var(--border); border-radius:8px; padding:2px 6px; }
+  pre { background:#0f1115; color:#e8e8e8; border-radius:14px; padding:14px 16px; overflow:auto; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; }
+  button { border:0; border-radius:999px; padding:11px 20px; font-weight:600; cursor:pointer;
+           font-size:.92rem; transition:transform .12s ease, box-shadow .2s ease; }
+  button:active { transform:scale(.97); }
+  .primary { background:linear-gradient(135deg,#0A84FF,#6C63FF); color:#fff;
+             box-shadow:0 12px 28px -10px rgba(10,132,255,.65); }
+  .ghost { background:#fff; border:1px solid var(--border); color:var(--text); }
+  .reason { background:#fff6f5; border:1px solid #ffd9d4; color:#8a2b20;
+            border-radius:14px; padding:10px 14px; font-size:.9rem; margin-bottom:16px; }
+  details { margin-top:16px; }
+  summary { cursor:pointer; color:var(--muted); font-size:.88rem; }
+  #log { max-height:220px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Urai <span class="dot">✦</span> setup</h1>
+    <p>The desktop shell could not reach a Urai backend.</p>
+    <div class="reason" id="reason">No reason reported.</div>
+
+    <ol>
+      <li>Install the Python package: <code>pip install -e .</code> (from the repo) or <code>pip install urai</code>.</li>
+      <li>Point the shell at the repo: set <code>URAI_HOME=/path/to/urai</code>.</li>
+      <li>Or start a server yourself: <code>urai api --port 8777</code>, then relaunch with <code>URAI_NO_SERVER=1</code>.</li>
+    </ol>
+
+    <pre>urai api --port 8777
+# then open http://127.0.0.1:8777/app</pre>
+
+    <div class="row">
+      <button class="primary" onclick="retry()">Retry</button>
+      <button class="ghost" onclick="window.urai && window.urai.open('https://github.com/etside/urai#install')">Install guide ↗</button>
+    </div>
+
+    <details>
+      <summary>Backend log</summary>
+      <pre id="log">loading…</pre>
+    </details>
+  </div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const reason = q.get('reason');
+  if (reason) document.getElementById('reason').textContent = reason;
+
+  async function retry() {
+    if (!window.urai) return location.reload();
+    await window.urai.retry();
+  }
+  (async () => {
+    if (!window.urai) return;
+    try { document.getElementById('log').textContent = (await window.urai.log()) || '(empty)'; }
+    catch (e) { document.getElementById('log').textContent = String(e); }
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+# Urai v-next — distill Muse Spark Open (teacher) → Qwen3 student
+# Teacher: meta/muse-spark-open via OpenRouter (1M ctx, multimodal, agentic)
+# Student: Qwen3-0.6B → urai-v-next.gguf (Q4_K_M, local llama.cpp)
+#
+# Pipeline (two stages):
+#   1. Teacher generation (this config drives it): OpenRouter Muse Spark
+#      answers Urai tasks → JSONL (system, user, assistant, reasoning).
+#   2. QLoRA on Kaggle (see kaggle/train_qlora.py): SFT on that JSONL.
+#
+# Ref: https://dev.meta.ai/resources/blog/build-with-muse-spark-open
+# Post-training: Fireworks/Together managed SFT or HF TRL (scripts/train.py)
+
+teacher:
+  provider: openrouter
+  model_id: meta/muse-spark-open
+  base_url: https://openrouter.ai/api/v1
+  # Env: OPENROUTER_API_KEY (never commit). Free until public release.
+  temperature: 1.0
+  reasoning_effort: high      # xhigh for eval, high for bulk train data
+  max_tokens: 8192
+  stream: false
+  modalities: [text, image, video, audio, pdf]
+
+student:
+  base_model: Qwen/Qwen3-0.6B
+  output_name: urai-v-next
+  quantization: Q4_K_M
+  max_seq_len: 8192           # covers most Urai tasks; teacher handles 1M
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  learning_rate: 2.0e-5
+  num_epochs: 3
+  lora:
+    r: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules: [q_proj, v_proj, k_proj, o_proj]
+
+tasks:
+  - vibe-code        # NL → write → run → iterate
+  - llm-tools        # parallel tool calls
+  - agent            # plan → tool → verify
+  - memory           # wiki/session retrieval
+  - mcp              # MCP tool use
+  - vision           # image understanding (VL teacher path)
+  - multimodal       # video/audio/pdf summaries (Muse Spark only)
+
+data:
+  tasks_file: data/raw_tasks/sample_tasks.jsonl
+  train: data/finetune/muse-spark-open/train.jsonl
+  eval: data/finetune/muse-spark-open/eval.jsonl
+
+optimizations:
+  flash_attention2: true
+  gradient_checkpointing: true
+  qlora: true
+  packing: true
+  dtype: bf16          # Kaggle T4/P100 → fp16 if bf16 unsupported
+
+compute:
+  kaggle:
+    quota: 30h GPU     # tjm account
+    instance: T4x2
+  aws:
+    spot_instance: g4dn.xlarge
+    region: ap-south-1
+    s3_bucket: urai-data-089737991855-ap-south-1
+    s3_prefix: urai-v-next
