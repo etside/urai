@@ -76,8 +76,7 @@ def main():
         if args.max_examples and idx > args.max_examples:
             print(f"  stopped at --max-examples {args.max_examples}", flush=True)
             break
-        label = task.get("id", task.get("category", "?"))[:40]
-        print(f"  [{idx}/{len(tasks)}] {label}", flush=True)
+        print(f"  [{idx}/{len(tasks)}] {task.get("id", task.get("category", "?"))[:40]}", flush=True)
         out = None
         for _attempt in (1, 2):
             try:

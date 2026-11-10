@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# NOTE: Soup (soup-cli[train]) is now the PRIMARY training path for Urai.
+# To train: bash scripts/train/soup_train.sh
+# See config/soup_train.yaml for the canonical Soup config.
+# This script is kept as a FALLBACK for manual Kaggle/Colab/Unsloth runs.
+
 """Urai Phase-3 training: QLoRA fine-tune on the distilled dataset with Unsloth.
 
 Needs a CUDA GPU (free Colab T4 works for 0.6B/1.7B; see docs/TRAINING.md).

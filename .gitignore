@@ -17,6 +17,7 @@ __pycache__/
 opencode-migration-backup-*/
 *.safetensors
 data/token_state.json
+<<<<<<< HEAD
 data/api_tokens.json
 data/sessions/
 data/sched_runs/
@@ -44,3 +45,7 @@ jev/data/
 .env
 .env.*
 !.env.example
+=======
+# generated unified training set (rebuild with scripts/train/merge_verified.py)
+data/verified/unified.jsonl
+>>>>>>> tukitattu/main
