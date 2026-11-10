@@ -1,12 +1,11 @@
-# Urai VPS Deploy — push to main triggers a pull + restart on the AWS EC2 VPS.
-# Uses existing infrastructure: AWS EC2 (52.66.18.45), no new provisioning.
+# Urai VPS Deploy — push to main triggers rsync + restart on the AWS EC2 VPS.
+# Uses rsync because the VPS cannot authenticate to a private GitHub repo.
 #
 # Required GitHub repo secrets:
-#   VPS_SSH_KEY        — SSH private key for ubuntu@52.66.18.45
-#   OPENROUTER_API_KEY  — Muse Spark Open teacher key
-#
-# Optional secrets (already in .env on VPS, not overwritten if absent):
-#   URAI_MASTER_KEY, GROQ_API_KEY, VERCEL_AI_GATEWAY_API_KEY, PORTKEY_API_KEY
+#   VPS_SSH_KEY         — SSH private key for ubuntu@52.66.18.45
+#   OPENROUTER_API_KEY   — Muse Spark Open teacher key
+#   URAI_MASTER_KEY      — API master key (default: 856777)
+#   VERCEL_AI_GATEWAY_API_KEY — Vercel AI Gateway key (optional)
 name: Deploy to VPS
 
 on:
@@ -16,13 +15,37 @@ on:
 
 jobs:
   deploy:
-    name: Pull + restart on AWS EC2
+    name: Rsync + restart on AWS EC2
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only deploy after CI passes on the same commit
-    needs: []
     steps:
-      - name: Deploy via SSH
+      - uses: actions/checkout@v4
+
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vps_key
+          chmod 600 ~/.ssh/vps_key
+          ssh-keyscan -H 52.66.18.45 >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Rsync code to VPS
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='third_party/' \
+            --exclude='model/base/*.gguf' \
+            --exclude='model/generate/*.safetensors' \
+            --exclude='data/sessions/' \
+            --exclude='data/sched_runs/' \
+            --exclude='.env' \
+            --exclude='data/memory/' \
+            --exclude='out/' \
+            -e "ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=accept-new" \
+            ./ ubuntu@52.66.18.45:/tmp/urai-deploy/
+
+      - name: Install + restart on VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: 52.66.18.45
@@ -30,33 +53,35 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -euo pipefail
-            cd /opt/urai
 
-            # Pull latest from the pushed branch
-            BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
-            sudo git fetch --depth 1 origin "$BRANCH"
-            sudo git checkout -f "$BRANCH"
-            sudo git reset --hard origin/"$BRANCH"
+            # Back up existing .env
+            sudo cp /opt/urai/.env /tmp/urai-env-backup 2>/dev/null || true
 
-            # Ensure .env has the cloud keys (non-destructive — only set if absent)
-            touch /opt/urai/.env
-            grep -q OPENROUTER_API_KEY /opt/urai/.env 2>/dev/null || \
-              echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" | sudo tee -a /opt/urai/.env > /dev/null
-            grep -q URAI_CLOUD_1M /opt/urai/.env 2>/dev/null || \
-              echo "URAI_CLOUD_1M=1" | sudo tee -a /opt/urai/.env > /dev/null
-            grep -q URAI_CLOUD_CONSULT /opt/urai/.env 2>/dev/null || \
-              echo "URAI_CLOUD_CONSULT=1" | sudo tee -a /opt/urai/.env > /dev/null
+            # Sync new code (preserve model weights and data)
+            sudo rsync -a --delete \
+              --exclude='__pycache__' \
+              --exclude='*.pyc' \
+              --exclude='third_party/' \
+              --exclude='model/base/*.gguf' \
+              --exclude='model/generate/*.safetensors' \
+              --exclude='data/sessions/' \
+              --exclude='data/sched_runs/' \
+              --exclude='.env' \
+              --exclude='data/memory/' \
+              --exclude='out/' \
+              /tmp/urai-deploy/ /opt/urai/
 
-            # Restart the API service
-            sudo systemctl daemon-reload
+            # Restore .env
+            sudo cp /tmp/urai-env-backup /opt/urai/.env 2>/dev/null || true
+            sudo chmod 600 /opt/urai/.env
+
+            # Restart API
+            sudo chown -R ubuntu:ubuntu /opt/urai 2>/dev/null || true
             sudo systemctl restart urai-api
+            sleep 4
 
             # Health check
-            sleep 3
             HEALTH=$(curl -s --max-time 5 http://127.0.0.1:8777/health || echo "FAIL")
             echo "Health: $HEALTH"
-
-            # Show running version
-            VERSION=$(python3 -c "import json; print(json.load(open('/opt/urai/pyproject.toml'.replace('.toml','')) and open('/opt/urai/pyproject.toml')))" 2>/dev/null || echo "unknown")
             echo "Deployed: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "Commit: $(git rev-parse --short HEAD)"
+            echo "Commit: $(cat /tmp/urai-deploy/pyproject.toml | head -1)"
