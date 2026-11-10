@@ -40,7 +40,7 @@ def run_cli(*args):
 def main():
     offline = "--offline" in sys.argv  # device-safe: no network, no subprocesses
     import jev
-    check("version", jev.VERSION in ("v2","v3"), getattr(jev, "VERSION", None))
+    check("version", jev.VERSION in ("v2","v3","v1.3"), getattr(jev, "VERSION", None))
 
     from jev import models_registry as reg
     r = reg.load()

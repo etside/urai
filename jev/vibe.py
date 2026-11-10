@@ -108,9 +108,9 @@ def _exec_tool(name: str, args: dict, workspace: Path) -> str:
 
 def vibe_session(task: str, workspace: str | None = None,
                  plan_only: bool = False, max_steps: int = 20,
-                 verbose: bool = True) -> dict:
+                 verbose: bool = True, session_id: str = "") -> dict:
     """Run a vibe coding session. Returns {steps, files_written, summary}."""
-    from .engine import complete
+    from .engine import complete, _get_backend
     from .backends import LlamaServerBackend
 
     ws = Path(workspace or os.getcwd()).expanduser().resolve()
@@ -130,13 +130,17 @@ def vibe_session(task: str, workspace: str | None = None,
     history = []
     steps = []
     files_written = []
-    backend = LlamaServerBackend()
+    # Use engine auto-select: local llama-server if healthy, else cloud fallback
+    try:
+        backend = _get_backend()
+    except RuntimeError as e:
+        return {"ok": False, "error": str(e), "steps": [], "files_written": [],
+                "summary": "No LLM backend available for vibe coding."}
 
     for step in range(max_steps):
         msgs = [{'role': 'system', 'content': system}]
         msgs.append({'role': 'user', 'content': task if step == 0 else 'Continue.'})
         msgs.extend(history)
-
         try:
             result = complete(backend, msgs, max_tokens=1024, temperature=0.2)
             reply = result['content'].strip()
@@ -183,6 +187,17 @@ def vibe_session(task: str, workspace: str | None = None,
             files_written.append(tool_args.get('path', ''))
 
         steps.append({'step': step+1, 'tool': tool_name, 'args': tool_args, 'result': tool_result})
+        # Emit event to session log
+        if session_id:
+            try:
+                from . import events as _ev
+                _ev.emit(session_id, "tool_call", agent_id="vibe",
+                         tool=tool_name,
+                         input_summary=str(tool_args)[:200],
+                         output_summary=tool_result[:200],
+                         status='BLOCKED' not in tool_result)
+            except Exception:
+                pass
         history.append({'role': 'assistant', 'content': reply})
         history.append({'role': 'user', 'content': f'Tool result: {_summarize_result(tool_name, tool_result)}'})
 

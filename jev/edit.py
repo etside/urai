@@ -72,7 +72,9 @@ def ai_edit(path: str, instruction: str, workspace: str | None = None) -> dict:
     prompt = f'Instruction: {instruction}\n\nFile ({path}):\n{content}'
 
     try:
-        result = complete(LlamaServerBackend(),
+        from .engine import _get_backend
+        backend = _get_backend()
+        result = complete(backend,
                           [{'role': 'system', 'content': system},
                            {'role': 'user', 'content': prompt}],
                           max_tokens=4096, temperature=0.1)
