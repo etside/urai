@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "1M Token Context Window: Raise default ctx from 2048 to 32768 in serve_ctl.py and cli.py. Add --rope-scale and --yarn-ext-factor flags to urai serve start for 128K+ via llama.cpp RoPE/YaRN. Add URAI_CTX env var. Add ctx_window field to /v1/info response. Show live 'N / 32768 tokens' counter in Studio chat UI. Document 1M-context cloud fallback (Gemini 1.5 Pro via L4 router when URAI_CLOUD_1M=1).",
+  "status": "pending",
+  "steps": [
+    "Edit jev/serve_ctl.py: change start() default ctx=2048 to ctx=32768. Add rope_scale=1.0 and yarn_ext_factor=-1.0 params. In the llama-server cmd list, add '--rope-scale', str(rope_scale) when rope_scale > 1.0, and '--yarn-ext-factor', str(yarn_ext_factor) when yarn_ext_factor >= 0.",
+    "Edit jev/cli.py lines ~519 and ~524: change both --ctx defaults from 2048 to 32768. Add --rope-scale (float, default 1.0) and --yarn-ext-factor (float, default -1.0) args to the 'serve' sub-parser. Pass them through to serve_ctl.start() at line ~844. Add URAI_CTX env var fallback: int(os.environ.get('URAI_CTX', '32768')).",
+    "Edit jev/router.py: add comment block documenting L4 1M-context cloud path (Gemini 1.5 Pro / Claude 3.5 when URAI_CLOUD_1M=1 and tier='urai-ultra'). Read URAI_CTX env and pass as context hint in cloud_consult().",
+    "Edit jev/server.py /v1/info handler (around line 765): add ctx_window field: int(os.environ.get('URAI_CTX', '32768')). Edit jev/static/app.html chat JS: after streaming [DONE], read response.usage.total_tokens and display a small pill '2,341 / 32,768 tokens' below the chat input. Fetch ctx_window from /v1/info on page load."
+  ],
+  "acceptance_criteria": [
+    "python3 scripts/smoke_urai.py passes all checks",
+    "urai serve start --help shows --rope-scale and --yarn-ext-factor flags",
+    "curl http://localhost:8777/v1/info returns JSON with ctx_window: 32768",
+    "Studio chat shows token counter after a message is sent",
+    "URAI_CTX=65536 env var is respected by cli and /v1/info"
+  ],
+  "verification": [
+    "python3 scripts/smoke_urai.py",
+    "python3 -m jev.cli serve start --help | grep rope-scale",
+    "python3 -c \"import jev.serve_ctl as s; import inspect; src=inspect.getsource(s.start); print('32768' in src)\"",
+    "python3 -c \"import jev.cli; print('ok')\""
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

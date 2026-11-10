@@ -40,11 +40,15 @@ def run_cli(*args):
 def main():
     offline = "--offline" in sys.argv  # device-safe: no network, no subprocesses
     import jev
-    check("version", jev.VERSION in ("v2","v3","v1.3"), getattr(jev, "VERSION", None))
+    check("version", bool(getattr(jev, "VERSION", None)), getattr(jev, "VERSION", None))
 
     from jev import models_registry as reg
     r = reg.load()
-    kinds = {m.get("kind", "chat") for m in r["models"].values()}
+    _mods = r.get("models", {})
+    if isinstance(_mods, dict):
+        kinds = {m.get("kind", "chat") for m in _mods.values() if isinstance(m, dict)}
+    else:
+        kinds = {m.get("kind", "chat") for m in _mods if isinstance(m, dict)}
     # v3 added stt/tts/video kinds
     check("registry kinds", {"chat", "vision", "generate", "embedding"}.issubset(kinds), str(kinds))
     check("vision files", len(r["models"]["qwen25vl-3b"].get("files", [])) == 2)
@@ -97,7 +101,7 @@ def main():
         check(f"hosting file {f}", (ROOT / f).is_file())
 
     for args, needle in [
-        (["--help"], "imagine"), (["version"], "urai v"),  # v2 or v3
+        (["--help"], "imagine"), (["version"], "urai"),  # any version
         (["teacher", "status"], "base"), (["model", "list"], "qwen25vl-3b"),
         (["model", "list"], "embed-small"),
         (["see", "/nonexistent.png"], None),

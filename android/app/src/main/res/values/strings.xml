@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Urai</string>
+    <string name="settings_title">Urai settings</string>
+    <string name="cyber_title">CyberUrai</string>
+    <string name="notif_channel_monitor">Privacy monitor</string>
+    <string name="notif_monitor_running">Privacy monitor is active</string>
+</resources>

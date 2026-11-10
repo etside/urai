@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Sandboxed Code Interpreter: New jev/sandbox.py that extends the existing run_code() with Docker detection, matplotlib image capture (base64 PNG), and isolated execution. Add POST /v1/code/execute endpoint. Register code_execute as an agent tool. Add Code panel in Studio with textarea editor, Run button, stdout/stderr output, and inline image renders.",
+  "status": "pending",
+  "steps": [
+    "Create jev/sandbox.py: function execute(source, language='python', capture_images=True, timeout_s=30). Check shutil.which('docker'). If Docker available: write source to tmpdir/main.py, prepend matplotlib Agg backend + savefig if 'plt' or 'matplotlib' in source, run: docker run --rm --network none --memory 256m --pids-limit 50 --cpus 0.5 -v {tmpdir}:/work python:3.11-slim python3 /work/main.py (subprocess, capture_output=True, timeout=timeout_s). If no Docker: use subprocess approach like existing tools.run_code() but with matplotlib capture. For image capture: if capture_images=True, prepend 'import matplotlib; matplotlib.use(\"Agg\")' and append 'import os as _os, glob as _gl; [__import__(\"matplotlib\").pyplot.savefig(\"/tmp/_urai_fig_{i}.png\") for i,_ in enumerate(__import__(\"matplotlib\").pyplot.get_fignums())]' to source. After run, glob /tmp/_urai_fig_*.png and base64-encode each. Returns {ok, stdout, stderr, exit_code, duration_s, images:[base64_str,...], language}. Handle ImportError for matplotlib gracefully.",
+    "Edit jev/tools.py: add function code_execute(source, language='python') that calls sandbox.execute(source, language). Import sandbox lazily inside the function. Register in TOOLS dict: TOOLS['code_execute'] = code_execute. Add schema to TOOL_SCHEMAS: {type:'function', function:{name:'code_execute', description:'Execute Python/JS/Bash code in an isolated sandbox and return stdout, stderr, and any matplotlib plots as base64 images', parameters:{type:'object', properties:{source:{type:'string'}, language:{type:'string', enum:['python','javascript','bash'], default:'python'}}, required:['source']}}}.",
+    "Edit jev/agent.py run_tool_call(): add dispatch case for 'code_execute': return tools.TOOLS['code_execute'](source=args.get('source',''), language=args.get('language','python')). Emit event via _events.emit() after execution.",
+    "Edit jev/server.py do_POST: add 'if p == \"/v1/code/execute\":' block. Parse body {source, language}. Validate source is non-empty string. Call sandbox.execute(source, language). Return result dict. Apply normal auth gate (already handled by gated path check). Emit event via events.emit('code_execute_api', 'code', 'server', 'code_execute', source[:100], str(result.get('exit_code'))). Add '/v1/code/execute' to the _guarded tuple (already covered by /v1/ prefix).",
+    "Edit jev/static/app.html: add 'Code' tab to sb-nav list (icon: 💻). Add panel div #panel-code. Panel contains: language selector <select> (Python/JavaScript/Bash). Code textarea styled with monospace font, syntax highlighting via highlight.js. Run button calls async runCode(). Output area below with two sections: stdout (green text) and stderr (red text). Image section: if response.images array non-empty, render each as <img src='data:image/png;base64,...' style='max-width:100%;border-radius:8px'>. Add clear button. Wire runCode() to POST /v1/code/execute with {source, language} body."
+  ],
+  "acceptance_criteria": [
+    "python3 scripts/smoke_urai.py passes all checks",
+    "python3 -c \"from jev.sandbox import execute; r=execute('print(6*7)'); assert r['stdout'].strip()=='42'; print('sandbox ok')\"",
+    "curl -X POST http://localhost:8777/v1/code/execute -H 'Content-Type: application/json' -d '{\"source\":\"print(99)\"}' returns {ok:true, stdout:'99\\n'}",
+    "Studio Code panel renders with textarea, Run button, and output area",
+    "code_execute appears in GET /v1/tools response"
+  ],
+  "verification": [
+    "python3 scripts/smoke_urai.py",
+    "python3 -c \"from jev.sandbox import execute; r=execute('print(6*7)'); assert r['stdout'].strip()=='42', r; print('sandbox ok')\"",
+    "python3 -c \"from jev.tools import TOOLS; assert 'code_execute' in TOOLS; print('tool registered')\""
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

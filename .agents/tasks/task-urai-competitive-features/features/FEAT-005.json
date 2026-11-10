@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-005",
+  "type": "feat",
+  "description": "Contemplating Mode (Parallel Multi-Agent Reasoning): New jev/contemplate.py using swarm.py for 3-agent fan-out with different reasoning seeds, merged by a judge agent. Add mode param to /v1/chat/completions (instant/thinking/contemplating). Add mode selector button group in Studio chat UI. Depends on FEAT-002 (events.py) for event emission.",
+  "status": "pending",
+  "steps": [
+    "Edit jev/agent.py: add system_override kwarg to run_agent(task, files={}, budget_tokens=2048, session_id='', system_override=None). When system_override is provided, replace the SYSTEM constant with system_override in the messages list construction.",
+    "Create jev/contemplate.py: import swarm, agent, events. SEEDS dict: {'analytical': 'You are a precise analytical reasoner. Focus on facts, logic, and step-by-step deduction. Be thorough.', 'creative': 'You are a creative lateral thinker. Explore non-obvious angles, analogies, and unconventional solutions.', 'skeptical': 'You are a critical skeptic. Challenge assumptions, identify weaknesses, and play devil\\'s advocate.'}. Function contemplate(messages, max_tokens=1024, session_id='') -> dict: extract prompt text from messages (use agent._text_of equivalent). Fan out via run_swarm([{task: prompt, system_override: seed_text} for seed_text in SEEDS.values()], max_workers=3). Emit event for each branch via events.emit(). Judge step: call agent.run_agent(f'You are a synthesis judge. Merge these 3 expert answers into one definitive best answer, preserving the strongest points from each:\\n\\nAnalytical view:\\n{r0}\\n\\nCreative view:\\n{r1}\\n\\nSkeptical view:\\n{r2}\\n\\nBest merged answer:', session_id=session_id). Return {ok, answer: judge_result['answer'], branches: [{seed, answer},...], judge_trace, elapsed_s}.",
+    "Edit jev/server.py /v1/chat/completions handler: extract mode = body.get('mode', 'instant'). Before calling route(), add: if mode == 'thinking': use reason.reason(msgs, max_tokens, temperature) and return structured response with thinking field. If mode == 'contemplating': call contemplate.contemplate(msgs, max_tokens, session_id=body.get('session_id','')), return response with answer + branches. Add 'reasoning_mode' field to all response objects. Import contemplate lazily.",
+    "Edit jev/static/app.html: add mode selector below the chat input (above send button). Three buttons in a pill group: '⚡ Instant' (default), '🤔 Think', '🧠 Contemplate'. Active mode stored in S.mode (default 'instant'). Button click updates S.mode and visual active state. Include mode in chat POST body: mode: S.mode. For contemplating mode, show a spinner with message 'Consulting 3 reasoning agents…'. After response, if branches array present, render collapsible <details> sections for each branch before the merged answer."
+  ],
+  "acceptance_criteria": [
+    "python3 scripts/smoke_urai.py passes all checks",
+    "python3 -c \"from jev.contemplate import contemplate; print('import ok')\"",
+    "POST /v1/chat/completions with mode:'instant' returns normal response",
+    "POST /v1/chat/completions with mode:'contemplating' returns {answer, branches:[3 items]}",
+    "Studio mode selector renders 3 buttons; active button highlighted",
+    "Contemplating response shows 3 collapsible branch details in Studio"
+  ],
+  "verification": [
+    "python3 scripts/smoke_urai.py",
+    "python3 -c \"from jev.contemplate import contemplate; print('contemplate imports ok')\"",
+    "python3 -c \"import jev.agent; import inspect; src=inspect.getsource(jev.agent.run_agent); assert 'system_override' in src; print('system_override kwarg ok')\""
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

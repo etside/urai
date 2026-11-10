@@ -1,17 +1,30 @@
 package io.github.tukitattu.urai.cyber;
 
+import android.Manifest;
+import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.AppOpsManager;
+import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
-import android.widget.ArrayAdapter;
+import android.os.Process;
+import android.provider.Settings;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
-import android.widget.ListView;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -19,17 +32,24 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+import io.github.tukitattu.urai.MainActivity;
+import io.github.tukitattu.urai.SettingsActivity;
+
 /** CyberUrai console: ranked app list, per-app detail, block prompt,
  *  one-tap "Ask CyberUrai" backend analysis. Programmatic UI, no XML. */
-public class CyberActivity extends android.app.Activity {
+public class CyberActivity extends Activity {
+    private static final int REQ_NOTIF = 201;
+
     private static class Row {
         String pkg, label;
         int score;
         List<String> reasons;
-        public String toString() { return label + "  [" + score + "]"; }
     }
 
-    @Override protected void onCreate(Bundle b) {
+    private RowAdapter adapter;
+
+    @Override
+    protected void onCreate(Bundle b) {
         super.onCreate(b);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -43,30 +63,90 @@ public class CyberActivity extends android.app.Activity {
 
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        Button scan = new Button(this); scan.setText("Scan");
-        scan.setOnClickListener(v -> load((ListView) root.findViewWithTag("list")));
-        Button svc = new Button(this); svc.setText("Start monitor");
-        svc.setOnClickListener(v -> {
-            startForegroundService(new android.content.Intent(this, PrivacyMonitorService.class));
-            Toast.makeText(this, "Monitor started", Toast.LENGTH_SHORT).show();
-        });
-        bar.addView(scan); bar.addView(svc);
+        Button scan = new Button(this);
+        scan.setText("Scan");
+        scan.setOnClickListener(v -> load());
+        Button svc = new Button(this);
+        svc.setText("Start monitor");
+        svc.setOnClickListener(v -> startMonitor());
+        bar.addView(scan);
+        bar.addView(svc);
+        if (!hasUsageAccess()) {
+            Button usage = new Button(this);
+            usage.setText("Grant usage access");
+            usage.setOnClickListener(v -> openUsageAccessSettings());
+            bar.addView(usage);
+        }
         root.addView(bar);
 
-        ListView list = new ListView(this);
-        list.setTag("list");
-        list.setLayoutParams(new LinearLayout.LayoutParams(
+        // RecyclerView instead of a weighted ListView nested in a ScrollView:
+        // nested scrolling is handled correctly and there is one scroll owner.
+        RecyclerView list = new RecyclerView(this);
+        list.setLayoutManager(new LinearLayoutManager(this));
+        adapter = new RowAdapter();
+        list.setAdapter(adapter);
+        root.addView(list, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-        root.addView(list);
-        setContentView(new ScrollView(this) {{ addView(root); }});
+        setContentView(root);
 
         String pkg = getIntent().getStringExtra("pkg");
         String op = getIntent().getStringExtra("op");
-        load(list);
+        load();
         if (pkg != null) showDetail(pkg, op);
     }
 
-    private void load(ListView list) {
+    private void startMonitor() {
+        if (Build.VERSION.SDK_INT >= 33
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIF);
+            return;
+        }
+        launchMonitor();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, @NonNull String[] perms, @NonNull int[] res) {
+        super.onRequestPermissionsResult(req, perms, res);
+        if (req == REQ_NOTIF) launchMonitor(); // run even if denied: FGS still runs
+    }
+
+    private void launchMonitor() {
+        Intent si = new Intent(this, PrivacyMonitorService.class);
+        if (Build.VERSION.SDK_INT >= 26) startForegroundService(si);
+        else startService(si);
+        Toast.makeText(this, "Monitor started", Toast.LENGTH_SHORT).show();
+    }
+
+    private boolean hasUsageAccess() {
+        try {
+            AppOpsManager ops = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
+            if (ops == null) return false;
+            int mode;
+            if (Build.VERSION.SDK_INT >= 29) {
+                mode = ops.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
+                        Process.myUid(), getPackageName());
+            } else {
+                mode = ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
+                        Process.myUid(), getPackageName());
+            }
+            return mode == AppOpsManager.MODE_ALLOWED;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void openUsageAccessSettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
+        } catch (Exception e) {
+            Toast.makeText(this, "No usage-access settings on this device",
+                    Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void load() {
         new Thread(() -> {
             PackageManager pm = getPackageManager();
             List<Row> rows = new ArrayList<>();
@@ -86,11 +166,7 @@ public class CyberActivity extends android.app.Activity {
             }
             Collections.sort(rows, Comparator.comparingInt((Row r) -> r.score).reversed());
             runOnUiThread(() -> {
-                ArrayAdapter<Row> ad = new ArrayAdapter<>(this,
-                        android.R.layout.simple_list_item_1, rows);
-                list.setAdapter(ad);
-                list.setOnItemClickListener((p, v, pos, id) ->
-                        showDetail(rows.get(pos).pkg, null));
+                adapter.submit(rows);
                 Toast.makeText(this, rows.size() + " flagged apps", Toast.LENGTH_SHORT).show();
             });
         }).start();
@@ -116,14 +192,89 @@ public class CyberActivity extends android.app.Activity {
     private void askBackend(String pkg, String op) {
         Toast.makeText(this, "Asking CyberUrai…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
-            SharedPreferences sp = getSharedPreferences("cyber", MODE_PRIVATE);
-            String url = sp.getString("url", "https://urai.daddyai.online");
-            String key = sp.getString("key", "");
+            SharedPreferences sp = getSharedPreferences(
+                    SettingsActivity.CYBER_PREFS, MODE_PRIVATE);
+            String url = sp.getString(SettingsActivity.CYBER_URL, "");
+            String key = sp.getString(SettingsActivity.CYBER_KEY, "");
+            // Fall back to the main endpoint/key if the guard prefs were never
+            // written (e.g. app upgraded from an older build).
+            if (url == null || url.isEmpty() || key == null || key.isEmpty()) {
+                SharedPreferences mp = getSharedPreferences(MainActivity.PREFS, MODE_PRIVATE);
+                if (url == null || url.isEmpty()) {
+                    url = mp.getString(MainActivity.KEY_EP, "https://urai.daddyai.online/");
+                }
+                if (key == null || key.isEmpty()) {
+                    key = mp.getString(MainActivity.KEY_APIKEY, "");
+                }
+            }
             String ans = CyberUraiClient.analyze(url, key, pkg, op);
             runOnUiThread(() -> new AlertDialog.Builder(this)
                     .setTitle("CyberUrai verdict")
                     .setMessage(ans)
                     .setPositiveButton("OK", null).show());
         }).start();
+    }
+
+    /** RecyclerView adapter: no nested scroll, safe inside a fixed-height list. */
+    private class RowAdapter extends RecyclerView.Adapter<RowAdapter.VH> {
+        private final List<Row> rows = new ArrayList<>();
+
+        void submit(List<Row> fresh) {
+            rows.clear();
+            rows.addAll(fresh);
+            notifyDataSetChanged();
+        }
+
+        @NonNull
+        @Override
+        public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            LinearLayout c = new LinearLayout(CyberActivity.this);
+            c.setOrientation(LinearLayout.VERTICAL);
+            int p = (int) (12 * getResources().getDisplayMetrics().density);
+            c.setPadding(p, p, p, p);
+            c.setLayoutParams(new RecyclerView.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+            TextView label = new TextView(CyberActivity.this);
+            label.setTextSize(16);
+            label.setId(android.R.id.text1);
+            TextView sub = new TextView(CyberActivity.this);
+            sub.setTextSize(12);
+            sub.setId(android.R.id.text2);
+            c.addView(label);
+            c.addView(sub);
+            return new VH(c);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull VH h, int position) {
+            final Row r = rows.get(position);
+            ((TextView) h.itemView.findViewById(android.R.id.text1))
+                    .setText(r.label + "  [" + r.score + "]");
+            ((TextView) h.itemView.findViewById(android.R.id.text2))
+                    .setText(summarize(r.reasons));
+            h.itemView.setOnClickListener(v -> showDetail(r.pkg, null));
+        }
+
+        @Override
+        public int getItemCount() {
+            return rows.size();
+        }
+
+        private String summarize(List<String> reasons) {
+            if (reasons == null || reasons.isEmpty()) return "";
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < reasons.size() && i < 3; i++) {
+                if (i > 0) sb.append(" • ");
+                sb.append(reasons.get(i));
+            }
+            return sb.toString();
+        }
+
+        class VH extends RecyclerView.ViewHolder {
+            VH(@NonNull View v) {
+                super(v);
+            }
+        }
     }
 }

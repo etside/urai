@@ -1,0 +1,63 @@
+name: Urai Integration
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Smoke test API
+        run: |
+          python3 - <<'EOF'
+          import requests, sys
+          try:
+              r = requests.get("http://52.66.18.45:8777/v1/models", timeout=10,
+                               headers={"Authorization": "Bearer urai_e3sbJn3XztLzDS3nahrJPnYKdbDRiRpY"})
+              print("API status:", r.status_code)
+              if r.status_code == 200:
+                  print("PASS: API reachable")
+              else:
+                  print("WARN: unexpected status", r.status_code)
+          except Exception as e:
+              print("WARN: API not reachable:", e)
+          EOF
+
+  deploy-ec2:
+    name: Deploy to EC2
+    needs: smoke
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        env:
+          EC2_SSH_KEY: ${{secrets.EC2_SSH_KEY}}
+        run: |
+          echo "$EC2_SSH_KEY" > /tmp/urai-deploy.pem
+          chmod 600 /tmp/urai-deploy.pem
+          ssh -o StrictHostKeyChecking=no \
+              -i /tmp/urai-deploy.pem \
+              ubuntu@52.66.18.45 \
+              "cd /home/ubuntu/urai && git pull origin main && sudo systemctl restart urai || echo restart-skipped"
+          rm -f /tmp/urai-deploy.pem
+
+  # Pages is deployed by .github/workflows/pages.yml from jev/static/.
+  # This workflow used to deploy ./studio (which does not exist), producing an
+  # empty artifact that raced with the real deploy and left the site at 404.

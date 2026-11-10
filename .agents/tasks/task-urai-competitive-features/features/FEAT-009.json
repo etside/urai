@@ -1,0 +1,32 @@
+{
+  "id": "FEAT-009",
+  "type": "feat",
+  "description": "Calendar / Email Integrations (Google + Outlook): Migrate jev/integrations.py to jev/integrations/ package. New jev/integrations/google.py (OAuth2 + Calendar API + Gmail) and jev/integrations/outlook.py (MSAL + Microsoft Graph). Register 6 agent tools. OAuth routes in server.py. Integrations tab in Studio Settings. New 'integrations' extra in pyproject.toml. Independent of other FEATs.",
+  "status": "pending",
+  "steps": [
+    "Migrate jev/integrations.py to package: create jev/integrations/ directory. Create jev/integrations/status.py with the content of the current jev/integrations.py (move the entire file). Create jev/integrations/__init__.py that exports: from .status import report. Edit jev/server.py: change 'from .integrations import report as _ireport' to 'from .integrations import report as _ireport' (import stays the same since __init__.py re-exports). Delete jev/integrations.py. Verify smoke tests pass.",
+    "Create jev/integrations/google.py: handle ImportError for google.oauth2/google_auth_oauthlib gracefully. TOKEN_FILE = data/integrations/google_token.json. SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/calendar.events', 'https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send']. Functions: is_connected()->bool (checks TOKEN_FILE exists and token not expired). get_auth_url(client_id, client_secret, redirect_uri)->str: uses google_auth_oauthlib.flow.Flow.from_client_config(). handle_callback(code, redirect_uri)->dict: exchanges code for token, saves to TOKEN_FILE encrypted (simple: store as-is but note in comment that URAI_MASTER_KEY XOR encryption should be added in production). _get_creds()->Credentials: loads from TOKEN_FILE, refreshes if expired. calendar_list_events(days=7)->list: calls Google Calendar API events.list(). calendar_create_event(title, start_iso, end_iso, description=''')->dict: calls events.insert(). gmail_read(max_results=10, query=''')->list[{id,subject,from_addr,snippet,date}]. gmail_send(to, subject, body)->dict. All functions return {ok:False, error:'Google not connected — call GET /v1/integrations/google/auth first'} if is_connected() is False.",
+    "Create jev/integrations/outlook.py: handle ImportError for msal. TOKEN_FILE = data/integrations/outlook_token.json. SCOPES = ['https://graph.microsoft.com/Calendars.ReadWrite', 'https://graph.microsoft.com/Mail.ReadWrite', 'https://graph.microsoft.com/Mail.Send']. GRAPH_URL = 'https://graph.microsoft.com/v1.0'. Functions: is_connected()->bool. get_auth_url(client_id, tenant_id, redirect_uri)->str: uses msal.ConfidentialClientApplication or PublicClientApplication. handle_callback(code, redirect_uri)->dict. _get_token()->str|None. _graph_get(path)->dict: urllib.request.urlopen with Bearer token. _graph_post(path, data)->dict. calendar_list_events(days=7)->list. calendar_create_event(title, start_iso, end_iso)->dict. mail_read(max_results=10)->list[{id,subject,from_addr,preview,date}]. mail_send(to, subject, body)->dict.",
+    "Edit jev/tools.py: add 6 integration tool wrapper functions. Each function auto-detects which provider is connected (try Google first, then Outlook). Functions: calendar_list_events(days=7), calendar_create_event(title, start, end, description=''), email_read(max_results=10, query=''), email_send(to, subject, body), calendar_list_events_outlook(days=7), email_send_outlook(to, subject, body). Register in TOOLS dict. Add 4 schemas to TOOL_SCHEMAS for the primary tools (calendar_list_events, calendar_create_event, email_read, email_send).",
+    "Edit jev/server.py: add in do_GET: '/v1/integrations/google/auth' -> {url: google.get_auth_url(client_id from env, ...)}. '/v1/integrations/outlook/auth' -> {url: outlook.get_auth_url(...)}. '/v1/integrations/status' -> {google: google.is_connected(), outlook: outlook.is_connected()}. In do_POST: '/v1/integrations/google/callback' -> body {code, redirect_uri} -> google.handle_callback(). '/v1/integrations/outlook/callback' -> outlook.handle_callback(). In do_DELETE: '/v1/integrations/google' -> delete TOKEN_FILE, return {ok:True}. '/v1/integrations/outlook' -> same.",
+    "Edit jev/static/app.html Settings panel: add 'Integrations' section after the Models section. Two cards: Google (🗓 Calendar + 📧 Gmail) and Microsoft (🗓 Outlook Calendar + 📨 Outlook Mail). Each card shows: connection status dot (green=connected, gray=disconnected), Connect button (calls GET /v1/integrations/google/auth, opens URL in new tab), Disconnect button (DELETE /v1/integrations/google). When connected, show the account email and a test button. Load status from GET /v1/integrations/status on Settings panel open. Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OUTLOOK_CLIENT_ID, OUTLOOK_TENANT_ID to .env.example with instructions.",
+    "Edit pyproject.toml: add optional extra 'integrations' = ['google-auth-oauthlib>=1.2.0', 'google-api-python-client>=2.131.0', 'msal>=1.28.0']. All Apache 2.0 / MIT licensed. Update 'all' extra to include 'integrations'. Add to .env.example: GOOGLE_CLIENT_ID=, GOOGLE_CLIENT_SECRET=, OUTLOOK_CLIENT_ID=, OUTLOOK_TENANT_ID= with comments explaining OAuth2 app registration steps."
+  ],
+  "acceptance_criteria": [
+    "python3 scripts/smoke_urai.py passes all checks (critical: integrations.py migration must not break /v1/integrations endpoint)",
+    "python3 -c \"from jev.integrations import report; print('integrations package ok')\"",
+    "python3 -c \"from jev.integrations.google import is_connected, calendar_list_events; print('google module ok')\"",
+    "python3 -c \"from jev.integrations.outlook import is_connected, mail_read; print('outlook module ok')\"",
+    "GET /v1/integrations returns existing status report (unchanged behavior)",
+    "GET /v1/integrations/status returns {google: false, outlook: false} when no tokens stored",
+    "calendar_list_events and email_read appear in GET /v1/tools",
+    "Studio Settings shows Integrations section with Connect buttons"
+  ],
+  "verification": [
+    "python3 scripts/smoke_urai.py",
+    "python3 -c \"from jev.integrations import report; from jev.integrations.google import is_connected; from jev.integrations.outlook import is_connected as oc; print('all integrations imports ok')\"",
+    "python3 -c \"from jev.tools import TOOLS; assert 'calendar_list_events' in TOOLS; assert 'email_send' in TOOLS; print('integration tools registered')\""
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

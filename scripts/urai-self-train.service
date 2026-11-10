@@ -1,0 +1,19 @@
+[Unit]
+Description=Urai Continuous Self-Training Loop
+After=network.target tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+Type=simple
+User=kp
+WorkingDirectory=/home/kp/urai-work/urai
+ExecStart=/usr/bin/python3 /home/kp/urai-work/urai/scripts/self_train_loop.py --daemon --interval 6
+Restart=on-failure
+RestartSec=60
+StandardOutput=journal
+StandardError=journal
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=HOME=/home/kp
+
+[Install]
+WantedBy=multi-user.target

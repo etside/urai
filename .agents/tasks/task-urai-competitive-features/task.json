@@ -1,0 +1,17 @@
+{
+  "task_id": "task-urai-competitive-features",
+  "task_description": "Implement 9 competitive features into Urai to match/beat Muse Spark: 1M context window, sandboxed code interpreter, web artifacts, contemplating mode, visual grounding, proactive goals agent, observable event log, PDF input, calendar/email integrations. All open-source Apache 2.0, self-hosted, no required cloud dependencies.",
+  "status": "pending",
+  "feature_order": [
+    "FEAT-001",
+    "FEAT-002",
+    "FEAT-003",
+    "FEAT-004",
+    "FEAT-005",
+    "FEAT-006",
+    "FEAT-007",
+    "FEAT-008",
+    "FEAT-009"
+  ],
+  "blocked_reason": null
+}
