@@ -750,13 +750,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
           <select id="vid-provider" style="background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text1)">
             <option value="auto">Auto (Best Available)</option>
-            <option value="chatcut-seedance">Seedance 2.5 (ChatCut)</option>
-            <option value="chatcut-kling4">Kling 4.0 (ChatCut)</option>
-            <option value="chatcut-minimax">MiniMax H3 (ChatCut)</option>
-            <option value="chatcut-omni">Gemini Omni (ChatCut)</option>
-            <option value="higgsfield">Higgsfield</option>
-            <option value="runway">Runway</option>
-            <option value="local">Local Animatic</option>
+            <option value="wan21">WAN 2.1 (Best Quality)</option>
+            <option value="ltx">LTX-Video (Fast)</option>
+            <option value="animatediff">AnimateDiff</option>
+            <option value="animatic">Animatic Preview (CPU)</option>
           </select>
           <select id="vid-ratio" style="background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text1)">
             <option value="16:9">16:9 Landscape</option>
@@ -1807,7 +1804,7 @@ async function generateImage() {
 async function generateVideo() {
   const prompt = document.getElementById('vid-prompt').value.trim();
   if (!prompt) return;
-  const provider = document.getElementById('vid-provider').value;
+  const backend = document.getElementById('vid-provider').value;
   const ratio = document.getElementById('vid-ratio').value;
   const duration = parseInt(document.getElementById('vid-duration').value);
   const resolution = document.getElementById('vid-resolution').value;
@@ -1816,15 +1813,14 @@ async function generateVideo() {
   try {
     const data = await api('/video', {
       method: 'POST',
-      body: JSON.stringify({ prompt, provider, ratio, duration, resolution })
+      body: JSON.stringify({ prompt, backend, ratio, duration, resolution })
     });
     if (data.ok === false) {
       res.innerHTML = `<span style="color:#f87171">Error: ${data.error || 'unknown error'}</span>`;
     } else if (data.job_id) {
       res.innerHTML = `<div style="background:var(--bg1);border-radius:8px;padding:12px">
-        ✅ <strong>Job submitted!</strong> Provider: ${data.provider} / Model: ${data.model}<br>
-        Job ID: <code>${data.job_id}</code><br>
-        <span style="font-size:.8rem;color:var(--text3)">${data.note || 'Check your ChatCut dashboard for the result.'}</span>
+        ✅ <strong>Job submitted!</strong> Backend: ${data.backend || data.provider}<br>
+        Job ID: <code>${data.job_id}</code>
       </div>`;
     } else if (data.path) {
       res.innerHTML = `<div style="background:var(--bg1);border-radius:8px;padding:12px">

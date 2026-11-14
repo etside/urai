@@ -1301,13 +1301,19 @@ class Handler(BaseHTTPRequestHandler):
             from . import video as _video
             res = _video.generate(
                 body.get("prompt", ""), body.get("out"),
-                body.get("duration", 4), body.get("width", 512),
-                body.get("height", 512), body.get("fps", 4),
-                body.get("seed", 7), body.get("provider", "auto"),
-                body.get("provider_url"), body.get("provider_key"))
+                body.get("duration", 4), body.get("width", 480),
+                body.get("height", 832), body.get("fps", 16),
+                body.get("seed", 7),
+                backend=body.get("backend", body.get("provider", "auto")),
+                ratio=body.get("ratio", "16:9"),
+                resolution=body.get("resolution", "720p"),
+                first_frame=body.get("first_frame"),
+                last_frame=body.get("last_frame"),
+                style=body.get("style", "cinematic"),
+                camera=body.get("camera"))
             if not res.get("ok"):
                 return self._send({"ok": False, "error": res.get("error"),
-                                   "grade": res.get("grade", "")}, 502)
+                                   "note": res.get("note", "")}, 502)
             _record_use(ip, device, bool(body.get("_urai_authed")))
             _log("video", ip, device, str(body.get("prompt", ""))[:160],
                  {"master": bool(body.get("_urai_authed")), "id": res.get("id")})

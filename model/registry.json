@@ -149,6 +149,28 @@
       ],
       "status": "production",
       "version": "v1.1.1"
+    },
+    "wan2.1": {
+      "path": "model/video/wan2.1",
+      "kind": "video",
+      "role": "video-gen",
+      "params": "14B",
+      "license": "Apache-2.0",
+      "note": "WAN 2.1 open-weight T2V by ByteDance. Best quality. 8GB+ VRAM.",
+      "source": "https://github.com/Wan-Video/Wan2.1",
+      "hf": "https://huggingface.co/Wan-AI/Wan2.1-T2V-14B-Diffusers",
+      "setup": "git clone https://github.com/Wan-Video/Wan2.1.git third_party/wan2.1 && pip install -e third_party/wan2.1"
+    },
+    "ltx-video": {
+      "path": "model/video/ltx-video",
+      "kind": "video",
+      "role": "video-gen-fast",
+      "params": "8B",
+      "license": "Apache-2.0",
+      "note": "LTX-Video by Lightricks. Fast generation. 8GB+ VRAM.",
+      "source": "https://github.com/Lightricks/LTX-Video",
+      "hf": "https://huggingface.co/Lightricks/LTX-Video",
+      "setup": "git clone https://github.com/Lightricks/LTX-Video.git third_party/LTX-Video && pip install -e third_party/LTX-Video"
     }
   },
   "ec2_default": "urai-qwen3-06b-v1-Q4_K_M",

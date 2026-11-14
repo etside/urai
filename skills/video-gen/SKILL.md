@@ -1,60 +1,72 @@
 ---
 name: video-gen
-description: "AI video generation via ChatCut (Seedance 2.5, Kling 4, MiniMax H3, Gemini Omni), local sd-turbo+ffmpeg slideshow, or provider APIs (Higgsfield, Runway). Use for text-to-video, image-to-video, first/last-frame transitions, and reference-guided generation."
-source: https://github.com/ChatCut-Inc/agent-plugin
+description: "AI video generation using open-source, self-hosted models. No API keys or payment required. Backends: WAN 2.1 (best quality), LTX-Video (fast), AnimateDiff (SD-based), or Animatic preview (sd-turbo + ffmpeg). Patterns from Seedance/Kling/LTX open research. Use for text-to-video, image-to-video, first/last-frame transitions."
+sources:
+  - https://github.com/Wan-Video/Wan2.1
+  - https://github.com/Lightricks/LTX-Video
+  - https://github.com/guoyww/AnimateDiff
 ---
 
-# Video Generation (Urai)
+# Video Generation (Urai — 100% Open Source)
 
-Urai supports multiple video generation backends. The best available backend is selected automatically.
+No API keys. No payment. All models run locally on your hardware.
 
-## Models Available
+## Backends
 
-| Model | Provider | Duration | Resolution | Best For |
-|-------|----------|----------|------------|---------|
-| `seedance-2-5` | ChatCut | 4-30s | 480p/720p/1080p | Default; multimodal refs, audio sync |
-| `seedance2fast` | ChatCut | 4-15s | 720p | Fast drafts, iteration |
-| `seedance2mini` | ChatCut | 4-15s | 720p | Cheap bulk generation |
-| `kling` | ChatCut | 1-10s | 1080p (pro) | Character shots, fine emotional control |
-| `kling-4` | ChatCut | 3-30s | 720p/1080p | Long clips, firstFrame/lastFrame |
-| `minimax-h3` | ChatCut | 4-15s | 768p/2K | Multimodal (9img+3vid+3audio refs) |
-| `minimax-h3-max` | ChatCut | 5-15s | 480p/768p | High-fidelity text/frame gen |
-| `omni` | ChatCut (Gemini) | 3-10s | 360p-4K | Targeted edits, cheap drafts |
-| `local` | sd-turbo+ffmpeg | 2-12s | 512p | Offline animatic (no API key needed) |
+| Backend | Quality | Speed | VRAM | Setup |
+|---------|---------|-------|------|-------|
+| `wan21` | Best | Slow | 8GB+ GPU | `urai model download wan2.1` |
+| `ltx` | Great | Fast | 8GB+ GPU | `urai model download ltx-video` |
+| `animatediff` | Good | Medium | 6GB+ GPU | `urai model download animatediff` |
+| `animatic` | Preview | Fast | CPU-ok | `urai model download sd-turbo` |
 
-## Usage via Urai API
+## Usage
 
 ```bash
-# Text-to-video
-curl -X POST http://localhost:8777/video \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "a sunset over the ocean", "duration": 5, "provider": "chatcut-seedance", "ratio": "16:9"}'
+# Text-to-video (auto-picks best available backend)
+urai agent "generate a 5 second video of a sunset over the ocean"
 
-# With first frame image
+# Via API
 curl -X POST http://localhost:8777/video \
-  -d '{"prompt": "zoom out to reveal a city", "provider": "chatcut-kling4", "first_frame": "asset-id", "duration": 8}'
+  -d '{"prompt": "a waterfall in a forest", "duration": 5, "ratio": "16:9"}'
+
+# Specify backend
+curl -X POST http://localhost:8777/video \
+  -d '{"prompt": "...", "backend": "wan21", "ratio": "9:16", "resolution": "720p"}'
 ```
 
-## Setup
+## Prompt Structure (from open research)
 
-Set `CHATCUT_API_KEY` in `.env` to enable ChatCut providers (Seedance, Kling, MiniMax, Omni).
+Best results use 8 elements:
+```
+[Subject] [Action] [Environment] [Camera] [Lighting] [Mood] [Style] [Audio description]
 
+Example: "A red fox running through autumn forest. Tracking shot. Golden hour light. Peaceful. Cinematic. Rustling leaves and distant birdsong."
+```
+
+## Parameters
+
+| Param | Options | Default |
+|-------|---------|---------|
+| `backend` | wan21, ltx, animatediff, animatic, auto | auto |
+| `ratio` | 16:9, 9:16, 1:1, 4:3, 21:9 | 16:9 |
+| `resolution` | 480p, 720p, 1080p | 720p |
+| `duration` | 1-30 seconds | 4 |
+| `first_frame` | image path | — |
+| `last_frame` | image path | — |
+| `style` | cinematic, anime, realistic, etc. | cinematic |
+| `camera` | tracking shot, drone, handheld, etc. | — |
+
+## Image-to-Video (WAN 2.1 / LTX)
+
+Pass a `first_frame` image to animate from it:
 ```bash
-CHATCUT_API_KEY=your_key_here
+curl -X POST http://localhost:8777/video \
+  -d '{"prompt": "zoom out slowly", "first_frame": "/path/to/image.png", "backend": "wan21"}'
 ```
 
-## Prompt Engineering
+## Model Sources
 
-For Seedance 2.5 (8-element structure):
-```
-[Subject] [Action] [Environment] [Camera motion] [Lighting] [Mood] [Style] [Audio description]
-Example: "A red sports car accelerating through rain-slicked streets. Tracking shot. Neon reflections. Cinematic tension. Realistic. Engine roar and rain."
-```
-
-For Kling: use `@first_frame`, `@last_frame`, `@image_1` to reference inputs in prompt.
-
-## Ratios
-- `16:9` — landscape/YouTube
-- `9:16` — vertical/mobile/Reels
-- `1:1` — square/Instagram
-- `21:9` — cinematic widescreen
+- **WAN 2.1** (Apache 2.0): github.com/Wan-Video/Wan2.1
+- **LTX-Video** (Apache 2.0): github.com/Lightricks/LTX-Video
+- **AnimateDiff** (Apache 2.0): github.com/guoyww/AnimateDiff
