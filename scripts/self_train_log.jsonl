@@ -71,3 +71,49 @@
 {"ts": "2026-11-09T19:48:08.085606", "level": "info", "msg": "LiteLLM test: \u001b[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new\u001b[0m\nLiteLLM.Info: If you need to debug th"}
 {"ts": "2026-11-09T19:48:08.092814", "level": "info", "msg": "Urai self-training cycle COMPLETE"}
 {"ts": "2026-11-09T19:48:08.092954", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-09T20:12:28.169233", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-09T20:12:28.169442", "level": "info", "msg": "Urai self-training cycle START"}
+{"ts": "2026-11-09T20:12:28.169524", "level": "info", "msg": "Scraping GitHub for Kaggle/Tailscale/LiteLLM training patterns..."}
+{"ts": "2026-11-09T20:14:28.975516", "level": "info", "msg": "Scraped 73 rows from GitHub -> distill-ghsoup.jsonl"}
+{"ts": "2026-11-09T20:14:28.975625", "level": "info", "msg": "Generating base distill data..."}
+{"ts": "2026-11-09T20:14:29.092326", "level": "info", "msg": "Master dataset: 735 rows"}
+{"ts": "2026-11-09T20:14:29.118806", "level": "info", "msg": "Merged: +73 new rows from gh-soup. Master now 619 rows."}
+{"ts": "2026-11-09T20:14:30.290659", "level": "info", "msg": "soup validate: Inspecting /home/kp/urai-work/data/verified/distill-master.jsonl...                                   Dataset Stats"}
+{"ts": "2026-11-09T20:14:30.290790", "level": "info", "msg": "Preparing Kaggle training dispatch..."}
+{"ts": "2026-11-09T20:14:31.307468", "level": "info", "msg": "Kaggle CLI ready: Kaggle CLI 2.2.5"}
+{"ts": "2026-11-09T20:14:31.309382", "level": "info", "msg": "Ready to push 619 rows to Kaggle dataset sherikhtj/urai-distill-v0-2"}
+{"ts": "2026-11-09T20:14:57.774550", "level": "info", "msg": "Kaggle dataset pushed successfully"}
+{"ts": "2026-11-09T20:14:57.774726", "level": "info", "msg": "Testing Urai API via LiteLLM..."}
+{"ts": "2026-11-09T20:15:05.821376", "level": "info", "msg": "LiteLLM test: \u001b[1;31mGive Feedback / Get Help: https://github.com/BerriAI/litellm/issues/new\u001b[0m\nLiteLLM.Info: If you need to debug th"}
+{"ts": "2026-11-09T20:15:05.821530", "level": "info", "msg": "Urai self-training cycle COMPLETE"}
+{"ts": "2026-11-09T20:15:05.821595", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-10T00:00:01.520974", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-10T00:00:01.521544", "level": "info", "msg": "Urai self-training cycle START"}
+{"ts": "2026-11-10T00:00:01.521800", "level": "info", "msg": "Scraping GitHub for Kaggle/Tailscale/LiteLLM training patterns..."}
+{"ts": "2026-11-10T00:00:59.268615", "level": "warning", "msg": "Scraper error: Traceback (most recent call last):\n  File \"/usr/lib/python3/dist-packages/urllib3/connectionpool.py\", line 534, in _make_request\n    response = conn.getresponse()\n  File \"/usr/lib/python3/dist-package"}
+{"ts": "2026-11-10T00:00:59.268986", "level": "info", "msg": "Generating base distill data..."}
+{"ts": "2026-11-10T00:00:59.530643", "level": "info", "msg": "Master dataset: 735 rows"}
+{"ts": "2026-11-10T00:00:59.596008", "level": "info", "msg": "Merged: +73 new rows from gh-soup. Master now 619 rows."}
+{"ts": "2026-11-10T00:00:59.597275", "level": "info", "msg": "soup CLI not found \u2014 skipping soup validate step (install soup or ignore)"}
+{"ts": "2026-11-10T00:00:59.597551", "level": "info", "msg": "Preparing Kaggle training dispatch..."}
+{"ts": "2026-11-10T06:00:01.598623", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-10T06:00:01.600741", "level": "info", "msg": "Urai self-training cycle START"}
+{"ts": "2026-11-10T06:00:01.600913", "level": "info", "msg": "Scraping GitHub for Kaggle/Tailscale/LiteLLM training patterns..."}
+{"ts": "2026-11-10T06:02:00.007325", "level": "info", "msg": "Scraped 74 rows from GitHub -> distill-ghsoup.jsonl"}
+{"ts": "2026-11-10T06:02:00.007464", "level": "info", "msg": "Generating base distill data..."}
+{"ts": "2026-11-10T06:02:00.128085", "level": "info", "msg": "Master dataset: 735 rows"}
+{"ts": "2026-11-10T06:02:00.163399", "level": "info", "msg": "Merged: +74 new rows from gh-soup. Master now 620 rows."}
+{"ts": "2026-11-10T06:02:00.165865", "level": "info", "msg": "soup CLI not found \u2014 skipping soup validate step (install soup or ignore)"}
+{"ts": "2026-11-10T06:02:00.166038", "level": "info", "msg": "Preparing Kaggle training dispatch..."}
+{"ts": "2026-11-10T12:00:01.927417", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-10T12:00:01.928770", "level": "info", "msg": "Urai self-training cycle START"}
+{"ts": "2026-11-10T12:00:01.929028", "level": "info", "msg": "Scraping GitHub for Kaggle/Tailscale/LiteLLM training patterns..."}
+{"ts": "2026-11-10T18:00:01.608161", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-10T18:00:01.616674", "level": "info", "msg": "Urai self-training cycle START"}
+{"ts": "2026-11-10T18:00:01.616826", "level": "info", "msg": "Scraping GitHub for Kaggle/Tailscale/LiteLLM training patterns..."}
+{"ts": "2026-11-10T18:00:46.917213", "level": "warning", "msg": "Scraper error: Traceback (most recent call last):\n  File \"/usr/lib/python3/dist-packages/urllib3/connectionpool.py\", line 534, in _make_request\n    response = conn.getresponse()\n  File \"/usr/lib/python3/dist-package"}
+{"ts": "2026-11-10T18:00:46.917362", "level": "info", "msg": "Generating base distill data..."}
+{"ts": "2026-11-10T18:00:47.018173", "level": "info", "msg": "Master dataset: 735 rows"}
+{"ts": "2026-11-10T18:00:47.044363", "level": "info", "msg": "Merged: +74 new rows from gh-soup. Master now 620 rows."}
+{"ts": "2026-11-10T18:00:47.044915", "level": "info", "msg": "soup CLI not found \u2014 skipping soup validate step (install soup or ignore)"}
+{"ts": "2026-11-10T18:00:47.044997", "level": "info", "msg": "Preparing Kaggle training dispatch..."}

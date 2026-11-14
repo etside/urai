@@ -525,6 +525,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       Goals
     </button>
+    <button class="sb-tab" onclick="showPanel('media',this)" data-panel="media">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      Media
+    </button>
   </div>
   <div class="sb-section">Recent</div>
   <div class="sb-hist" id="hist-list"></div>
@@ -713,6 +717,72 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
   </div>
 
   <!-- Settings panel -->
+  <div class="panel" id="panel-media">
+    <div style="padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:20px">
+      <div class="panel-header">Media Generation</div>
+      <div class="panel-sub">Generate images and videos with AI</div>
+
+      <!-- Image Generation -->
+      <div style="background:var(--bg2);border-radius:12px;padding:16px">
+        <div style="font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          Image Generation
+        </div>
+        <textarea id="img-prompt" placeholder="Describe the image you want to generate..." style="width:100%;height:80px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text1);font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <select id="img-size" style="background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text1)">
+            <option value="512">512×512</option>
+            <option value="768">768×768</option>
+            <option value="1024">1024×1024</option>
+          </select>
+          <button onclick="generateImage()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 18px;cursor:pointer;font-weight:600">Generate Image</button>
+        </div>
+        <div id="img-result" style="margin-top:12px;min-height:40px"></div>
+      </div>
+
+      <!-- Video Generation -->
+      <div style="background:var(--bg2);border-radius:12px;padding:16px">
+        <div style="font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          Video Generation
+        </div>
+        <textarea id="vid-prompt" placeholder="Describe the video you want to generate..." style="width:100%;height:80px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text1);font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
+          <select id="vid-provider" style="background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text1)">
+            <option value="auto">Auto (Best Available)</option>
+            <option value="chatcut-seedance">Seedance 2.5 (ChatCut)</option>
+            <option value="chatcut-kling4">Kling 4.0 (ChatCut)</option>
+            <option value="chatcut-minimax">MiniMax H3 (ChatCut)</option>
+            <option value="chatcut-omni">Gemini Omni (ChatCut)</option>
+            <option value="higgsfield">Higgsfield</option>
+            <option value="runway">Runway</option>
+            <option value="local">Local Animatic</option>
+          </select>
+          <select id="vid-ratio" style="background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text1)">
+            <option value="16:9">16:9 Landscape</option>
+            <option value="9:16">9:16 Vertical</option>
+            <option value="1:1">1:1 Square</option>
+            <option value="21:9">21:9 Cinematic</option>
+          </select>
+          <select id="vid-duration" style="background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text1)">
+            <option value="4">4s</option>
+            <option value="6" selected>6s</option>
+            <option value="10">10s</option>
+            <option value="15">15s</option>
+            <option value="30">30s</option>
+          </select>
+          <select id="vid-resolution" style="background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text1)">
+            <option value="720p" selected>720p</option>
+            <option value="480p">480p</option>
+            <option value="1080p">1080p</option>
+          </select>
+          <button onclick="generateVideo()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 18px;cursor:pointer;font-weight:600">Generate Video</button>
+        </div>
+        <div id="vid-result" style="margin-top:12px;min-height:40px;font-size:.85rem;color:var(--text3)"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="panel" id="panel-settings">
     <div id="settings-panel">
       <div class="panel-header">Settings</div>
@@ -1703,6 +1773,70 @@ function appendEventRow(ev) {
   row.title = 'In: ' + (ev.input_summary||'') + '\nOut: ' + (ev.output_summary||'');
   el.appendChild(row);
   el.scrollTop = el.scrollHeight;
+}
+
+// ── Media (Image + Video Generation) ──────────────────────────────────────────
+async function generateImage() {
+  const prompt = document.getElementById('img-prompt').value.trim();
+  if (!prompt) return;
+  const size = document.getElementById('img-size').value;
+  const res = document.getElementById('img-result');
+  res.innerHTML = '<span style="color:var(--text3)">Generating image… ⏳</span>';
+  try {
+    const data = await api('/v1/images/generations', {
+      method: 'POST',
+      body: JSON.stringify({ prompt, width: parseInt(size), height: parseInt(size), response_format: 'b64_json' })
+    });
+    if (data.data && data.data[0]) {
+      const b64 = data.data[0].b64_json || '';
+      const url = data.data[0].url || '';
+      if (b64) {
+        res.innerHTML = `<img src="data:image/png;base64,${b64}" style="max-width:100%;border-radius:8px;margin-top:8px" alt="generated image">
+          <div style="margin-top:8px;font-size:.8rem;color:var(--text3)">Provider: ${data.provider || 'local'} · ${new Date().toLocaleTimeString()}</div>`;
+      } else if (url) {
+        res.innerHTML = `<div style="font-size:.85rem;padding:8px;background:var(--bg1);border-radius:8px">📁 Saved: ${url}</div>`;
+      }
+    } else if (data.error) {
+      res.innerHTML = `<span style="color:#f87171">Error: ${data.error}</span>`;
+    }
+  } catch(e) {
+    res.innerHTML = `<span style="color:#f87171">Error: ${e.message}</span>`;
+  }
+}
+
+async function generateVideo() {
+  const prompt = document.getElementById('vid-prompt').value.trim();
+  if (!prompt) return;
+  const provider = document.getElementById('vid-provider').value;
+  const ratio = document.getElementById('vid-ratio').value;
+  const duration = parseInt(document.getElementById('vid-duration').value);
+  const resolution = document.getElementById('vid-resolution').value;
+  const res = document.getElementById('vid-result');
+  res.innerHTML = '<span style="color:var(--text3)">Generating video… this may take 1-5 minutes ⏳</span>';
+  try {
+    const data = await api('/video', {
+      method: 'POST',
+      body: JSON.stringify({ prompt, provider, ratio, duration, resolution })
+    });
+    if (data.ok === false) {
+      res.innerHTML = `<span style="color:#f87171">Error: ${data.error || 'unknown error'}</span>`;
+    } else if (data.job_id) {
+      res.innerHTML = `<div style="background:var(--bg1);border-radius:8px;padding:12px">
+        ✅ <strong>Job submitted!</strong> Provider: ${data.provider} / Model: ${data.model}<br>
+        Job ID: <code>${data.job_id}</code><br>
+        <span style="font-size:.8rem;color:var(--text3)">${data.note || 'Check your ChatCut dashboard for the result.'}</span>
+      </div>`;
+    } else if (data.path) {
+      res.innerHTML = `<div style="background:var(--bg1);border-radius:8px;padding:12px">
+        ✅ <strong>Video ready!</strong> Saved to: <code>${data.path}</code>
+        ${data.grade ? `<br><span style="font-size:.8rem;color:var(--text3)">${data.grade}</span>` : ''}
+      </div>`;
+    } else {
+      res.innerHTML = `<pre style="font-size:.75rem;overflow-x:auto">${JSON.stringify(data, null, 2)}</pre>`;
+    }
+  } catch(e) {
+    res.innerHTML = `<span style="color:#f87171">Error: ${e.message}</span>`;
+  }
 }
 
 // ── Goals ────────────────────────────────────────────────────────────────────
