@@ -1297,6 +1297,27 @@ class Handler(BaseHTTPRequestHandler):
                                **{k: v for k, v in res.items()
                                    if k not in ("path",)}})
 
+        if p == "/v1/videos/ingest":
+            # Accept a video file pushed from Kaggle/external GPU runner
+            import base64
+            video_b64 = body.get("video_b64", "")
+            prompt = body.get("prompt", "untitled")
+            backend = body.get("backend", "external")
+            if not video_b64:
+                return self._send({"error": "video_b64 required"}, 400)
+            try:
+                from pathlib import Path as _P
+                out_dir = ROOT / "out" / "videos"
+                out_dir.mkdir(parents=True, exist_ok=True)
+                stamp = time.strftime("%Y%m%d-%H%M%S")
+                dest = out_dir / f"urai-{stamp}-{backend}.mp4"
+                dest.write_bytes(base64.b64decode(video_b64))
+                _record_use(ip, device, bool(body.get("_urai_authed")))
+                return self._send({"ok": True, "path": str(dest), "backend": backend,
+                                   "prompt": prompt[:200], "size": dest.stat().st_size})
+            except Exception as e:
+                return self._send({"error": str(e)[:200]}, 500)
+
         if p in ("/video", "/v1/videos/generations"):
             from . import video as _video
             res = _video.generate(
