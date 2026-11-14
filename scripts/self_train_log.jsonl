@@ -117,3 +117,12 @@
 {"ts": "2026-11-10T18:00:47.044363", "level": "info", "msg": "Merged: +74 new rows from gh-soup. Master now 620 rows."}
 {"ts": "2026-11-10T18:00:47.044915", "level": "info", "msg": "soup CLI not found \u2014 skipping soup validate step (install soup or ignore)"}
 {"ts": "2026-11-10T18:00:47.044997", "level": "info", "msg": "Preparing Kaggle training dispatch..."}
+{"ts": "2026-11-14T18:00:01.944954", "level": "info", "msg": "======================================================="}
+{"ts": "2026-11-14T18:00:01.952039", "level": "info", "msg": "Urai self-training cycle START"}
+{"ts": "2026-11-14T18:00:01.952221", "level": "info", "msg": "Scraping GitHub for Kaggle/Tailscale/LiteLLM training patterns..."}
+{"ts": "2026-11-14T18:00:54.228022", "level": "warning", "msg": "Scraper error: Traceback (most recent call last):\n  File \"/usr/lib/python3/dist-packages/urllib3/connectionpool.py\", line 534, in _make_request\n    response = conn.getresponse()\n  File \"/usr/lib/python3/dist-package"}
+{"ts": "2026-11-14T18:00:54.228155", "level": "info", "msg": "Generating base distill data..."}
+{"ts": "2026-11-14T18:00:54.344981", "level": "info", "msg": "Master dataset: 735 rows"}
+{"ts": "2026-11-14T18:00:54.378128", "level": "info", "msg": "Merged: +74 new rows from gh-soup. Master now 620 rows."}
+{"ts": "2026-11-14T18:00:54.378772", "level": "info", "msg": "soup CLI not found \u2014 skipping soup validate step (install soup or ignore)"}
+{"ts": "2026-11-14T18:00:54.378856", "level": "info", "msg": "Preparing Kaggle training dispatch..."}
