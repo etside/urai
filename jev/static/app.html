@@ -529,6 +529,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
       Media
     </button>
+    <button class="sb-tab" onclick="showPanel('voice',this)" data-panel="voice">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      Voice
+    </button>
+    <button class="sb-tab" onclick="showPanel('routines',this);loadRoutines()" data-panel="routines">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Routines
+    </button>
+    <button class="sb-tab" onclick="showPanel('skills',this);loadSkills()" data-panel="skills">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      Skills
+    </button>
   </div>
   <div class="sb-section">Recent</div>
   <div class="sb-hist" id="hist-list"></div>
@@ -776,6 +788,68 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100dv
           <button onclick="generateVideo()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 18px;cursor:pointer;font-weight:600">Generate Video</button>
         </div>
         <div id="vid-result" style="margin-top:12px;min-height:40px;font-size:.85rem;color:var(--text3)"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voice panel -->
+  <div class="panel" id="panel-voice">
+    <div style="padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px">
+      <div class="panel-header">Voice</div>
+      <div class="panel-sub">Text-to-speech and voice recording</div>
+      <div style="background:var(--bg2);border-radius:12px;padding:16px">
+        <div style="font-weight:600;margin-bottom:12px">Text to Speech</div>
+        <textarea id="tts-text" placeholder="Enter text to speak..." style="width:100%;height:80px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text1);font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <select id="tts-voice" style="background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text1)">
+            <option value="af_heart">Heart (default)</option>
+            <option value="af_nova">Nova</option>
+            <option value="am_adam">Adam</option>
+            <option value="bf_emma">Emma</option>
+          </select>
+          <select id="tts-speed" style="background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text1)">
+            <option value="0.75">0.75x</option>
+            <option value="1.0" selected>1.0x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+          </select>
+          <button onclick="speakText()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 18px;cursor:pointer;font-weight:600">Speak</button>
+        </div>
+        <div id="tts-result" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Routines panel -->
+  <div class="panel" id="panel-routines">
+    <div style="padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px">
+      <div class="panel-header">Routines</div>
+      <div class="panel-sub">Scheduled tasks that run automatically</div>
+      <button onclick="showAddRoutine()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:600;align-self:flex-start">+ Add Routine</button>
+      <div id="routines-list" style="display:flex;flex-direction:column;gap:10px">
+        <div style="color:var(--text3);font-size:.88rem">Loading routines…</div>
+      </div>
+      <div id="add-routine-form" style="display:none;background:var(--bg2);border-radius:12px;padding:16px">
+        <div style="font-weight:600;margin-bottom:12px">New Routine</div>
+        <input id="routine-name" placeholder="Name" style="width:100%;background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text1);box-sizing:border-box;margin-bottom:8px">
+        <input id="routine-cron" placeholder="Schedule (cron: 0 9 * * * or @daily)" style="width:100%;background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text1);box-sizing:border-box;margin-bottom:8px">
+        <textarea id="routine-task" placeholder="Task description..." style="width:100%;height:60px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text1);font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px">
+          <button onclick="saveRoutine()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 16px;cursor:pointer">Save</button>
+          <button onclick="document.getElementById('add-routine-form').style.display='none'" style="background:var(--bg3);color:var(--text1);border:none;border-radius:8px;padding:8px 16px;cursor:pointer">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Skills panel -->
+  <div class="panel" id="panel-skills">
+    <div style="padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px">
+      <div class="panel-header">Skills</div>
+      <div class="panel-sub">Installed agent skills and capabilities</div>
+      <input id="skills-search" placeholder="Search skills…" oninput="filterSkills(this.value)" style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text1);box-sizing:border-box">
+      <div id="skills-list" style="display:flex;flex-direction:column;gap:8px">
+        <div style="color:var(--text3);font-size:.88rem">Loading skills…</div>
       </div>
     </div>
   </div>
@@ -2012,6 +2086,99 @@ window.addEventListener('appinstalled', () => {
   const want = new URLSearchParams(location.search).get('panel');
   if (want && document.getElementById('panel-' + want)) showPanel(want);
 })();
+
+// ── Voice (TTS) ───────────────────────────────────────────────────────────────
+async function speakText() {
+  const text = document.getElementById('tts-text').value.trim();
+  if (!text) return;
+  const voice = document.getElementById('tts-voice').value;
+  const speed = parseFloat(document.getElementById('tts-speed').value);
+  const res = document.getElementById('tts-result');
+  res.innerHTML = '<span style="color:var(--text3)">Generating speech… ⏳</span>';
+  try {
+    const r = await fetch(S.base + '/v1/audio/speech', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', ...authHeaders()},
+      body: JSON.stringify({input: text, voice, speed, response_format: 'mp3'})
+    });
+    if (!r.ok) { res.innerHTML = `<span style="color:#f87171">Error: ${r.status}</span>`; return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    res.innerHTML = `<audio controls src="${url}" style="width:100%;margin-top:8px"></audio>`;
+  } catch(e) { res.innerHTML = `<span style="color:#f87171">${e.message}</span>`; }
+}
+
+// ── Routines ──────────────────────────────────────────────────────────────────
+let _allRoutines = [];
+function showAddRoutine() {
+  document.getElementById('add-routine-form').style.display = 'block';
+}
+async function loadRoutines() {
+  try {
+    const data = await api('/v1/routines/list');
+    _allRoutines = data.routines || data || [];
+    renderRoutines(_allRoutines);
+  } catch(e) { document.getElementById('routines-list').innerHTML = `<span style="color:#f87171">${e.message}</span>`; }
+}
+function renderRoutines(routines) {
+  const el = document.getElementById('routines-list');
+  if (!routines.length) { el.innerHTML = '<div style="color:var(--text3);font-size:.88rem">No routines yet. Add one above.</div>'; return; }
+  el.innerHTML = routines.map(r => `
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:600">${r.name || r.id}</div>
+        <div style="font-size:.8rem;color:var(--text3)">${r.cron || r.schedule || ''} · ${(r.task || r.prompt || '').slice(0,60)}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="runRoutine('${r.id}')" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem">Run</button>
+        <button onclick="deleteRoutine('${r.id}')" style="background:var(--bg3);color:var(--text2);border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem">Delete</button>
+      </div>
+    </div>`).join('');
+}
+async function saveRoutine() {
+  const name = document.getElementById('routine-name').value.trim();
+  const cron = document.getElementById('routine-cron').value.trim();
+  const task = document.getElementById('routine-task').value.trim();
+  if (!name || !task) return;
+  await api('/v1/routines/create', {method:'POST', body: JSON.stringify({name, cron, task})});
+  document.getElementById('add-routine-form').style.display = 'none';
+  loadRoutines();
+}
+async function runRoutine(id) {
+  await api('/v1/routines/run', {method:'POST', body: JSON.stringify({id})});
+  alert('Routine triggered!');
+}
+async function deleteRoutine(id) {
+  if (!confirm('Delete this routine?')) return;
+  await api('/v1/routines/delete', {method:'POST', body: JSON.stringify({id})});
+  loadRoutines();
+}
+
+// ── Skills ────────────────────────────────────────────────────────────────────
+let _allSkills = [];
+async function loadSkills() {
+  try {
+    const data = await api('/v1/skills/list');
+    _allSkills = data.skills || data || [];
+    renderSkills(_allSkills);
+  } catch(e) {
+    document.getElementById('skills-list').innerHTML = `<span style="color:#f87171">${e.message}</span>`;
+  }
+}
+function filterSkills(q) {
+  const f = _allSkills.filter(s => !q || (s.name||'').toLowerCase().includes(q.toLowerCase()) || (s.description||'').toLowerCase().includes(q.toLowerCase()));
+  renderSkills(f);
+}
+function renderSkills(skills) {
+  const el = document.getElementById('skills-list');
+  if (!skills.length) { el.innerHTML = '<div style="color:var(--text3);font-size:.88rem">No skills found.</div>'; return; }
+  el.innerHTML = skills.map(s => `
+    <div style="background:var(--bg2);border-radius:10px;padding:12px">
+      <div style="font-weight:600;margin-bottom:4px">${s.name}</div>
+      <div style="font-size:.82rem;color:var(--text3);line-height:1.4">${(s.description||'').slice(0,120)}${(s.description||'').length>120?'…':''}</div>
+      ${s.source ? `<a href="${s.source}" target="_blank" style="font-size:.78rem;color:var(--accent);text-decoration:none;margin-top:4px;display:inline-block">Source ↗</a>` : ''}
+    </div>`).join('');
+}
 </script>
 </body>
 </html>

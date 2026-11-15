@@ -1565,12 +1565,28 @@ class Handler(BaseHTTPRequestHandler):
 
         if p == "/v1/routines/create":
             from .routines import create_routine as _cr
-            return self._send(_cr(body.get("name",""),body.get("prompt",""),
-                                  body.get("schedule","manual"),body.get("tools",[])))
+            return self._send(_cr(body.get("name",""),body.get("task",body.get("prompt","")),
+                                  body.get("cron",body.get("schedule","manual")),body.get("tools",[])))
 
         if p == "/v1/routines/run":
             from .routines import run_routine as _rr
             return self._send(_rr(body.get("id","")))
+
+        if p == "/v1/routines/delete":
+            from .routines import delete_routine as _dr
+            try:
+                return self._send(_dr(body.get("id","")))
+            except Exception as e:
+                return self._send({"ok": False, "error": str(e)[:200]})
+
+        if p == "/v1/skills/list":
+            from .skills import all_skills as _as
+            skills = _as()
+            return self._send({"skills": [
+                {"name": s.get("name",""), "description": s.get("description",""),
+                 "source": s.get("source",""), "file": s.get("file","")}
+                for s in skills
+            ]})
 
         if p == "/v1/chart":
             from .chart import chart as _ch
