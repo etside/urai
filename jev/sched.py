@@ -59,6 +59,17 @@ def _llama_healthy() -> bool:
     try:
         urllib.request.urlopen(LLAMA_URL + "/health", timeout=5).read()
         return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            # Ollama and other OpenAI-compatible servers have no /health;
+            # fall back to /v1/models as a liveness probe.
+            try:
+                urllib.request.urlopen(
+                    LLAMA_URL + "/v1/models", timeout=5).read()
+                return True
+            except Exception:
+                return False
+        return False
     except Exception:
         return False
 

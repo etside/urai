@@ -20,10 +20,12 @@ for _pkg in ["unsloth", "trl", "peft", "accelerate", "bitsandbytes", "datasets",
     _sp.run([_sys.executable, "-m", "pip", "install", "-q", _pkg],
             capture_output=True)
 print("deps installed", flush=True)
-DATA = sorted(glob.glob("/kaggle/input/**/*.jsonl", recursive=True))
+# Defaults keep the Kaggle workflow unchanged; env overrides let the same
+# script run on Google Colab (or any GPU box) via `colab exec` / `colab run`.
+DATA = sorted(glob.glob(os.environ.get("URAI_TRAIN_DATA_GLOB", "/kaggle/input/**/*.jsonl"), recursive=True))
 DATA = DATA[0] if DATA else "distill-now.jsonl"
-OUT = "/kaggle/working/urai-adapter"
-MODEL = os.environ.get("URAI_BASE", "unsloth/Qwen3-1.7B")
+OUT = os.environ.get("URAI_ADAPTER_OUT", "/kaggle/working/urai-adapter")
+MODEL = os.environ.get("URAI_BASE", "unsloth/Qwen3-4B-bnb-4bit")
 MAX_STEPS = int(os.environ.get("MAX_TRAIN_STEPS", "300"))
 
 
@@ -77,6 +79,7 @@ def main():
                  logging_steps=5, save_steps=200, optim="adamw_8bit",
                  seed=3407, report_to="none", max_steps=MAX_STEPS)
     SFTTrainer(model=model, tokenizer=tok, train_dataset=ds,
+               dataset_text_field="text",   # required by trl >= 0.8
                args=TrainingArguments(**targs)).train()
     model.save_pretrained(OUT)
     tok.save_pretrained(OUT)

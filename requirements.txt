@@ -1,0 +1,20 @@
+# Urai runtime is stdlib-first (see jev/server.py). These pins are for the
+# optional HTTP/media/agent paths and are the latest versions verified on the
+# Python 3.12 control box. Core chat/agent/CLI works without installing these.
+#
+# Install:  python3 -m pip install -r requirements.txt
+# GPU training (Kaggle/Modal) uses its own image — see docs/SETUP_PRODUCTION.md.
+
+fastapi==0.162.2
+starlette==1.10.0
+uvicorn==0.54.0
+pydantic==2.14.3
+httpx==0.28.1
+requests==2.34.2
+python-dotenv==1.2.4
+PyYAML==6.0.3
+
+# Media: local image fallback, browser automation, vision/embedding helpers
+Pillow==13.0.0
+numpy==2.5.4
+playwright==1.64.1

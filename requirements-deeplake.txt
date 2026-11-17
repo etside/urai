@@ -1,0 +1,11 @@
+# Optional DeepLake 4.x integration for Urai (agent memory, versioned training
+# data, multimodal media). NOT part of the core runtime — install separately:
+#
+#   python3 -m pip install -r requirements-deeplake.txt
+#
+# Local `file://` and `mem://` datasets need no cloud credentials. S3/GCS/Azure
+# need their own SDK extras plus credentials from env / creds dict.
+deeplake==4.7.4
+
+# Kept separate so a deeplake upgrade cannot disturb the pinned core runtime
+# in requirements.txt (Urai tests are stdlib-first and must stay green).
