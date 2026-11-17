@@ -98,7 +98,9 @@ def call(method, path, payload=None, timeout=300, remote=False):
         payload = dict(payload)
         payload.setdefault("device_id", _device_id())
     data = json.dumps(payload or {}).encode() if payload is not None else None
-    headers = {"Content-Type": "application/json", "X-Device-Id": _device_id()}
+    headers = {"Content-Type": "application/json", "X-Device-Id": _device_id(),
+               # Cloudflare 1010 rejects Python-urllib default agent
+               "User-Agent": "urai-cli/1.0 (+https://urai.daddyai.online)"}
     key = _master_key()
     if key:
         headers["Authorization"] = "Bearer " + key
